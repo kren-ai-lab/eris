@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 
@@ -13,22 +13,44 @@ from morpheo.core.registry import register_encoder
 from morpheo.core.types import StructureArtifact, StructureInput
 
 
+def _validate_edges(edges: Sequence[float]) -> np.ndarray:
+    arr = np.asarray(list(edges), dtype=np.float32).reshape(-1)
+    if arr.size < 2:
+        raise ValueError("edges must have at least 2 values (bin boundaries).")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError("edges contains non-finite values.")
+    if not np.all(arr[1:] > arr[:-1]):
+        raise ValueError("edges must be strictly increasing.")
+    return arr
+
+
 @dataclass
 class DistogramBinsCA:
     name: str = "distogram_bins_ca"
-    # default bins: 2..20 Å, 36 bins style-ish 
+
+    edges: Optional[Sequence[float]] = None
+
     dmin: float = 2.0
     dmax: float = 20.0
     num_bins: int = 36
+
     include_self: bool = True
-    dtype: str = "uint8"  # uint8 ok up to 255 bins
+
+    # If True: class 0 = > last edge, class 1..K = in-range bins
+    add_no_contact_class: bool = True
+
+    dtype: str = "uint8"
     use_cache: bool = True
-    cache: Optional[DiskCache] = None
-    edges: Optional[list[float]] = None
+    cache: Optional[Any] = None
 
     def fingerprint(self) -> str:
+        if self.edges is not None:
+            e = ",".join(f"{float(x):.6g}" for x in list(self.edges))
+            edge_sig = f"edges=[{e}]"
+        else:
+            edge_sig = f"dmin={self.dmin}|dmax={self.dmax}|num_bins={self.num_bins}"
         return sha256_text(
-            f"{self.name}|dmin={self.dmin}|dmax={self.dmax}|num_bins={self.num_bins}|include_self={self.include_self}|dtype={self.dtype}|use_cache={self.use_cache}"
+            f"{self.name}|{edge_sig}|include_self={self.include_self}|no_contact={self.add_no_contact_class}|dtype={self.dtype}|use_cache={self.use_cache}"
         )
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
@@ -51,21 +73,34 @@ class DistogramBinsCA:
         if not self.include_self:
             np.fill_diagonal(dist, np.nan)
 
-        # Create bin edges and digitize
-        edges = np.linspace(float(self.dmin), float(self.dmax), int(self.num_bins) + 1, dtype=np.float32)
-        # digitize returns 1..num_bins; convert to 0..num_bins-1 and clip
-        bins = np.digitize(dist, edges, right=False) - 1
-        bins = np.clip(bins, 0, int(self.num_bins) - 1)
+        # Build edges
+        if self.edges is not None:
+            edges = _validate_edges(self.edges)
+        else:
+            edges = np.linspace(float(self.dmin), float(self.dmax), int(self.num_bins) + 1, dtype=np.float32)
+
+        K = int(edges.size - 1)
+
+        raw_bins = np.digitize(dist, edges, right=False) - 1
+        raw_bins = np.clip(raw_bins, 0, K - 1)
+
+        if self.add_no_contact_class:
+            out = (raw_bins + 1).astype(np.int32)
+            out[dist > float(edges[-1])] = 0
+            out[np.isnan(dist)] = 0
+        else:
+            out = raw_bins.astype(np.int32)
+            out[np.isnan(dist)] = 0
 
         if self.dtype == "uint16":
-            bins_out = bins.astype(np.uint16)
+            dist_bins = out.astype(np.uint16)
         elif self.dtype == "int16":
-            bins_out = bins.astype(np.int16)
+            dist_bins = out.astype(np.int16)
         else:
-            bins_out = bins.astype(np.uint8)
+            dist_bins = out.astype(np.uint8)
 
         data = {
-            "dist_bins": bins_out,
+            "dist_bins": dist_bins,
             "bin_edges": edges.astype(np.float32),
             "pos": pos.astype(np.float32),
             "residue_ids": residue_ids.astype(np.str_),
@@ -78,12 +113,12 @@ class DistogramBinsCA:
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
             "input": inp.to_string(),
-            "dmin": float(self.dmin),
-            "dmax": float(self.dmax),
-            "num_bins": int(self.num_bins),
             "include_self": bool(self.include_self),
+            "add_no_contact_class": bool(self.add_no_contact_class),
             "dtype": self.dtype,
             "n_residues": int(n),
+            "num_bins": int(K),
+            "edges": edges.tolist(),
             "shapes": {k: list(v.shape) for k, v in data.items()},
         }
 

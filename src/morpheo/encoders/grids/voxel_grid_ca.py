@@ -1,3 +1,5 @@
+# src/morpheo/encoders/grids/voxel_grid_ca.py
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -65,6 +67,64 @@ def _parse_channels(channels: Any) -> List[str]:
     raise ValueError("channels must be a string (e.g. 'occupancy+plddt') or a list of strings")
 
 
+def _pool_mode(pool: str) -> str:
+    p = (pool or "max").strip().lower()
+    if p not in ("max", "sum", "mean"):
+        raise ValueError("pool must be one of: 'max', 'sum', 'mean'")
+    return p
+
+
+def _accumulate_scalar(
+    grid_ch: np.ndarray,
+    counts_ch: Optional[np.ndarray],
+    ijk: np.ndarray,
+    values: np.ndarray,
+    pool: str,
+) -> None:
+    """
+    Accumulate scalar values into a single channel (in-place).
+    - max: max pooling
+    - sum: sum pooling
+    - mean: sum pooling + counts (counts_ch required)
+    """
+    if pool == "max":
+        for (i, j, k), val in zip(ijk, values):
+            if val > grid_ch[i, j, k]:
+                grid_ch[i, j, k] = val
+    else:
+        for (i, j, k), val in zip(ijk, values):
+            grid_ch[i, j, k] += val
+            if counts_ch is not None:
+                counts_ch[i, j, k] += 1.0
+
+
+def _accumulate_onehot(
+    grid: np.ndarray,
+    counts: Optional[np.ndarray],
+    ijk: np.ndarray,
+    aa: np.ndarray,
+    base_ch: int,
+    pool: str,
+) -> None:
+    """
+    Accumulate AA onehot into channels base_ch..base_ch+20.
+    - max: set presence (0/1)
+    - sum/mean: add 1 per hit (mean divides by counts later)
+    """
+    if pool == "max":
+        for (i, j, k), a in zip(ijk, aa):
+            a = int(a)
+            if 0 <= a < 21:
+                grid[base_ch + a, i, j, k] = 1.0
+    else:
+        for (i, j, k), a in zip(ijk, aa):
+            a = int(a)
+            if 0 <= a < 21:
+                grid[base_ch + a, i, j, k] += 1.0
+                if counts is not None:
+                    counts[base_ch + a, i, j, k] += 1.0
+
+
 @dataclass
 class VoxelGridCA:
     name: str = "voxel_grid_ca"
@@ -73,7 +133,7 @@ class VoxelGridCA:
     dtype: str = "float32"
 
     # multi-channel spec
-    channels: Any = "occupancy"   # e.g. "density+aa_onehot+plddt"
+    channels: Any = "occupancy"  # e.g. "density+aa_onehot+plddt"
 
     # spatial normalization
     center: bool = True
@@ -84,6 +144,9 @@ class VoxelGridCA:
     # density params (voxel units)
     sigma: float = 1.0
 
+    # pooling
+    pool: str = "max"  # "max" | "sum" | "mean"
+
     # value handling
     clamp: bool = True  # clip final grid to [0,1] (recommended for occupancy/density)
 
@@ -93,7 +156,7 @@ class VoxelGridCA:
     def fingerprint(self) -> str:
         ch = "+".join(_parse_channels(self.channels))
         return sha256_text(
-            f"{self.name}|G={self.grid_size}|dtype={self.dtype}|channels={ch}|center={self.center}|fit={self.fit}|margin={self.margin}|voxel_size={self.voxel_size}|sigma={self.sigma}|clamp={self.clamp}|use_cache={self.use_cache}"
+            f"{self.name}|G={self.grid_size}|dtype={self.dtype}|channels={ch}|center={self.center}|fit={self.fit}|margin={self.margin}|voxel_size={self.voxel_size}|sigma={self.sigma}|pool={self.pool}|clamp={self.clamp}|use_cache={self.use_cache}"
         )
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
@@ -170,38 +233,44 @@ class VoxelGridCA:
 
         grid = np.zeros((C, G, G, G), dtype=np.float32)
 
-        # helper to add into a single channel
+        pool = _pool_mode(self.pool)
+        counts = None
+        if pool == "mean":
+            counts = np.zeros((C, G, G, G), dtype=np.float32)
+
+        # channel fillers
         def add_occupancy(ch: int) -> int:
-            grid[ch, ijk[:, 0], ijk[:, 1], ijk[:, 2]] = 1.0
+            if pool == "max":
+                grid[ch, ijk[:, 0], ijk[:, 1], ijk[:, 2]] = 1.0
+            else:
+                for i, j, k in ijk:
+                    grid[ch, i, j, k] += 1.0
+                    if counts is not None:
+                        counts[ch, i, j, k] += 1.0
             return ch + 1
 
         def add_density(ch: int) -> int:
             sig = float(self.sigma)
             for i, j, k in ijk:
                 _gaussian_splat(grid[ch], (int(i), int(j), int(k)), sigma=sig, value=1.0)
+                if pool != "max" and counts is not None:
+                    # simple proxy count: center voxel hit
+                    counts[ch, int(i), int(j), int(k)] += 1.0
             return ch + 1
 
-        def add_scalar_max(ch: int, values: np.ndarray, normalize: Optional[Tuple[float, float]] = None) -> int:
-            # normalize optional, then write max per voxel
+        def add_scalar_pool(ch: int, values: np.ndarray, normalize: Optional[Tuple[float, float]] = None) -> int:
             v = values.copy()
             if normalize is not None:
                 lo, hi = normalize
                 v = (v - lo) / (hi - lo + 1e-8)
-            # replace nan with 0
             v = np.nan_to_num(v, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
 
-            # max pooling per voxel
-            for (i, j, k), val in zip(ijk, v):
-                if val > grid[ch, i, j, k]:
-                    grid[ch, i, j, k] = val
+            cch = None if counts is None else counts[ch]
+            _accumulate_scalar(grid[ch], cch, ijk, v, pool=pool)
             return ch + 1
 
         def add_aa_onehot(ch: int) -> int:
-            # one channel per aa index 0..20
-            for (i, j, k), a in zip(ijk, aa_v):
-                a = int(a)
-                if 0 <= a < 21:
-                    grid[ch + a, i, j, k] = 1.0
+            _accumulate_onehot(grid, counts, ijk, aa_v, base_ch=ch, pool=pool)
             return ch + 21
 
         # fill channels in order
@@ -212,16 +281,19 @@ class VoxelGridCA:
             elif c == "density":
                 cidx = add_density(cidx)
             elif c == "plddt":
-                # pLDDT is typically 0..100 -> normalize to 0..1
-                cidx = add_scalar_max(cidx, plddt_v, normalize=(0.0, 100.0))
+                cidx = add_scalar_pool(cidx, plddt_v, normalize=(0.0, 100.0))
             elif c == "bfactor":
-                # B-factor is unbounded; keep raw but clip later if you want
-                # Here we normalize gently assuming [0,100] common enough; tweak later if needed
-                cidx = add_scalar_max(cidx, bfac_v, normalize=(0.0, 100.0))
+                cidx = add_scalar_pool(cidx, bfac_v, normalize=(0.0, 100.0))
             elif c == "aa_onehot":
                 cidx = add_aa_onehot(cidx)
             else:
-                raise ValueError(f"Unknown channel '{c}'. Supported: occupancy, density, plddt, bfactor, aa_onehot")
+                raise ValueError(
+                    f"Unknown channel '{c}'. Supported: occupancy, density, plddt, bfactor, aa_onehot"
+                )
+
+        if pool == "mean":
+            denom = np.maximum(counts, 1.0)
+            grid = grid / denom
 
         if self.clamp:
             grid = np.clip(grid, 0.0, 1.0)
@@ -257,6 +329,7 @@ class VoxelGridCA:
             "margin": float(self.margin),
             "voxel_size": float(vs),
             "sigma": float(self.sigma),
+            "pool": pool,
             "clamp": bool(self.clamp),
             "n_residues": int(n),
             "n_points_in_grid": int(ijk.shape[0]),
