@@ -34,7 +34,9 @@ def to_torch(
     prefer: str = "grid_or_graph",
     device: Optional[str] = None,
     matrix_as_channel: bool = True,
+    cloud_x_mode: str = "none",  # "none" | "onehot" | "onehot+plddt" | "onehot+plddt+bfactor"
 ) -> Dict[str, Any]:
+
     """
     Convert Morpheo artifact -> dict of torch tensors.
 
@@ -142,9 +144,50 @@ def to_torch(
 
     # --- CLOUD fallback
     else:
+        # --- CLOUD fallback / explicit cloud
         if not has_pos:
-            raise KeyError("Artifact cannot be represented as torch input: missing 'grid', 'edge_index', 'matrix', and 'pos'.")
+            raise KeyError(
+                "Artifact cannot be represented as torch input: missing 'grid', 'edge_index', 'matrix', and 'pos'."
+            )
+
         out["pos"] = _to_tensor(d["pos"], dtype="float32")
+
+        mode = (cloud_x_mode or "none").strip().lower()
+        if mode not in {"none", "onehot", "onehot+plddt", "onehot+plddt+bfactor"}:
+            raise ValueError("cloud_x_mode must be: none | onehot | onehot+plddt | onehot+plddt+bfactor")
+
+        # Build point-wise x if requested and possible
+        if mode != "none":
+            if "aa_index" not in d:
+                raise KeyError("cloud_x_mode requires 'aa_index' in artifact.")
+
+            aa = np.asarray(d["aa_index"], dtype=np.int64).reshape(-1)
+            n = aa.shape[0]
+
+            onehot = np.zeros((n, 21), dtype=np.float32)
+            valid = (aa >= 0) & (aa < 21)
+            onehot[np.arange(n)[valid], aa[valid]] = 1.0
+
+            feats = [onehot]
+
+            if "plddt" in d and ("plddt" in mode):
+                p = np.asarray(d["plddt"], dtype=np.float32).reshape(-1, 1)
+                p = np.nan_to_num(p, nan=0.0, posinf=0.0, neginf=0.0)
+                if float(np.nanmax(p)) > 1.5:
+                    p = p / 100.0
+                feats.append(p)
+
+            if "bfactor_ca" in d and ("bfactor" in mode):
+                b = np.asarray(d["bfactor_ca"], dtype=np.float32).reshape(-1, 1)
+                b = np.nan_to_num(b, nan=0.0, posinf=0.0, neginf=0.0)
+                # typical bfactor range can vary; normalize to 0..1 using /100 if large
+                if float(np.nanmax(b)) > 1.5:
+                    b = b / 100.0
+                feats.append(b)
+
+            out["x"] = _to_tensor(np.concatenate(feats, axis=1), dtype="float32")
+
+        # still attach raw scalars if present (useful for debugging)
         if "aa_index" in d:
             out["aa_index"] = _to_tensor(d["aa_index"], dtype="int64")
         if "plddt" in d:
@@ -152,6 +195,12 @@ def to_torch(
                 np.nan_to_num(np.asarray(d["plddt"], dtype=np.float32), nan=0.0),
                 dtype="float32",
             )
+        if "bfactor_ca" in d:
+            out["bfactor_ca"] = _to_tensor(
+                np.nan_to_num(np.asarray(d["bfactor_ca"], dtype=np.float32), nan=0.0),
+                dtype="float32",
+            )
+
 
     # --- Attach optional debug metadata
     for k in ("residue_ids", "resname"):
@@ -172,6 +221,13 @@ def load_torch(
     prefer: str = "grid_or_graph",
     device: Optional[str] = None,
     matrix_as_channel: bool = True,
+    cloud_x_mode: str = "none",
 ) -> Dict[str, Any]:
     artifact = StructureArtifact.load(Path(artifact_dir))
-    return to_torch(artifact, prefer=prefer, device=device, matrix_as_channel=matrix_as_channel)
+    return to_torch(
+        artifact,
+        prefer=prefer,
+        device=device,
+        matrix_as_channel=matrix_as_channel,
+        cloud_x_mode=cloud_x_mode,
+    )
