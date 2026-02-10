@@ -16,7 +16,7 @@ from morpheo.core.types import StructureArtifact, StructureInput
 @dataclass
 class DistogramBinsCA:
     name: str = "distogram_bins_ca"
-    # default bins: 2..20 Å, 36 bins style-ish (tú puedes ajustar)
+    # default bins: 2..20 Å, 36 bins style-ish 
     dmin: float = 2.0
     dmax: float = 20.0
     num_bins: int = 36
@@ -24,6 +24,7 @@ class DistogramBinsCA:
     dtype: str = "uint8"  # uint8 ok up to 255 bins
     use_cache: bool = True
     cache: Optional[DiskCache] = None
+    edges: Optional[list[float]] = None
 
     def fingerprint(self) -> str:
         return sha256_text(

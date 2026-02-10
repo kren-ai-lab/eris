@@ -16,11 +16,12 @@ from morpheo.core.types import StructureArtifact, StructureInput
 @dataclass
 class DistogramCA:
     name: str = "distogram_ca"
+    include_self: bool = True
     use_cache: bool = True
     cache: Optional[DiskCache] = None
 
     def fingerprint(self) -> str:
-        return sha256_text(f"{self.name}|use_cache={self.use_cache}")
+        return sha256_text(f"{self.name}|include_self={self.include_self}|use_cache={self.use_cache}")
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
         cache = self.cache or DiskCache()
@@ -33,16 +34,30 @@ class DistogramCA:
                 data, meta = hit
                 return StructureArtifact(self.name, data=data, meta=meta)
 
-        pos, residue_ids = load_and_extract(inp)
+        pos, residue_ids, resname, aa_index, plddt, bfactor_ca = load_and_extract(inp)
+        n = pos.shape[0]
 
         diff = pos[:, None, :] - pos[None, :, :]
         dist = np.sqrt((diff ** 2).sum(axis=-1)).astype(np.float32)
 
-        data = {"dist": dist, "pos": pos, "residue_ids": residue_ids}
+        if not self.include_self:
+            np.fill_diagonal(dist, np.nan)
+
+        data = {
+            "dist": dist,
+            "pos": pos.astype(np.float32),
+            "residue_ids": residue_ids.astype(np.str_),
+            "resname": resname.astype(np.str_),
+            "aa_index": aa_index.astype(np.int16),
+            "plddt": plddt.astype(np.float32),
+            "bfactor_ca": bfactor_ca.astype(np.float32),
+        }
+
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
             "input": inp.to_string(),
-            "n_residues": int(pos.shape[0]),
+            "include_self": bool(self.include_self),
+            "n_residues": int(n),
             "shapes": {k: list(v.shape) for k, v in data.items()},
         }
 
