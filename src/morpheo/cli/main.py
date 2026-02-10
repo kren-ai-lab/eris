@@ -9,6 +9,9 @@ from morpheo.core.registry import get_encoder, list_encoders
 from morpheo.core.types import StructureInput
 from morpheo.core.embeddings import load_node_embeddings
 
+import shutil
+from morpheo.core.cache import default_cache_dir
+
 app = typer.Typer(add_completion=False)
 
 
@@ -50,3 +53,15 @@ def encode(
     outdir = out / sid / encoder
     art.save(outdir)
     typer.echo(str(outdir))
+
+@app.command("clear-cache")
+def clear_cache() -> None:
+    """
+    Remove Morpheo disk cache directory.
+    """
+    cache_dir = default_cache_dir()
+    if cache_dir.exists():
+        shutil.rmtree(cache_dir)
+        typer.echo(f"Cache cleared: {cache_dir}")
+    else:
+        typer.echo(f"Cache directory does not exist: {cache_dir}")
