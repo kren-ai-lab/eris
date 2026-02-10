@@ -37,7 +37,7 @@ class ResidueContactGraph:
                 data, meta = hit
                 return StructureArtifact(self.name, data=data, meta=meta)
 
-        pos, residue_ids = load_and_extract(inp)
+        pos, residue_ids, resname, aa_index, plddt = load_and_extract(inp)
         n = pos.shape[0]
 
         diff = pos[:, None, :] - pos[None, :, :]
@@ -61,8 +61,11 @@ class ResidueContactGraph:
         data = {
             "pos": pos.astype(np.float32),
             "residue_ids": residue_ids.astype(np.str_),
-            "edge_index": edge_index,
-            "edge_dist": edge_dist,
+            "resname": resname.astype(np.str_),
+            "aa_index": aa_index.astype(np.int16),
+            "plddt": plddt.astype(np.float32),
+            "edge_index": edge_index.astype(np.int64),
+            "edge_dist": edge_dist.astype(np.float32),
         }
 
         meta: Dict[str, Any] = {

@@ -38,7 +38,7 @@ class ResidueKNNGraph:
                 data, meta = hit
                 return StructureArtifact(self.name, data=data, meta=meta)
 
-        pos, residue_ids = load_and_extract(inp)
+        pos, residue_ids, resname, aa_index, plddt = load_and_extract(inp)
         n = pos.shape[0]
         if n <= 1:
             edge_index = np.zeros((2, 0), dtype=np.int64)
@@ -67,6 +67,9 @@ class ResidueKNNGraph:
         data = {
             "pos": pos.astype(np.float32),
             "residue_ids": residue_ids.astype(np.str_),
+            "resname": resname.astype(np.str_),
+            "aa_index": aa_index.astype(np.int16),
+            "plddt": plddt.astype(np.float32),
             "edge_index": edge_index.astype(np.int64),
             "edge_dist": edge_dist.astype(np.float32),
         }
