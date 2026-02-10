@@ -78,5 +78,3 @@ class ContactMapCA:
 
         return StructureArtifact(self.name, data=data, meta=meta)
 
-
-register_encoder("contact_map_ca", lambda: ContactMapCA())

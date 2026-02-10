@@ -84,5 +84,3 @@ class ResidueContactGraph:
 
         return StructureArtifact(self.name, data=data, meta=meta)
 
-
-register_encoder("residue_contact_graph", lambda: ResidueContactGraph())

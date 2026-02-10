@@ -133,5 +133,3 @@ class ContactMapBinsCA:
 
         return StructureArtifact(self.name, data=data, meta=meta)
 
-
-register_encoder("contact_map_bins_ca", lambda: ContactMapBinsCA())

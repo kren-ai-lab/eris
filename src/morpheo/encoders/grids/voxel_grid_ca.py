@@ -341,5 +341,3 @@ class VoxelGridCA:
 
         return StructureArtifact(self.name, data=data, meta=meta)
 
-
-register_encoder("voxel_grid_ca", lambda: VoxelGridCA())

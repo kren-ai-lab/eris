@@ -127,5 +127,3 @@ class DistogramBinsCA:
 
         return StructureArtifact(self.name, data=data, meta=meta)
 
-
-register_encoder("distogram_bins_ca", lambda: DistogramBinsCA())

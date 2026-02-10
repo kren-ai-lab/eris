@@ -91,5 +91,3 @@ class ResidueKNNGraph:
 
         return StructureArtifact(self.name, data=data, meta=meta)
 
-
-register_encoder("residue_knn_graph", lambda: ResidueKNNGraph())

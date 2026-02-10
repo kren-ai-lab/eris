@@ -221,5 +221,3 @@ class ResidueKNNGraphNS:
 
         return StructureArtifact(self.name, data=data, meta=meta)
 
-
-register_encoder("residue_knn_graph_ns", lambda: ResidueKNNGraphNS())

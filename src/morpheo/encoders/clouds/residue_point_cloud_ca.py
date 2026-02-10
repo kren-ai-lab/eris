@@ -77,6 +77,3 @@ class ResiduePointCloudCA:
             cache.set(key, data=data, meta=meta)
 
         return StructureArtifact(self.name, data=data, meta=meta)
-
-
-register_encoder("residue_point_cloud_ca", lambda: ResiduePointCloudCA())

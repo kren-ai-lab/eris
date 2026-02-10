@@ -52,13 +52,23 @@ def _apply_params(enc: Any, params_json: str, allow_unknown: bool = False) -> No
 
 
 @app.command()
-def encoders() -> None:
-    """
-    List available encoders.
-    """
-    for name in list_encoders():
-        typer.echo(name)
+def encoders(
+    verbose: bool = typer.Option(False, "--verbose"),
+) -> None:
+    from morpheo.core.registry import list_encoders, list_encoder_info
 
+    if not verbose:
+        for n in list_encoders():
+            typer.echo(n)
+        return
+
+    # verbose table
+    rows = list_encoder_info()
+    header = f"{'name':28s} {'type':7s} {'level':7s} {'family':10s} desc"
+    typer.echo(header)
+    typer.echo("-" * len(header))
+    for r in rows:
+        typer.echo(f"{r.name:28s} {r.type:7s} {r.level:7s} {r.family:10s} {r.desc}")
 
 @app.command()
 def clear_cache() -> None:
