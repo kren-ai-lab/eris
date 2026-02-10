@@ -239,3 +239,111 @@ def batch(
         typer.echo(f"Done: ok={ok} skipped={skipped} failed={len(failures)} (see {failed})")
     else:
         typer.echo(f"Done: ok={ok} skipped={skipped} failed=0")
+
+@app.command()
+def pack(
+    root: Path = typer.Option(Path("out"), "--root", exists=True, readable=True),
+    out_csv: Path = typer.Option(Path("index.csv"), "--out"),
+    encoder: Optional[str] = typer.Option(None, "--encoder", help="Only include this encoder"),
+    prefer: str = typer.Option(
+        "any",
+        "--prefer",
+        help="Filter by representation type: any|graph|grid|cloud|matrix",
+    ),
+    include_meta: bool = typer.Option(False, "--include-meta", help="Store meta.json content as a JSON string column"),
+) -> None:
+    """
+    Scan an output folder and build an index.csv for dataset loading.
+
+    Expected structure:
+      out/<sample_id>/<encoder>/meta.json
+    """
+    import json
+    import csv
+
+    prefer = (prefer or "any").strip().lower()
+    if prefer not in {"any", "graph", "grid", "cloud", "matrix"}:
+        raise typer.BadParameter("prefer must be one of: any, graph, grid, cloud, matrix")
+
+    def is_prefer_ok(meta: dict) -> bool:
+        shapes = meta.get("shapes", {})
+        if not isinstance(shapes, dict):
+            shapes = {}
+
+        has_graph = "edge_index" in shapes
+        has_grid = "grid" in shapes
+        has_cloud = "pos" in shapes
+
+        # matrix family
+        has_matrix = any(k in shapes for k in ("dist", "dist_bins", "contact", "contact_bins"))
+
+        if prefer == "any":
+            return True
+        if prefer == "graph":
+            return has_graph
+        if prefer == "grid":
+            return has_grid
+        if prefer == "cloud":
+            return has_cloud and (not has_graph) and (not has_grid)
+        if prefer == "matrix":
+            return has_matrix
+        return True
+
+    rows = []
+    for sid_dir in sorted([p for p in root.iterdir() if p.is_dir()]):
+        sid = sid_dir.name
+        for enc_dir in sorted([p for p in sid_dir.iterdir() if p.is_dir()]):
+            enc = enc_dir.name
+            if encoder is not None and enc != encoder:
+                continue
+
+            meta_path = enc_dir / "meta.json"
+            data_path = enc_dir / "data.npz"
+            if not meta_path.exists() or not data_path.exists():
+                continue
+
+            try:
+                meta = json.loads(meta_path.read_text())
+            except Exception:
+                continue
+
+            if not is_prefer_ok(meta):
+                continue
+
+            shapes = meta.get("shapes", {}) if isinstance(meta.get("shapes", {}), dict) else {}
+            n_res = meta.get("n_residues", "")
+            n_edges = meta.get("n_edges", "")
+
+            grid_shape = ""
+            if "grid" in shapes and isinstance(shapes["grid"], list):
+                grid_shape = "x".join(str(x) for x in shapes["grid"])
+
+            row = {
+                "id": sid,
+                "encoder": enc,
+                "artifact_dir": str(enc_dir),
+                "data_path": str(data_path),
+                "meta_path": str(meta_path),
+                "n_residues": n_res,
+                "n_edges": n_edges,
+                "grid_shape": grid_shape,
+            }
+
+            if include_meta:
+                row["meta_json"] = json.dumps(meta, ensure_ascii=False)
+
+            rows.append(row)
+
+    if not rows:
+        typer.echo("No artifacts found (after filtering).")
+        raise typer.Exit(code=1)
+
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = list(rows[0].keys())
+    with out_csv.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        w.writerows(rows)
+
+    typer.echo(f"Wrote {len(rows)} rows -> {out_csv}")
