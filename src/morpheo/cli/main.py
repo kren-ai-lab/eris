@@ -122,8 +122,6 @@ def encode(
     art.save(outdir)
     typer.echo(str(outdir))
 
-
-
 @app.command()
 def batch(
     manifest: Path = typer.Option(..., "--manifest", exists=True, readable=True),
