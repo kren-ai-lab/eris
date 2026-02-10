@@ -28,39 +28,45 @@ def _is_compatible(meta: Dict[str, Any], prefer: str) -> bool:
 
     has_grid = "grid" in shapes
     has_graph = "edge_index" in shapes
-    has_cloud = "pos" in shapes  # CA clouds + graphs often have pos too
+    has_cloud = "pos" in shapes
+    has_matrix = any(k in shapes for k in ("dist", "dist_bins", "contact", "contact_bins"))
 
     if prefer == "grid":
         return has_grid
     if prefer == "graph":
         return has_graph
     if prefer == "cloud":
-        return has_cloud
+        # clouds “puros”: pos pero no edge_index ni grid
+        return has_cloud and (not has_graph) and (not has_grid)
+    if prefer == "matrix":
+        return has_matrix
     if prefer == "grid_or_graph":
         return has_grid or has_graph
-    # fallback: be permissive
     return True
 
 
 @dataclass
 class MorpheoFolderDataset:
     """
-    PyTorch Dataset to load Morpheo artifacts referenced by a pack-generated index.csv.
+    Dataset que consume `index.csv` generado por `morpheo pack`.
+    Carga artifacts con `load_torch(...)`.
 
-    Parameters
+    Parámetros
     ----------
-    index_csv
-        Path to index.csv produced by `morpheo pack`.
-    prefer
-        'grid', 'graph', 'cloud', or 'grid_or_graph'.
-    encoders
-        Optional allowlist of encoders.
-    device
-        Optional torch device string, e.g. 'cpu', 'cuda'.
-    transform
-        Optional transform applied to sample dict.
-    auto_filter
-        If True, filters rows by representation compatibility (using meta.json shapes).
+    index_csv:
+        Path al index.csv.
+    prefer:
+        'grid', 'graph', 'cloud', 'matrix', o 'grid_or_graph'
+    encoders:
+        allowlist opcional de encoders.
+    device:
+        'cpu', 'cuda', etc.
+    transform:
+        función opcional que transforma el sample dict.
+    auto_filter:
+        filtra filas incompatibles usando meta.json["shapes"].
+    matrix_as_channel:
+        si True, matrices se entregan como (1,N,N)
     """
     index_csv: Union[str, Path]
     prefer: str = "grid_or_graph"
@@ -68,6 +74,7 @@ class MorpheoFolderDataset:
     device: Optional[str] = None
     transform: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
     auto_filter: bool = True
+    matrix_as_channel: bool = True
 
     def __post_init__(self) -> None:
         self.index_csv = Path(self.index_csv)
@@ -82,7 +89,6 @@ class MorpheoFolderDataset:
             for r in self.rows:
                 meta_path = Path(r.get("meta_path", ""))
                 if not meta_path.exists():
-                    # if meta missing, keep (or drop). I'd drop to be safe.
                     continue
                 try:
                     meta = json.loads(meta_path.read_text())
@@ -102,12 +108,16 @@ class MorpheoFolderDataset:
         r = self.rows[idx]
         artifact_dir = Path(r["artifact_dir"])
 
-        sample = load_torch(artifact_dir, prefer=self.prefer, device=self.device)
+        sample = load_torch(
+            artifact_dir, prefer=self.prefer, device=self.device
+        )
 
+        # attach identifiers
         sample["id"] = r.get("id")
         sample["encoder"] = r.get("encoder")
         sample["artifact_dir"] = str(artifact_dir)
 
+        # optional csv fields
         for k in ("n_residues", "n_edges", "grid_shape"):
             if k in r and r[k] != "":
                 sample[k] = r[k]
@@ -116,3 +126,6 @@ class MorpheoFolderDataset:
             sample = self.transform(sample)
 
         return sample
+
+
+__all__ = ["MorpheoFolderDataset"]
