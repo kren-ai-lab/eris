@@ -10,3 +10,4 @@ from morpheo.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from morpheo.encoders.graphs.residue_knn_graph_ns import ResidueKNNGraphNS
 
 from morpheo.encoders import clouds  # noqa: F401
+from morpheo.encoders import grids  # noqa: F401
