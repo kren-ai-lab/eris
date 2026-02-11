@@ -195,6 +195,13 @@ def to_pyg(
     if "resname" in d:
         data.resname = np.asarray(d["resname"]).astype(str).tolist()
 
+    if "graph_attr" in d:
+        ga = np.asarray(d["graph_attr"], dtype=np.float32).reshape(-1)
+        data.graph_attr = torch.from_numpy(ga).float()
+
+    if "graph_attr_keys" in d:
+        data.graph_attr_keys = np.asarray(d["graph_attr_keys"]).astype(str).tolist()
+        
     return data
 
 

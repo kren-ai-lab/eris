@@ -222,6 +222,13 @@ def to_torch(
                 dtype="float32",
             )
 
+    # --- Optional graph-level attributes (always expose if present)
+    if "graph_attr" in d:
+        out["graph_attr"] = _to_tensor(d["graph_attr"], dtype="float32").reshape(-1)
+
+    if "graph_attr_keys" in d:
+        out["graph_attr_keys"] = np.asarray(d["graph_attr_keys"]).astype(str).tolist()
+
     # --- Attach optional debug metadata
     for k in ("residue_ids", "resname"):
         if k in d:

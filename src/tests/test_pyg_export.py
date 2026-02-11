@@ -35,6 +35,9 @@ def test_export_pyg_graph_ns_auto(tmp_path: Path):
     assert g.edge_attr.ndim == 2
     assert g.edge_attr.shape[0] == g.edge_index.shape[1]
 
+    assert hasattr(g, "graph_attr")
+    assert g.graph_attr.ndim == 1
+    assert g.graph_attr.numel() > 0
 
 @pytest.mark.skipif(
     pytest.importorskip("torch", reason="torch not installed") is None,
