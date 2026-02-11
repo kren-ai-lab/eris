@@ -4,7 +4,7 @@ import numpy as np
 from morpheo.core.registry import get_encoder
 from morpheo.core.types import StructureInput
 
-DATA = Path("src/tests/data/1AQ2.pdb")
+DATA = Path("tests/data/1AQ2.pdb")
 
 def _check_artifact(art):
     pos = art.data["pos"]
