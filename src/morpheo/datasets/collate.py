@@ -4,35 +4,93 @@ from typing import Any, Dict, List
 
 import torch
 
-def collate_graph(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
+def collate_graph(
+    batch: List[Dict[str, Any]],
+    *,
+    pad_x: bool = True,
+    pad_edge_attr: bool = True,
+    pad_graph_attr: bool = True,
+) -> Dict[str, Any]:
     """
     Collate for graphs WITHOUT PyG dependency.
+
+    Supports mixed feature dims by padding:
+      - x: pad to Fmax if pad_x=True
+      - edge_attr: pad to Femax if pad_edge_attr=True
+      - graph_attr: pad to Fgmax if pad_graph_attr=True
 
     Expects each sample has:
       - x: (N,F)
       - edge_index: (2,E)
     Optional:
+      - edge_attr: (E,Fe)
       - edge_dist: (E,)
       - pos: (N,3)
+      - graph_attr: (Fg,)
+      - graph_attr_keys: list[str]
     """
     xs = []
     edge_indices = []
+    edge_attrs = []
     edge_dists = []
     poss = []
     batch_vec = []
 
     node_offset = 0
+
+    # Max dims (for padding)
+    Fmax = max(int(b["x"].shape[1]) for b in batch)
+
+    has_edge_attr_any = any(("edge_attr" in b and b["edge_attr"] is not None) for b in batch)
+    Femax = 0
+    if has_edge_attr_any:
+        Femax = max(
+            int(b["edge_attr"].shape[1])
+            for b in batch
+            if ("edge_attr" in b and b["edge_attr"] is not None)
+        )
+
+    has_graph_attr_any = any(("graph_attr" in b and b["graph_attr"] is not None) for b in batch)
+    Fgmax = 0
+    if has_graph_attr_any:
+        Fgmax = max(
+            int(b["graph_attr"].reshape(-1).shape[0])
+            for b in batch
+            if ("graph_attr" in b and b["graph_attr"] is not None)
+        )
+
     for i, b in enumerate(batch):
         x = b["x"]
         ei = b["edge_index"]
+        n = int(x.shape[0])
 
-        n = x.shape[0]
+        # --- pad x
+        if pad_x and int(x.shape[1]) != Fmax:
+            pad = torch.zeros((n, Fmax), dtype=x.dtype, device=x.device)
+            pad[:, : int(x.shape[1])] = x
+            x = pad
         xs.append(x)
+
         edge_indices.append(ei + node_offset)
 
-        if "edge_dist" in b:
+        # --- edge_attr (optional + pad)
+        if has_edge_attr_any:
+            if "edge_attr" in b and b["edge_attr"] is not None:
+                ea = b["edge_attr"]
+                e = int(ea.shape[0])
+                if pad_edge_attr and int(ea.shape[1]) != Femax:
+                    pad_ea = torch.zeros((e, Femax), dtype=ea.dtype, device=ea.device)
+                    pad_ea[:, : int(ea.shape[1])] = ea
+                    ea = pad_ea
+            else:
+                # missing -> zeros
+                e = int(ei.shape[1])
+                ea = torch.zeros((e, Femax), dtype=x.dtype, device=x.device)
+            edge_attrs.append(ea)
+
+        if "edge_dist" in b and b["edge_dist"] is not None:
             edge_dists.append(b["edge_dist"])
-        if "pos" in b:
+        if "pos" in b and b["pos"] is not None:
             poss.append(b["pos"])
 
         batch_vec.append(torch.full((n,), i, dtype=torch.long, device=x.device))
@@ -44,11 +102,32 @@ def collate_graph(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
         "batch": torch.cat(batch_vec, dim=0),
     }
 
+    if has_edge_attr_any:
+        out["edge_attr"] = torch.cat(edge_attrs, dim=0)
+
     if edge_dists:
         out["edge_dist"] = torch.cat(edge_dists, dim=0)
 
     if poss:
         out["pos"] = torch.cat(poss, dim=0)
+
+    # --- graph_attr (optional + pad)
+    if has_graph_attr_any:
+        gas = []
+        for b in batch:
+            if "graph_attr" in b and b["graph_attr"] is not None:
+                ga = b["graph_attr"].reshape(-1)
+                if pad_graph_attr and int(ga.numel()) != Fgmax:
+                    pad_ga = torch.zeros((Fgmax,), dtype=ga.dtype, device=ga.device)
+                    pad_ga[: int(ga.numel())] = ga
+                    ga = pad_ga
+            else:
+                ga = torch.zeros((Fgmax,), dtype=out["x"].dtype, device=out["x"].device)
+            gas.append(ga.reshape(1, -1))
+        out["graph_attr"] = torch.cat(gas, dim=0)
+
+        if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
+            out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
 
     if "id" in batch[0]:
         out["id"] = [b.get("id") for b in batch]
@@ -57,15 +136,63 @@ def collate_graph(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     return out
 
+
+def collate_graph_strict(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Strict collate: requires identical feature dimensions across samples.
+    Useful for training where you want a fixed schema and no padding.
+    """
+    # x dim check
+    F0 = int(batch[0]["x"].shape[1])
+    for j, b in enumerate(batch[1:], start=1):
+        Fj = int(b["x"].shape[1])
+        if Fj != F0:
+            raise RuntimeError(f"collate_graph_strict: x feature dim mismatch: batch[0]={F0}, batch[{j}]={Fj}")
+
+    # edge_attr dim check (only if present in any)
+    has_ea_any = any(("edge_attr" in b and b["edge_attr"] is not None) for b in batch)
+    if has_ea_any:
+        # require all to have it and same Fe
+        if not all(("edge_attr" in b and b["edge_attr"] is not None) for b in batch):
+            raise RuntimeError("collate_graph_strict: some samples missing edge_attr while others have it.")
+        Fe0 = int(batch[0]["edge_attr"].shape[1])
+        for j, b in enumerate(batch[1:], start=1):
+            Fej = int(b["edge_attr"].shape[1])
+            if Fej != Fe0:
+                raise RuntimeError(f"collate_graph_strict: edge_attr dim mismatch: batch[0]={Fe0}, batch[{j}]={Fej}")
+
+    # graph_attr dim check (only if present in any)
+    has_ga_any = any(("graph_attr" in b and b["graph_attr"] is not None) for b in batch)
+    if has_ga_any:
+        if not all(("graph_attr" in b and b["graph_attr"] is not None) for b in batch):
+            raise RuntimeError("collate_graph_strict: some samples missing graph_attr while others have it.")
+        G0 = int(batch[0]["graph_attr"].reshape(-1).numel())
+        for j, b in enumerate(batch[1:], start=1):
+            Gj = int(b["graph_attr"].reshape(-1).numel())
+            if Gj != G0:
+                raise RuntimeError(f"collate_graph_strict: graph_attr dim mismatch: batch[0]={G0}, batch[{j}]={Gj}")
+
+    # If all ok, just call padded collate with padding disabled
+    return collate_graph(batch, pad_x=False, pad_edge_attr=False, pad_graph_attr=False)
+
 def collate_grid(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Collate for voxel grids.
     Expects each sample has:
       - x: (C,G,G,G)
+    Optional:
+      - graph_attr: (Fg,)
+      - graph_attr_keys: list[str]
     """
     x = torch.stack([b["x"] for b in batch], dim=0)  # (B,C,G,G,G)
-
     out: Dict[str, Any] = {"x": x}
+
+    # graph-level features (stack)
+    if "graph_attr" in batch[0] and batch[0]["graph_attr"] is not None:
+        if all(("graph_attr" in b and b["graph_attr"] is not None) for b in batch):
+            out["graph_attr"] = torch.cat([b["graph_attr"].reshape(1, -1) for b in batch], dim=0)
+            if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
+                out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
 
     # keep ids if present
     if "id" in batch[0]:
@@ -76,13 +203,10 @@ def collate_grid(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     # optional: carry spatial meta (assumes consistent per-batch)
     for k in ("voxel_size", "origin", "centroid"):
         if k in batch[0]:
-            # if stored as tensors
-            if torch.is_tensor(batch[0][k]):
-                out[k] = batch[0][k]
-            else:
-                out[k] = batch[0][k]
+            out[k] = batch[0][k]
 
     return out
+
 
 def collate_matrix(
     batch: List[Dict[str, Any]],
@@ -99,6 +223,9 @@ def collate_matrix(
       - x: (B,1,Nmax,Nmax) (always with channel dim)
       - n: list[int] original sizes
       - matrix_key: list[str] if present
+    Optional:
+      - graph_attr: (Fg,) stacked to (B,Fg)
+      - graph_attr_keys: list[str]
     """
     xs = []
     ns = []
@@ -110,7 +237,6 @@ def collate_matrix(
         if x.ndim == 2:
             n = int(x.shape[0])
         elif x.ndim == 3:
-            # (1,N,N)
             n = int(x.shape[-1])
         else:
             raise ValueError(f"Expected x to be 2D or 3D, got shape {tuple(x.shape)}")
@@ -125,11 +251,7 @@ def collate_matrix(
     out_x = torch.full((len(batch), 1, nmax, nmax), float(pad_value), dtype=dtype, device=device)
 
     for i, x in enumerate(xs):
-        if x.ndim == 2:
-            x2 = x
-        else:
-            x2 = x[0]  # (N,N)
-
+        x2 = x if x.ndim == 2 else x[0]
         n = ns[i]
         out_x[i, 0, :n, :n] = x2
 
@@ -138,6 +260,13 @@ def collate_matrix(
         "n": ns,
         "matrix_key": keys,
     }
+
+    # graph-level features (stack)
+    if "graph_attr" in batch[0] and batch[0]["graph_attr"] is not None:
+        if all(("graph_attr" in b and b["graph_attr"] is not None) for b in batch):
+            out["graph_attr"] = torch.cat([b["graph_attr"].reshape(1, -1) for b in batch], dim=0)
+            if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
+                out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
 
     # keep ids if present
     if "id" in batch[0]:
@@ -163,6 +292,7 @@ def collate_matrix(
 
     return out
 
+
 def collate_grid_pad(
     batch: List[Dict[str, Any]],
     *,
@@ -180,6 +310,9 @@ def collate_grid_pad(
       - c: list[int] original channels
       - g: list[int] original grid sizes
       - mask (optional): (B,1,Gmax,Gmax,Gmax) valid voxels mask per sample
+    Optional:
+      - graph_attr: (Fg,) stacked to (B,Fg)
+      - graph_attr_keys: list[str]
     """
     xs = [b["x"] for b in batch]
     device = xs[0].device
@@ -198,6 +331,13 @@ def collate_grid_pad(
         out_x[i, :c, :g, :g, :g] = x
 
     out: Dict[str, Any] = {"x": out_x, "c": Cs, "g": Gs}
+
+    # graph-level features (stack)
+    if "graph_attr" in batch[0] and batch[0]["graph_attr"] is not None:
+        if all(("graph_attr" in b and b["graph_attr"] is not None) for b in batch):
+            out["graph_attr"] = torch.cat([b["graph_attr"].reshape(1, -1) for b in batch], dim=0)
+            if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
+                out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
 
     if "id" in batch[0]:
         out["id"] = [b.get("id") for b in batch]
@@ -221,6 +361,7 @@ def collate_grid_pad(
 
     return out
 
+
 def collate_cloud_pad(
     batch: List[Dict[str, Any]],
     *,
@@ -235,6 +376,8 @@ def collate_cloud_pad(
       - pos: (N,3)
     Optional:
       - x: (N,F)
+      - graph_attr: (Fg,) stacked to (B,Fg)
+      - graph_attr_keys: list[str]
 
     Returns:
       - pos: (B,Nmax,3)
@@ -251,10 +394,8 @@ def collate_cloud_pad(
 
     out_pos = torch.full((len(batch), nmax, 3), float(pad_value_pos), dtype=dtype_pos, device=device)
 
-    has_x = "x" in batch[0]
+    has_x = ("x" in batch[0]) and (batch[0]["x"] is not None)
     out_x = None
-    F = None
-    dtype_x = None
     if has_x:
         xs = [b["x"] for b in batch]
         F = int(xs[0].shape[1])
@@ -264,7 +405,7 @@ def collate_cloud_pad(
     for i, b in enumerate(batch):
         n = ns[i]
         out_pos[i, :n, :] = b["pos"]
-        if has_x:
+        if has_x and out_x is not None:
             out_x[i, :n, :] = b["x"]
 
     out: Dict[str, Any] = {"pos": out_pos, "n": ns}
@@ -277,6 +418,13 @@ def collate_cloud_pad(
         for i, n in enumerate(ns):
             mask[i, :n] = True
         out["mask"] = mask
+
+    # graph-level features (stack)
+    if "graph_attr" in batch[0] and batch[0]["graph_attr"] is not None:
+        if all(("graph_attr" in b and b["graph_attr"] is not None) for b in batch):
+            out["graph_attr"] = torch.cat([b["graph_attr"].reshape(1, -1) for b in batch], dim=0)
+            if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
+                out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
 
     if "id" in batch[0]:
         out["id"] = [b.get("id") for b in batch]
