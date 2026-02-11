@@ -12,7 +12,7 @@ from morpheo.core.io import load_and_extract
 from morpheo.core.types import StructureArtifact, StructureInput
 from morpheo.features.node import build_node_attr
 from morpheo.features.edge import build_edge_attr
-
+from morpheo.features.graph_stats import compute_graph_stats, pack_graph_stats
 
 _NEIGHBOR_OFFSETS = [(dx, dy, dz) for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)]
 
@@ -189,6 +189,9 @@ class ResidueKNNGraphNS:
 
         seq_pos = np.arange(pos.shape[0], dtype=np.int64)
 
+        stats = compute_graph_stats(edge_index=edge_index, edge_dist=edge_dist, n_nodes=int(pos.shape[0]))
+        graph_attr, graph_attr_keys = pack_graph_stats(stats)
+
         node_attr = build_node_attr(
             aa_index,
             plddt=plddt if "plddt" in locals() else None,
@@ -222,7 +225,11 @@ class ResidueKNNGraphNS:
             "edge_dist": edge_dist.astype(np.float32),
             "node_attr": node_attr,
             "edge_attr": edge_attr,
+            
         }
+
+        data["graph_attr"] = graph_attr
+        data["graph_attr_keys"] = np.asarray(graph_attr_keys, dtype=np.str_)
 
         if plddt is not None:
             data["plddt"] = plddt.astype(np.float32)

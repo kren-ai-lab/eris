@@ -12,6 +12,7 @@ from morpheo.core.io import load_and_extract
 from morpheo.core.types import StructureArtifact, StructureInput
 from morpheo.features.node import build_node_attr
 from morpheo.features.edge import build_edge_attr
+from morpheo.features.graph_stats import compute_graph_stats, pack_graph_stats
 
 def _cell_index(pos: np.ndarray, cell_size: float) -> np.ndarray:
     # floor divide for negatives as well
@@ -135,6 +136,9 @@ class ResidueContactGraphNS:
 
         edge_index, edge_dist = _neighbor_search_edges(pos, cutoff=self.cutoff)
 
+        stats = compute_graph_stats(edge_index=edge_index, edge_dist=edge_dist, n_nodes=int(pos.shape[0]))
+        graph_attr, graph_attr_keys = pack_graph_stats(stats)
+
         seq_pos = np.arange(pos.shape[0], dtype=np.int64)
 
         node_attr = build_node_attr(
@@ -172,6 +176,9 @@ class ResidueContactGraphNS:
             "node_attr": node_attr,
             "edge_attr": edge_attr,
         }
+
+        data["graph_attr"] = graph_attr
+        data["graph_attr_keys"] = np.asarray(graph_attr_keys, dtype=np.str_)
 
         if plddt is not None:
             data["plddt"] = plddt.astype(np.float32)
