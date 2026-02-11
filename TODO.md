@@ -18,24 +18,6 @@
 
 ---
 
-## 1) Core I/O (PDB/mmCIF) y normalización estructural
-
-* **Parser robusto**
-
-  * PDB + mmCIF
-  * selección consistente `chain_id`, `model_index`
-  * política de `altloc` y `occupancy` documentada y testeada
-  * manejo gaps, residuos raros, faltan átomos (CA missing)
-* **Normalización**
-
-  * mapping estable residuo ↔ índice
-  * bundle de átomos/residuos con IDs estables
-* **DoD**
-
-  * tests con 1 PDB + 1 CIF y outputs comparables
-
----
-
 ## 2) Contrato único de artefactos (StructureArtifact)
 
 * **Formato obligatorio**
