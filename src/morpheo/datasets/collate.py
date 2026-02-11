@@ -184,6 +184,16 @@ def collate_grid(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
       - graph_attr: (Fg,)
       - graph_attr_keys: list[str]
     """
+
+    x0 = batch[0]["x"]
+    for j, b in enumerate(batch[1:], start=1):
+        if tuple(b["x"].shape) != tuple(x0.shape):
+            raise RuntimeError(
+                f"collate_grid: grid shape mismatch at batch[{j}]: "
+                f"{tuple(x0.shape)} vs {tuple(b['x'].shape)}. "
+                "Use collate_grid_pad for mixed grid shapes/channels."
+            )
+        
     x = torch.stack([b["x"] for b in batch], dim=0)  # (B,C,G,G,G)
     out: Dict[str, Any] = {"x": x}
 

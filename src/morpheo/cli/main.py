@@ -158,11 +158,15 @@ def batch(
 def pack(
     root: Path = typer.Option(Path("out"), "--root", exists=True, readable=True),
     out_csv: Path = typer.Option(Path("index.csv"), "--out"),
-    encoder: Optional[str] = typer.Option(None, "--encoder", help="Only include this encoder"),
+    encoder: Optional[str] = typer.Option(
+        None,
+        "--encoder",
+        help="Only include encoder(s). Comma-separated allowed, e.g. residue_contact_graph_ns,residue_knn_graph_ns",
+    ),
     prefer: str = typer.Option(
         "any",
         "--prefer",
-        help="Filter by representation type: any|graph|grid|cloud|matrix",
+        help="Filter by representation type: any|graph|graph_ns|grid|cloud|matrix",
     ),
     include_meta: bool = typer.Option(False, "--include-meta", help="Store meta.json content as a JSON string column"),
 ) -> None:
@@ -171,44 +175,157 @@ def pack(
 
     Expected structure:
       out/<sample_id>/<encoder>/meta.json
+      out/<sample_id>/<encoder>/data.npz
     """
-    import json
     import csv
+    import json
+
+    import numpy as np
 
     prefer = (prefer or "any").strip().lower()
-    if prefer not in {"any", "graph", "grid", "cloud", "matrix"}:
-        raise typer.BadParameter("prefer must be one of: any, graph, grid, cloud, matrix")
+    allowed = {"any", "graph", "graph_ns", "grid", "cloud", "matrix"}
+    if prefer not in allowed:
+        raise typer.BadParameter(f"prefer must be one of: {', '.join(sorted(allowed))}")
 
-    def is_prefer_ok(meta: dict) -> bool:
+    enc_allow = None
+    if encoder is not None:
+        enc_allow = {e.strip() for e in encoder.split(",") if e.strip()}
+        if not enc_allow:
+            enc_allow = None
+
+    def _infer_from_npz(npz_path: Path) -> dict:
+        """
+        Cheap inference without loading full arrays.
+        """
+        info: dict = {}
+        try:
+            with np.load(npz_path, allow_pickle=False) as z:
+                files = set(z.files)
+                # dims
+                if "node_attr" in files:
+                    info["x_dim"] = int(z["node_attr"].shape[1])
+                elif "node_emb" in files:
+                    info["x_dim"] = int(z["node_emb"].shape[1])
+                elif "aa_index" in files:
+                    # onehot baseline (21) + optional plddt/bfactor often done later
+                    info["x_dim"] = 21
+                else:
+                    info["x_dim"] = ""
+
+                if "edge_attr" in files:
+                    info["edge_attr_dim"] = int(z["edge_attr"].shape[1])
+                else:
+                    info["edge_attr_dim"] = ""
+
+                if "graph_attr" in files:
+                    info["graph_attr_dim"] = int(z["graph_attr"].reshape(-1).shape[0])
+                else:
+                    info["graph_attr_dim"] = ""
+
+                # matrix key + size
+                matrix_key = ""
+                matrix_n = ""
+                for k in ("dist", "dist_bins", "contact", "contact_bins"):
+                    if k in files:
+                        matrix_key = k
+                        arr = z[k]
+                        matrix_n = int(arr.shape[-1])
+                        break
+                info["matrix_key"] = matrix_key
+                info["matrix_n"] = matrix_n
+
+                # grid shape
+                if "grid" in files:
+                    info["grid_shape"] = "x".join(str(x) for x in z["grid"].shape)
+                else:
+                    info["grid_shape"] = ""
+
+                # graph marker
+                info["has_graph"] = "edge_index" in files
+                info["has_grid"] = "grid" in files
+                info["has_cloud"] = "pos" in files
+                info["has_matrix"] = bool(matrix_key)
+
+        except Exception:
+            # best effort
+            info.update(
+                {
+                    "x_dim": "",
+                    "edge_attr_dim": "",
+                    "graph_attr_dim": "",
+                    "matrix_key": "",
+                    "matrix_n": "",
+                    "grid_shape": "",
+                    "has_graph": False,
+                    "has_grid": False,
+                    "has_cloud": False,
+                    "has_matrix": False,
+                }
+            )
+        return info
+
+    def _prefer_ok(enc: str, meta: dict, inferred: dict) -> bool:
+        # Try registry-style meta if present
+        enc_type = meta.get("type") or meta.get("encoder_type") or meta.get("repr_type")
+        if isinstance(enc_type, str):
+            enc_type = enc_type.strip().lower()
+        else:
+            enc_type = None
+
+        family = meta.get("family")
+        if isinstance(family, str):
+            family = family.strip().lower()
+        else:
+            family = None
+
+        # Fallback to shapes
         shapes = meta.get("shapes", {})
         if not isinstance(shapes, dict):
             shapes = {}
 
-        has_graph = "edge_index" in shapes
-        has_grid = "grid" in shapes
-        has_cloud = "pos" in shapes
+        has_graph = bool(inferred.get("has_graph")) or ("edge_index" in shapes)
+        has_grid = bool(inferred.get("has_grid")) or ("grid" in shapes)
+        has_cloud = bool(inferred.get("has_cloud")) or ("pos" in shapes)
+        has_matrix = bool(inferred.get("has_matrix")) or any(k in shapes for k in ("dist", "dist_bins", "contact", "contact_bins"))
 
-        # matrix family
-        has_matrix = any(k in shapes for k in ("dist", "dist_bins", "contact", "contact_bins"))
-
+        # Resolve prefer
         if prefer == "any":
             return True
+
         if prefer == "graph":
-            return has_graph
+            return (enc_type == "graph") or has_graph
+
+        if prefer == "graph_ns":
+            # rule: encoder name endswith _ns OR family == "residue" + presence of node_attr/edge_attr/graph_attr
+            if enc.endswith("_ns"):
+                return True
+            # fallback: require graph + node_attr present
+            return has_graph and bool(inferred.get("x_dim", "")) and ("node_attr" in shapes or meta.get("has_node_attr") is True)
+
         if prefer == "grid":
-            return has_grid
+            return (enc_type == "grid") or has_grid
+
         if prefer == "cloud":
-            return has_cloud and (not has_graph) and (not has_grid)
+            # cloud should be pos-only (not graph/grid) in our worldview
+            if enc_type == "cloud":
+                return True
+            return has_cloud and (not has_graph) and (not has_grid) and (not has_matrix)
+
         if prefer == "matrix":
-            return has_matrix
+            return (enc_type == "matrix") or has_matrix
+
         return True
 
     rows = []
-    for sid_dir in sorted([p for p in root.iterdir() if p.is_dir()]):
+    sid_dirs = sorted([p for p in root.iterdir() if p.is_dir()])
+
+    for sid_dir in sid_dirs:
         sid = sid_dir.name
-        for enc_dir in sorted([p for p in sid_dir.iterdir() if p.is_dir()]):
+        enc_dirs = sorted([p for p in sid_dir.iterdir() if p.is_dir()])
+
+        for enc_dir in enc_dirs:
             enc = enc_dir.name
-            if encoder is not None and enc != encoder:
+            if enc_allow is not None and enc not in enc_allow:
                 continue
 
             meta_path = enc_dir / "meta.json"
@@ -219,18 +336,16 @@ def pack(
             try:
                 meta = json.loads(meta_path.read_text())
             except Exception:
-                continue
+                meta = {}
 
-            if not is_prefer_ok(meta):
+            inferred = _infer_from_npz(data_path)
+
+            if not _prefer_ok(enc, meta, inferred):
                 continue
 
             shapes = meta.get("shapes", {}) if isinstance(meta.get("shapes", {}), dict) else {}
             n_res = meta.get("n_residues", "")
             n_edges = meta.get("n_edges", "")
-
-            grid_shape = ""
-            if "grid" in shapes and isinstance(shapes["grid"], list):
-                grid_shape = "x".join(str(x) for x in shapes["grid"])
 
             row = {
                 "id": sid,
@@ -240,9 +355,18 @@ def pack(
                 "meta_path": str(meta_path),
                 "n_residues": n_res,
                 "n_edges": n_edges,
-                "grid_shape": grid_shape,
+                # dims to avoid collate surprises
+                "x_dim": inferred.get("x_dim", ""),
+                "edge_attr_dim": inferred.get("edge_attr_dim", ""),
+                "graph_attr_dim": inferred.get("graph_attr_dim", ""),
+                # matrix details (if any)
+                "matrix_key": inferred.get("matrix_key", ""),
+                "matrix_n": inferred.get("matrix_n", ""),
+                # grid details (if any)
+                "grid_shape": inferred.get("grid_shape", ""),
             }
 
+            # optional meta
             if include_meta:
                 row["meta_json"] = json.dumps(meta, ensure_ascii=False)
 
@@ -252,11 +376,28 @@ def pack(
         typer.echo("No artifacts found (after filtering).")
         raise typer.Exit(code=1)
 
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    # Stable field order (important)
+    base_fields = [
+        "id",
+        "encoder",
+        "artifact_dir",
+        "data_path",
+        "meta_path",
+        "n_residues",
+        "n_edges",
+        "x_dim",
+        "edge_attr_dim",
+        "graph_attr_dim",
+        "matrix_key",
+        "matrix_n",
+        "grid_shape",
+    ]
+    if include_meta:
+        base_fields.append("meta_json")
 
-    fieldnames = list(rows[0].keys())
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
     with out_csv.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w = csv.DictWriter(f, fieldnames=base_fields)
         w.writeheader()
         w.writerows(rows)
 
