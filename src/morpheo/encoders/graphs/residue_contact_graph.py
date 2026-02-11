@@ -9,7 +9,6 @@ import numpy as np
 from morpheo.core.cache import DiskCache, make_cache_key
 from morpheo.core.hashing import sha256_file, sha256_text
 from morpheo.core.io import load_and_extract
-from morpheo.core.registry import register_encoder
 from morpheo.core.types import StructureArtifact, StructureInput
 
 
