@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, Optional, Sequence
+from typing import Literal
 
 import numpy as np
 
@@ -9,6 +9,7 @@ from morpheo.core.types import StructureArtifact
 
 
 XMode = Literal[
+    "auto",
     "aa_index",
     "onehot",
     "aa_index+plddt",
@@ -37,7 +38,6 @@ def _rbf(dist: np.ndarray, num_kernels: int = 16, dmin: float = 0.0, dmax: float
     """
     dist = np.asarray(dist, dtype=np.float32).reshape(-1, 1)
     centers = np.linspace(dmin, dmax, num_kernels, dtype=np.float32).reshape(1, -1)
-    # stable gamma
     step = float(centers[0, 1] - centers[0, 0]) if num_kernels > 1 else 1.0
     gamma = 1.0 / (step * step + 1e-8)
     return np.exp(-gamma * (dist - centers) ** 2).astype(np.float32)
@@ -69,7 +69,7 @@ def _get_matrix(d: dict, key: str, n: int) -> np.ndarray:
 
 def to_pyg(
     artifact: StructureArtifact,
-    x_mode: XMode = "onehot+plddt",
+    x_mode: XMode = "auto",
     rbf_k: int = 16,
     rbf_dmax: float = 20.0,
 ):
@@ -77,6 +77,13 @@ def to_pyg(
     Convert Morpheo artifact -> torch_geometric.data.Data.
 
     Requires torch + torch_geometric installed.
+
+    Auto behavior:
+      - If 'node_attr' exists -> x = node_attr
+      - Else if 'node_emb' exists -> x = node_emb
+      - Else fallback -> onehot(aa_index) + optional plddt if present
+      - If 'edge_attr' exists -> edge_attr = edge_attr
+      - Else if 'edge_dist' exists -> edge_attr = RBF(edge_dist)
     """
     try:
         import torch
@@ -102,45 +109,77 @@ def to_pyg(
         raise ValueError(f"'edge_index' must have shape (2,E), got {edge_index.shape}")
 
     # --- Node features
-    if "aa_index" not in d:
-        raise KeyError("Artifact missing 'aa_index' required to build x.")
-    aa_index = np.asarray(d["aa_index"]).reshape(-1)
-    if aa_index.shape[0] != n:
-        raise ValueError(f"'aa_index' must have shape (N,), N={n}, got {aa_index.shape}")
-    aa_index = aa_index.astype(np.int64)
+    x: np.ndarray
 
-    x_parts: list[np.ndarray] = []
+    if x_mode == "auto":
+        if "node_attr" in d:
+            node_attr = np.asarray(d["node_attr"], dtype=np.float32)
+            if node_attr.ndim != 2 or node_attr.shape[0] != n:
+                raise ValueError(f"'node_attr' must have shape (N,F) with N={n}, got {node_attr.shape}")
+            x = node_attr.astype(np.float32)
 
-    if x_mode.startswith("onehot"):
-        x_parts.append(_onehot_from_aa_index(aa_index, num_classes=21))
+        elif "node_emb" in d:
+            node_emb = _get_matrix(d, "node_emb", n)
+            x = node_emb.astype(np.float32)
+
+        else:
+            # fallback legacy: onehot + (plddt if present)
+            if "aa_index" not in d:
+                raise KeyError("Artifact missing 'aa_index' required to build x.")
+            aa_index = np.asarray(d["aa_index"]).reshape(-1).astype(np.int64)
+            if aa_index.shape[0] != n:
+                raise ValueError(f"'aa_index' must have shape (N,), N={n}, got {aa_index.shape}")
+
+            x_parts: list[np.ndarray] = [_onehot_from_aa_index(aa_index, num_classes=21)]
+            if "plddt" in d:
+                plddt = _get_vector(d, "plddt", n, fill_value=np.nan).reshape(-1, 1)
+                x_parts.append(plddt)
+            x = np.concatenate(x_parts, axis=1).astype(np.float32)
+
     else:
-        x_parts.append(aa_index.astype(np.float32).reshape(-1, 1))
+        # legacy modes: build x from aa_index (+ optional plddt/bfactor/emb)
+        if "aa_index" not in d:
+            raise KeyError("Artifact missing 'aa_index' required to build x.")
+        aa_index = np.asarray(d["aa_index"]).reshape(-1).astype(np.int64)
+        if aa_index.shape[0] != n:
+            raise ValueError(f"'aa_index' must have shape (N,), N={n}, got {aa_index.shape}")
 
-    if "+plddt" in x_mode:
-        plddt = _get_vector(d, "plddt", n, fill_value=np.nan).reshape(-1, 1)
-        # si viene NaN (PDB experimental), queda NaN y es responsabilidad del modelo/loader
-        x_parts.append(plddt)
+        x_parts: list[np.ndarray] = []
 
-    if "+bfactor" in x_mode:
-        bfac = _get_vector(d, "bfactor_ca", n, fill_value=np.nan).reshape(-1, 1)
-        x_parts.append(bfac)
+        if x_mode.startswith("onehot"):
+            x_parts.append(_onehot_from_aa_index(aa_index, num_classes=21))
+        else:
+            x_parts.append(aa_index.astype(np.float32).reshape(-1, 1))
 
-    if x_mode.endswith("+emb"):
-        node_emb = _get_matrix(d, "node_emb", n)
-        x_parts.append(node_emb)
+        if "+plddt" in x_mode:
+            plddt = _get_vector(d, "plddt", n, fill_value=np.nan).reshape(-1, 1)
+            x_parts.append(plddt)
 
-    x = np.concatenate(x_parts, axis=1).astype(np.float32)
+        if "+bfactor" in x_mode:
+            bfac = _get_vector(d, "bfactor_ca", n, fill_value=np.nan).reshape(-1, 1)
+            x_parts.append(bfac)
 
-    # --- Edge attributes (RBF on edge_dist if available)
+        if x_mode.endswith("+emb"):
+            node_emb = _get_matrix(d, "node_emb", n)
+            x_parts.append(node_emb)
+
+        x = np.concatenate(x_parts, axis=1).astype(np.float32)
+
+    # --- Edge attributes
     edge_attr = None
-    if "edge_dist" in d:
+
+    if "edge_attr" in d:
+        ea = np.asarray(d["edge_attr"], dtype=np.float32)
+        if ea.ndim != 2 or ea.shape[0] != edge_index.shape[1]:
+            raise ValueError(f"'edge_attr' must have shape (E,F) with E={edge_index.shape[1]}, got {ea.shape}")
+        edge_attr = torch.from_numpy(ea).float()
+
+    elif "edge_dist" in d:
         edge_dist = np.asarray(d["edge_dist"], dtype=np.float32).reshape(-1)
         if edge_dist.shape[0] != edge_index.shape[1]:
-            raise ValueError(
-                f"'edge_dist' must have length E={edge_index.shape[1]}, got {edge_dist.shape}"
-            )
-        edge_attr = _rbf(edge_dist, num_kernels=int(rbf_k), dmax=float(rbf_dmax))
-        edge_attr = torch.from_numpy(edge_attr).float()
+            raise ValueError(f"'edge_dist' must have length E={edge_index.shape[1]}, got {edge_dist.shape}")
+        ea = _rbf(edge_dist, num_kernels=int(rbf_k), dmax=float(rbf_dmax))
+        edge_attr = torch.from_numpy(ea).float()
 
     data = Data(
         x=torch.from_numpy(x).float(),
@@ -161,7 +200,7 @@ def to_pyg(
 
 def load_pyg(
     artifact_dir: str | Path,
-    x_mode: XMode = "onehot+plddt",
+    x_mode: XMode = "auto",
     rbf_k: int = 16,
     rbf_dmax: float = 20.0,
 ):

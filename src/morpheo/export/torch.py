@@ -34,9 +34,8 @@ def to_torch(
     prefer: str = "grid_or_graph",
     device: Optional[str] = None,
     matrix_as_channel: bool = True,
-    cloud_x_mode: str = "none",  # "none" | "onehot" | "onehot+plddt" | "onehot+plddt+bfactor"
+    cloud_x_mode: str = "none",  # "none" | "auto" | "onehot" | "onehot+plddt" | "onehot+plddt+bfactor"
 ) -> Dict[str, Any]:
-
     """
     Convert Morpheo artifact -> dict of torch tensors.
 
@@ -46,6 +45,11 @@ def to_torch(
       - "graph": require 'edge_index'
       - "matrix": require one of ('dist','dist_bins','contact','contact_bins')
       - "cloud": require 'pos'
+
+    Additions (auto features):
+      - Graph: prefer 'node_attr' as x, then 'node_emb', else aa_index->onehot (+ optional plddt)
+      - Graph: expose 'edge_attr' if present (keeps 'edge_dist' too)
+      - Cloud: if cloud_x_mode == "auto" and 'node_attr' exists, use it as x; else fall back to onehot modes.
     """
     import torch
 
@@ -93,9 +97,15 @@ def to_torch(
 
     # --- GRAPH
     elif prefer in ("graph", "grid_or_graph") and has_graph:
+        # NEW: prefer deterministic node_attr if present (ns encoders)
+        if "node_attr" in d:
+            out["x"] = _to_tensor(d["node_attr"], dtype="float32")
+
         # passthrough embeddings if present
-        if "node_emb" in d:
+        elif "node_emb" in d:
             out["x"] = _to_tensor(d["node_emb"], dtype="float32")
+
+        # fallback: build from aa_index (+ optional plddt)
         elif "aa_index" in d:
             aa = np.asarray(d["aa_index"]).astype(np.int64).reshape(-1)
             n = aa.shape[0]
@@ -113,9 +123,14 @@ def to_torch(
 
             out["x"] = _to_tensor(np.concatenate(feats, axis=1), dtype="float32")
         else:
-            raise KeyError("Graph artifact lacks 'aa_index' or 'node_emb' to build x.")
+            raise KeyError("Graph artifact lacks 'node_attr', 'aa_index' or 'node_emb' to build x.")
 
         out["edge_index"] = _to_tensor(d["edge_index"], dtype="int64")
+
+        # NEW: pass edge_attr if present
+        if "edge_attr" in d:
+            out["edge_attr"] = _to_tensor(d["edge_attr"], dtype="float32")
+
         if "edge_dist" in d:
             out["edge_dist"] = _to_tensor(d["edge_dist"], dtype="float32")
         if "pos" in d:
@@ -144,7 +159,6 @@ def to_torch(
 
     # --- CLOUD fallback
     else:
-        # --- CLOUD fallback / explicit cloud
         if not has_pos:
             raise KeyError(
                 "Artifact cannot be represented as torch input: missing 'grid', 'edge_index', 'matrix', and 'pos'."
@@ -153,8 +167,16 @@ def to_torch(
         out["pos"] = _to_tensor(d["pos"], dtype="float32")
 
         mode = (cloud_x_mode or "none").strip().lower()
-        if mode not in {"none", "onehot", "onehot+plddt", "onehot+plddt+bfactor"}:
-            raise ValueError("cloud_x_mode must be: none | onehot | onehot+plddt | onehot+plddt+bfactor")
+        if mode not in {"none", "auto", "onehot", "onehot+plddt", "onehot+plddt+bfactor"}:
+            raise ValueError("cloud_x_mode must be: none | auto | onehot | onehot+plddt | onehot+plddt+bfactor")
+
+        # NEW: auto uses node_attr if available, else falls back to onehot
+        if mode == "auto":
+            if "node_attr" in d:
+                out["x"] = _to_tensor(d["node_attr"], dtype="float32")
+                mode = "none"  # already set x, skip onehot construction
+            else:
+                mode = "onehot+plddt" if "plddt" in d else "onehot"
 
         # Build point-wise x if requested and possible
         if mode != "none":
@@ -180,7 +202,6 @@ def to_torch(
             if "bfactor_ca" in d and ("bfactor" in mode):
                 b = np.asarray(d["bfactor_ca"], dtype=np.float32).reshape(-1, 1)
                 b = np.nan_to_num(b, nan=0.0, posinf=0.0, neginf=0.0)
-                # typical bfactor range can vary; normalize to 0..1 using /100 if large
                 if float(np.nanmax(b)) > 1.5:
                     b = b / 100.0
                 feats.append(b)
@@ -200,7 +221,6 @@ def to_torch(
                 np.nan_to_num(np.asarray(d["bfactor_ca"], dtype=np.float32), nan=0.0),
                 dtype="float32",
             )
-
 
     # --- Attach optional debug metadata
     for k in ("residue_ids", "resname"):
