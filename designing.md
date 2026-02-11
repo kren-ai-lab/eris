@@ -1,352 +1,126 @@
-# Planificación realista (sin código aún)
+## 1) Node descriptors “bio” sin Sylphy ni Roxy
 
-Una hoja de ruta simple y honesta:
+### Qué meter (mínimo pero útil)
 
-### **v0.0.1 (skeleton)**
+**A) aa_index (categorical)**
 
-* repo + packaging + CI + pre-commit + CLI mínima + interfaces (listo con lo de arriba)
+* `aa_index` (0–20) ya lo tienes
 
-### **v0.1.0 (MVP usable)**
+**B) one-hot**
 
-* I/O real (PDB/mmCIF) + selección cadena/modelo
-* Cache real por hash (input + encoder + params)
-* 2 encoders baseline:
+* 21 dims (incluye UNK)
 
-  * `distogram_ca`
-  * `residue_contact_graph` o `residue_knn_graph`
-* Artefactos: `npz + meta.json`
-* Tests con 1–2 estructuras de ejemplo
+**C) physicochemical descriptors (hardcoded)**
+Una tabla pequeña (20 AA) con 6–10 propiedades clásicas, por ejemplo:
 
-### **v0.2.0 (diferencial)**
+* hydrophobicity (Kyte-Doolittle)
+* volume (o molecular weight)
+* polarity
+* charge (−1/0/+1)
+* aromatic (0/1)
+* H-bond donor/acceptor proxy (0/1)
+* aliphatic index proxy (0/1)
 
-* soporte AF2/ESMFold metadata (pLDDT si existe)
-* features por nodo/edge
-* batch CLI
-* integración suave con multimodal
+**D) confidence**
 
-# Morpheo Checklist Master
+* `plddt` si existe
+* `bfactor_ca` si existe (normalizado a 0–1 si viene tipo 0–100)
 
-## A. Ingesta, parsing y normalización estructural
+**Resultado**: `node_attr` tipo `(N, F)` siempre determinístico.
 
-### A1. Inputs soportados
+### Implementación recomendada (estructura)
 
-* [ ] PDB (.pdb) local
-* [ ] mmCIF (.cif/.mmcif) local
-* [ ] (Should) PDB ID → descarga (RCSB) con cache
-* [ ] (Should) AlphaFold/ESMFold outputs (mmCIF) como input directo
-* [ ] (Could) MMTF, PQR (si se necesita)
+* `morpheo/features/amino_acids.py`
 
-### A2. Selección y slicing
+  * tabla `AA_TO_INDEX`, `INDEX_TO_AA`
+  * `AA_PHYS` → `np.ndarray shape (21, P)` con UNK = 0
+* `morpheo/features/node.py`
 
-* [ ] Selección de modelo (model index)
-* [ ] Selección de cadena(s)
-* [ ] Selección por rango de residuos (start–end)
-* [ ] Selección por lista de residuos (IDs)
-* [ ] Soporte multi-chain (complejos) con “chain grouping”
-* [ ] Estrategias para representar *interfaces* (chain A–B)
-
-### A3. Sanitización
-
-* [ ] Política de altloc (A/major occupancy)
-* [ ] Manejo de residues incompletos (missing atoms)
-* [ ] Manejo de missing residues (gaps)
-* [ ] Política de heteroatoms: keep/remove ligands
-* [ ] Política de waters (keep/remove)
-* [ ] Política de hydrogens (keep/remove, add? opcional)
-* [ ] Renumeración consistente (mapping original ↔ interno)
-
-### A4. Coordenadas y referencia
-
-* [ ] Coordenadas por átomo y por residuo (CA, centroid, backbone)
-* [ ] Normalización opcional (centering, scaling)
-* [ ] Frame local por residuo (orientations) (should)
-* [ ] Unidades y consistencia (Å)
-
-### A5. Quality metadata
-
-* [ ] Propagar pLDDT (si existe en mmCIF AF2)
-* [ ] Propagar B-factors, occupancy
-* [ ] Propagar resolución experimental (si disponible)
-* [ ] Flags de calidad por residuo y por estructura
+  * `build_node_features(aa_index, plddt=None, bfactor=None, mode="onehot+physchem+plddt")`
 
 ---
 
-## B. Artefactos, hashing, cache y reproducibilidad
+## 2) Residue embeddings sin Sylphy/Roxy
 
-### B1. Provenir y fingerprinting
+Como no quieres PLMs, hay dos opciones “Morpheo-native”:
 
-* [ ] Hash de input (file hash o canonicalized content hash)
-* [ ] Fingerprint de encoder (name + version + params)
-* [ ] Registro de dependencias (versions: gemmi/biopython/torch, etc.)
-* [ ] Provenance completo en meta (timestamp opcional)
+### Opción 1: “static embedding table” (learnable en training, exportable como indices)
 
-### B2. Cache
+* Morpheo guarda `aa_index` y (opcional) `physchem`
+* El embedding real lo hace el modelo downstream (`nn.Embedding(21, d)`)
 
-* [ ] Cache on-disk por clave (input_hash + encoder_fp + selection)
-* [ ] Cache invalidation por version bump
-* [ ] Modo “no-cache”
-* [ ] Cache stats (hits/misses)
+👉 Esto es lo más limpio: Morpheo no entrena nada, solo exporta inputs.
 
-### B3. Serialización de artefactos
+### Opción 2: “frozen embeddings” (determinístico)
 
-* [ ] Convención única: `artifact.(npz|pt|pkl)+meta.json`
-* [ ] (Should) Compatibilidad zarr/np.memmap para grandes volúmenes
-* [ ] Validación de artefactos (schema)
+No lo recomiendo ahora, porque te obliga a elegir un método (ProtVec k-mer, etc.) y eso se empieza a parecer a Sylphy-lite.
+
+**Mi recomendación**: quédate con **Opción 1**. Morpheo entrega índices + descriptors.
 
 ---
 
-## C. Representaciones estructurales (familias)
+## 3) Edge descriptors mejores (baratos y muy útiles)
 
-### C1. Mapas 2D y matrices (baseline fuerte)
+Para tus grafos `*_ns`, agrega estas features en `edge_attr`:
 
-* [ ] Contact map (binary) por umbral (CA–CA, heavy atom)
-* [ ] Distance map / distogram (float)
-* [ ] (Should) Multi-channel maps: distance + orientation + confidence
-* [ ] (Could) Local environment maps (windowed)
+* `dist` (ya)
+* `rbf(dist)` con K bins (ya lo tienes en PyG export, pero mejor generarlo en el encoder si quieres)
+* `seq_sep = |i-j|` (si puedes mapear a posición secuencial)
+* `is_local = seq_sep <= 4` (o similar)
+* `same_chain` (por ahora siempre True si seleccionas cadena)
+* opcional: `contact_bin` si usas cutoff/bins
 
-### C2. Grafos (residuo y átomo)
-
-**Graph construction (must)**
-
-* [ ] Residue graph: nodes=residuos
-* [ ] Edge por cutoff de distancia
-* [ ] Edge por kNN en 3D
-* [ ] Edge por contactos químicos (H-bond, salt bridges) (should)
-* [ ] Multi-edge typing (contact, knn, sequential) (should)
-* [ ] Directed vs undirected (config)
-
-**Atomic graph (should)**
-
-* [ ] Nodes=átomos, bonds según química + proximidad
-* [ ] Opción “hybrid”: residues con subgraph atómico
-
-### C3. Point clouds
-
-* [ ] Point cloud de átomos (xyz + features)
-* [ ] Point cloud de superficie (sampled points) (should)
-* [ ] Point cloud de residuos (centroids / CA)
-* [ ] (Should) Normal vectors para superficie
-* [ ] (Could) FPFH / geometric descriptors
-
-### C4. Grillas / Voxels
-
-* [ ] Voxel grid 3D occupancy
-* [ ] Multi-channel voxels (element type, charge, hydrophobicity)
-* [ ] Config de resolución (Å/voxel) y bounding box
-* [ ] (Could) Sparse voxel formats
-
-### C5. Mesh / Surface
-
-* [ ] Mesh generation (triangulated surface)
-* [ ] Surface features (curvature, electrostatics proxy)
-* [ ] Mesh sampling para GDL en superficies (should)
-
-### C6. Representaciones “local frames”
-
-* [ ] Orientations/residue frames (SE(3) equivariant support-ready)
-* [ ] Edge direction vectors / relative position encoding
+Esto hace que el grafo sea ML-ready sin depender de nada.
 
 ---
 
-## D. Features de nodos (residuales y atómicos)
+## 4) “Graph embedding” sin Sylphy/Roxy
 
-### D1. Residue node features (must set)
+Acá hay que ser precisos: **graph embedding** puede significar 2 cosas.
 
-* [ ] AA identity (one-hot o index)
-* [ ] Physchem descriptors (charge, hydrophobicity, volume)
-* [ ] Secondary structure (DSSP o aproximado) (should)
-* [ ] RSA/SASA (should)
-* [ ] pLDDT / B-factor / occupancy (si disponible)
-* [ ] Sequence position encodings (absolute/relative)
-* [ ] Backbone torsions (phi/psi/omega) (should)
+### A) Graph-level vector determinístico (sin entrenamiento)
 
-### D2. Atomic node features (must set para atomic)
+Esto sí lo puede hacer Morpheo y es útil para clustering/EDA:
 
-* [ ] Element type (one-hot)
-* [ ] Atom name / atom role (backbone/sidechain)
-* [ ] Partial charge (si disponible) (could)
-* [ ] Aromaticity / hybridization (could)
-* [ ] (Should) Mask/flags por missing atoms
+* `n_nodes`, `n_edges`
+* degree mean/std/max
+* average edge length (mean/std)
+* clustering coefficient (si te animas con networkx)
+* spectral summary: top-k eigenvalues de Laplacian (barato si N ~ 500? puede ser pesado; top-10 con `scipy.sparse.linalg` si lo tienes)
 
-### D3. “Embeddings” como features (clave para ti)
+Yo lo implementaría como:
 
-* [ ] Residual embeddings desde pLMs (ESM2/ProtT5 via Sylphy) como node features
-* [ ] Atomic embeddings (si tienes encoder atómico o reglas) (should)
-* [ ] Fusion strategies: concat, sum, gated fusion, projection MLP (later)
-* [ ] Normalización + control de dimensionalidad (PCA/linear proj) (should)
+* `morpheo/features/graph_stats.py -> compute_graph_stats(edge_index, edge_dist, n_nodes) -> dict`
+  y guardarlo en `meta.json` (o como `graph_stats.npz` si prefieres).
 
----
+### B) Graph embedding “real” (aprendido)
 
-## E. Features de aristas (edge features)
+Eso **no debería vivir en Morpheo** (vive en el modelo GNN).
+Lo que sí puedes hacer es dar “hooks” para pooling:
 
-### E1. Geométricas (must)
+* En export PyG ya estás listo para usar `global_mean_pool`, `global_add_pool`, etc.
+* Para cloud/grid/matrix igual.
 
-* [ ] Distancia (scalar)
-* [ ] Δvector (x,y,z) o unit vector
-* [ ] Distance encoding (RBF / Fourier features) (should)
-* [ ] Sequential distance (|i−j|) si nodes=residuos
+**Mi recomendación**:
 
-### E2. Químicas/biológicas (should)
-
-* [ ] Contact type (H-bond, salt bridge, hydrophobic)
-* [ ] Same chain vs cross-chain flag
-* [ ] Interface flag (si complejo)
-* [ ] Confidence aggregation (min/mean pLDDT edge)
-
-### E3. Edge typing / relations (should)
-
-* [ ] Multi-relational graph support (edge_type)
-* [ ] Heterographs (DGL) (could)
+* implementa **(A) stats determinísticos** ahora
+* deja (B) para training scripts, no Morpheo
 
 ---
 
-## F. Graph embeddings y representaciones derivadas
+## 5) Dónde lo meto en tus encoders actuales
 
-### F1. Graph-level embeddings (must para “graph embedding”)
+Tus targets naturales:
 
-* [ ] Pooling: mean/sum/max sobre node embeddings
-* [ ] Attention pooling (should)
-* [ ] Set2Set / DeepSets pooling (should)
-* [ ] Readout configurable (per graph)
+* `residue_contact_graph_ns.py`
+* `residue_knn_graph_ns.py`
+* `residue_point_cloud_ca.py` (para `x` opcional en clouds)
 
-### F2. Subgraph embeddings (should)
+Cambios mínimos:
 
-* [ ] Patch embeddings (local neighborhoods)
-* [ ] Interface embeddings para complejos
-* [ ] Domain-level embeddings (si hay segmentation)
+* al final del encoder, además de `pos/residue_ids/edge_index/edge_dist`, agrega:
 
-### F3. Positional/structural encodings (should)
-
-* [ ] Laplacian eigenvectors (graph positional encoding)
-* [ ] Random walk features
-* [ ] Weisfeiler–Lehman hashing features (could)
-
----
-
-## G. Export “ready for PyTorch / GDL”
-
-### G1. Formatos objetivo (must)
-
-* [ ] **PyTorch**: `torch.save()` de dicts estandarizados
-* [ ] **PyTorch Geometric (PyG)**: export a `torch_geometric.data.Data`
-* [ ] (Should) **DGL**: export a `dgl.DGLGraph`
-* [ ] (Should) `npz + meta.json` como formato universal intermedio
-
-### G2. Dataset writing (must)
-
-* [ ] Writer para “one artifact per structure” (folder layout)
-* [ ] Manifest CSV/JSONL con paths + labels + splits
-* [ ] Soporte de sharding (tar/zarr) (should)
-
-### G3. DataLoader compatibility (must)
-
-* [ ] `Dataset` wrapper (PyTorch) para cargar artifacts
-* [ ] Collate functions (PyG batch, padding maps, voxel batching)
-* [ ] Lazy loading + memory safety (mmap/zarr) (should)
-
----
-
-## H. Batch processing y pipelines
-
-* [ ] Batch CLI: procesa una lista (CSV/TSV) con inputs
-* [ ] Multiprocessing / joblib / Ray (should)
-* [ ] Resume/skip if exists (idempotencia)
-* [ ] Reporte final: n_ok / n_failed + reasons
-* [ ] Logs estructurados por item
-
----
-
-## I. Configuración y esquemas
-
-* [ ] Config “encoder spec” (pydantic / jsonschema)
-* [ ] Validation fuerte + defaults
-* [ ] Config versioning (schema_version)
-* [ ] “Repro recipe” export: config + env versions + command line
-
----
-
-## J. Testing y QA “nivel Sylphy”
-
-### J1. Unit tests
-
-* [ ] Registry
-* [ ] Hashing determinista
-* [ ] I/O con fixtures mínimos
-* [ ] Export formats (PyG Data shape checks)
-
-### J2. Integration tests
-
-* [ ] Pipeline batch sobre 2–3 estructuras
-* [ ] Cache hit reproducible
-
-### J3. Lint/typing/CI
-
-* [ ] Ruff + mypy + pytest en CI
-* [ ] Pre-commit
-* [ ] Coverage mínimo (target p.ej. 70% al inicio)
-
----
-
-## K. Documentación y ejemplos (muy importante para estudiantes)
-
-* [ ] “Concepts” doc: inputs/outputs/artefacts
-* [ ] Tutorial 1: distogram/contact map
-* [ ] Tutorial 2: residue graph → PyG Data
-* [ ] Tutorial 3: point cloud / voxel (más adelante)
-* [ ] Cookbook: cómo agregar un encoder nuevo (plugin)
-* [ ] FAQ: errores típicos (missing chain, altloc, etc.)
-
----
-
-# “Lista fuerte” de estrategias a incorporar (resumen por catálogo)
-
-### Representations catalog
-
-* **2D**: contact map, distogram, multi-channel maps
-* **Graphs**: residue cutoff, residue kNN, atomic graph, interface graph, multi-relational
-* **Point clouds**: atoms, residues, surface sampled points (+normals)
-* **Grids/Voxels**: occupancy, multi-channel physicochem grids, sparse voxels
-* **Mesh/Surface**: triangulated mesh, mesh GDL-ready
-* **Frames**: local frames, orientation-aware edges
-
-### Features catalog
-
-* **Node (residue)**: AA + physchem + SS + SASA + torsions + quality + **Sylphy embeddings**
-* **Node (atom)**: element + atom role + optional chemistry features + (atomic embeddings)
-* **Edge**: distance + vector + RBF encoding + sequential distance + contact type + chain flags
-
-### GDL outputs
-
-* **PyG Data**
-* **DGLGraph**
-* **torch dict**
-* Universal intermediate: `npz + meta.json` (+ manifest)
-
----
-
-## Siguiente paso (para convertir esto en plan realista)
-
-Yo lo bajaría a 3 niveles:
-
-1. **MVP v0.1** (imprescindible para paper + usuarios):
-
-* mmCIF/PDB I/O robusto
-* distogram/contact map
-* residue graph (cutoff o kNN)
-* residue node features básicas + Sylphy embeddings
-* edge distance + RBF
-* export PyG Data + torch dict + npz
-
-2. **v0.2**
-
-* point clouds
-* batch + dataloaders
-* interface graphs
-* quality/pLDDT support
-
-3. **v1.0**
-
-* voxels + mesh
-* atomic graphs/hybrid
-* positional encodings avanzados
-* heterographs
+  * `aa_index`
+  * `plddt` y/o `bfactor_ca` si existen
+  * `node_attr` (construido por builder)
+  * `edge_attr` (dist + rbf + seq_sep)

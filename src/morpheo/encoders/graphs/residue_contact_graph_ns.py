@@ -9,9 +9,9 @@ import numpy as np
 from morpheo.core.cache import DiskCache, make_cache_key
 from morpheo.core.hashing import sha256_file, sha256_text
 from morpheo.core.io import load_and_extract
-from morpheo.core.registry import register_encoder
 from morpheo.core.types import StructureArtifact, StructureInput
-
+from morpheo.features.node import build_node_attr
+from morpheo.features.edge import build_edge_attr
 
 def _cell_index(pos: np.ndarray, cell_size: float) -> np.ndarray:
     # floor divide for negatives as well
@@ -135,6 +135,25 @@ class ResidueContactGraphNS:
 
         edge_index, edge_dist = _neighbor_search_edges(pos, cutoff=self.cutoff)
 
+        seq_pos = np.arange(pos.shape[0], dtype=np.int64)
+
+        node_attr = build_node_attr(
+            aa_index,
+            plddt=plddt if "plddt" in locals() else None,
+            bfactor_ca=bfactor_ca if "bfactor_ca" in locals() else None,
+            mode="onehot+physchem+plddt+bfactor",
+        )
+
+        edge_attr = build_edge_attr(
+            edge_index=edge_index,
+            edge_dist=edge_dist,
+            mode="dist+rbf+seq+local",
+            rbf_k=16,
+            rbf_dmax=20.0,
+            seq_pos=seq_pos,
+            local_cutoff=4,
+        )
+
         if self.include_self_loops:
             loops = np.arange(n, dtype=np.int64)
             loop_edges = np.stack([loops, loops], axis=0)
@@ -148,12 +167,17 @@ class ResidueContactGraphNS:
             "residue_ids": residue_ids.astype(np.str_),
             "resname": resname.astype(np.str_),
             "aa_index": aa_index.astype(np.int16),
-            "plddt": plddt.astype(np.float32),
-            "bfactor_ca": bfactor_ca.astype(np.float32),
             "edge_index": edge_index.astype(np.int64),
             "edge_dist": edge_dist.astype(np.float32),
+            "node_attr": node_attr,
+            "edge_attr": edge_attr,
         }
 
+        if plddt is not None:
+            data["plddt"] = plddt.astype(np.float32)
+        if bfactor_ca is not None:
+            data["bfactor_ca"] = bfactor_ca.astype(np.float32)
+            
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
             "input": inp.to_string(),

@@ -9,9 +9,8 @@ import numpy as np
 from morpheo.core.cache import DiskCache, make_cache_key
 from morpheo.core.hashing import sha256_file, sha256_text
 from morpheo.core.io import load_and_extract
-from morpheo.core.registry import register_encoder
 from morpheo.core.types import StructureArtifact, StructureInput
-
+from morpheo.features.node import build_node_attr
 
 @dataclass
 class ResiduePointCloudCA:
@@ -54,16 +53,27 @@ class ResiduePointCloudCA:
                 raise ValueError("scale must be > 0")
             pos_out = pos_out / s
 
+        node_attr = build_node_attr(
+            aa_index,
+            plddt=plddt,
+            bfactor_ca=bfactor_ca,
+            mode="onehot+physchem+plddt+bfactor",
+        )
+
         data = {
             "pos": pos_out.astype(np.float32),
             "centroid": centroid.astype(np.float32),
             "residue_ids": residue_ids.astype(np.str_),
             "resname": resname.astype(np.str_),
             "aa_index": aa_index.astype(np.int16),
-            "plddt": plddt.astype(np.float32),
-            "bfactor_ca": bfactor_ca.astype(np.float32),
+            "node_attr": node_attr,
         }
 
+        if plddt is not None:
+            data["plddt"] = plddt.astype(np.float32)
+        if bfactor_ca is not None:
+            data["bfactor_ca"] = bfactor_ca.astype(np.float32)
+        
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
             "input": inp.to_string(),
