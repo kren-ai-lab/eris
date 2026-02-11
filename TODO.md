@@ -2,15 +2,6 @@
 
 ## 0) Release hygiene, packaging y repo publicable
 
-* **Versioning real**
-
-  * `__version__` único (`pyproject.toml` + `morpheo/_version.py`)
-  * `CHANGELOG.md` (Keep a Changelog)
-  * tags SemVer
-* **Licencia + metadata**
-
-  * `LICENSE`, `README`, `pyproject.toml` con `classifiers`, `keywords`, `urls`
-  * extras: `morpheo[pyg]`, `morpheo[plm]`, `morpheo[mesh]`, `morpheo[dev]`
 * **Build**
 
   * `python -m build` genera wheel + sdist
