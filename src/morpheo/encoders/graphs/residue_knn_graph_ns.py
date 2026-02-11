@@ -173,7 +173,7 @@ class ResidueKNNGraphNS:
             hit = cache.get(key)
             if hit is not None:
                 data, meta = hit
-                return StructureArtifact(self.name, data=data, meta=meta)
+                return StructureArtifact(data=data, meta=meta)
 
         pos, residue_ids, resname, aa_index, plddt, bfactor_ca = load_and_extract(inp)
         n = int(pos.shape[0])
@@ -187,69 +187,96 @@ class ResidueKNNGraphNS:
             symmetric=bool(self.symmetric),
         )
 
-        seq_pos = np.arange(pos.shape[0], dtype=np.int64)
+        seq_pos = np.arange(n, dtype=np.int64)
 
-        stats = compute_graph_stats(edge_index=edge_index, edge_dist=edge_dist, n_nodes=int(pos.shape[0]))
+        stats = compute_graph_stats(edge_index=edge_index, edge_dist=edge_dist, n_nodes=n)
         graph_attr, graph_attr_keys = pack_graph_stats(stats)
 
+        node_attr_mode = "onehot+physchem+plddt+bfactor"
         node_attr = build_node_attr(
             aa_index,
-            plddt=plddt if "plddt" in locals() else None,
-            bfactor_ca=bfactor_ca if "bfactor_ca" in locals() else None,
-            mode="onehot+physchem+plddt+bfactor",
+            plddt=plddt,
+            bfactor_ca=bfactor_ca,
+            mode=node_attr_mode,
         )
 
-        edge_attr = build_edge_attr(
-            edge_index=edge_index,
-            edge_dist=edge_dist,
-            mode="dist+rbf+seq+local",
-            rbf_k=16,
-            rbf_dmax=20.0,
-            seq_pos=seq_pos,
-            local_cutoff=4,
-        )
+        edge_attr_mode = "dist+rbf+seq+local"
+        rbf_k = 16
+        rbf_dmax = 20.0
+        local_cutoff = 4
 
         if self.include_self_loops:
             loops = np.arange(n, dtype=np.int64)
             loop_edges = np.stack([loops, loops], axis=0)
             loop_dist = np.zeros((n,), dtype=np.float32)
+
             edge_index = np.concatenate([edge_index, loop_edges], axis=1)
             edge_dist = np.concatenate([edge_dist, loop_dist], axis=0)
 
-        data = {
+        edge_attr = build_edge_attr(
+            edge_index=edge_index,
+            edge_dist=edge_dist,
+            mode=edge_attr_mode,
+            rbf_k=rbf_k,
+            rbf_dmax=rbf_dmax,
+            seq_pos=seq_pos,
+            local_cutoff=local_cutoff,
+        )
+
+        data: Dict[str, Any] = {
             "pos": pos.astype(np.float32),
             "residue_ids": residue_ids.astype(np.str_),
             "resname": resname.astype(np.str_),
             "aa_index": aa_index.astype(np.int16),
             "edge_index": edge_index.astype(np.int64),
             "edge_dist": edge_dist.astype(np.float32),
-            "node_attr": node_attr,
-            "edge_attr": edge_attr,
-            
+            "node_attr": node_attr.astype(np.float32),
+            "edge_attr": edge_attr.astype(np.float32),
+            "graph_attr": np.asarray(graph_attr, dtype=np.float32),
+            "graph_attr_keys": np.asarray(graph_attr_keys, dtype=np.str_),
         }
-
-        data["graph_attr"] = graph_attr
-        data["graph_attr_keys"] = np.asarray(graph_attr_keys, dtype=np.str_)
 
         if plddt is not None:
             data["plddt"] = plddt.astype(np.float32)
         if bfactor_ca is not None:
             data["bfactor_ca"] = bfactor_ca.astype(np.float32)
-        
+
+        encoder_version = getattr(self, "version", None) or "0.1.0"
+        src = inp.source
+        fmt = Path(src).suffix.lstrip(".").lower() or None
+
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
-            "input": inp.to_string(),
-            "k": int(self.k),
-            "cutoff": float(self.cutoff),
-            "symmetric": bool(self.symmetric),
-            "include_self_loops": bool(self.include_self_loops),
-            "n_residues": int(n),
-            "n_edges": int(edge_index.shape[1]),
-            "shapes": {k: list(v.shape) for k, v in data.items()},
+            "encoder_version": encoder_version,
+            "encoder_fingerprint": self.fingerprint(),
+            "type": "graph",
+            "level": "ca",
+            "family": "residue_graph",
+            "params": {
+                "k": int(self.k),
+                "cutoff": float(self.cutoff),
+                "symmetric": bool(self.symmetric),
+                "include_self_loops": bool(self.include_self_loops),
+                "node_attr_mode": node_attr_mode,
+                "edge_attr_mode": edge_attr_mode,
+                "rbf_k": int(rbf_k),
+                "rbf_dmax": float(rbf_dmax),
+                "local_cutoff": int(local_cutoff),
+            },
+            "input": {
+                "source": src,
+                "chain_id": inp.chain_id,
+                "model_index": inp.model_index,
+                "format": fmt,
+            },
+            "feature_keys": {
+                "node_attr_keys": ["aa_onehot", "physchem", "plddt", "bfactor"],
+                "edge_attr_keys": ["dist", "rbf", "seq_sep", "local_contact"],
+                "graph_attr_keys": [str(x) for x in np.asarray(graph_attr_keys).tolist()],
+            },
         }
 
         if self.use_cache:
             cache.set(key, data=data, meta=meta)
 
-        return StructureArtifact(self.name, data=data, meta=meta)
-
+        return StructureArtifact(data=data, meta=meta)

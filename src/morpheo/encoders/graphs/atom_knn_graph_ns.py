@@ -208,7 +208,7 @@ class AtomKNNGraphNS:
             hit = cache.get(key)
             if hit is not None:
                 data, meta = hit
-                return StructureArtifact(self.name, data=data, meta=meta)
+                return StructureArtifact(data=data, meta=meta)
 
         b = load_and_extract_atoms(
             inp,
@@ -272,30 +272,48 @@ class AtomKNNGraphNS:
             "aa_index_residue": b["aa_index_residue"].astype(np.int16),
         }
 
+        encoder_version = getattr(self, "version", None) or "0.1.0"
+        src = inp.source
+        fmt = Path(src).suffix.lstrip(".").lower() or None
+
+        # Feature keys (stable semantics, no heuristics)
+        node_attr_keys = ["elem_onehot", "role_onehot", "bfactor", "occ"]
+        edge_attr_keys = ["dist", "rbf", "seq_sep", "local_contact"]
+        graph_keys_list = [str(x) for x in graph_attr_keys.tolist()]
+
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
+            "encoder_version": encoder_version,
+            "encoder_fingerprint": self.fingerprint(),
             "type": "graph",
             "level": "atom",
-            "family": "atom",
-            "input": inp.to_string(),
-            "k": int(self.k),
-            "include_self_loops": bool(self.include_self_loops),
-            "include_hetero": bool(self.include_hetero),
-            "include_h": bool(self.include_h),
-            "altloc": str(self.altloc),
-            "amino_acids_only": bool(self.amino_acids_only),
-            "rbf_k": int(self.rbf_k),
-            "rbf_dmax": float(self.rbf_dmax),
-            "local_cutoff": int(self.local_cutoff),
-            "n_atoms": int(n),
-            "n_edges": int(edge_index.shape[1]),
-            "node_attr_dim": int(node_attr.shape[1]),
-            "edge_attr_dim": int(edge_attr.shape[1]),
-            "graph_attr_dim": int(graph_attr.shape[0]),
-            "shapes": {k: list(v.shape) for k, v in data.items() if hasattr(v, "shape")},
+            "family": "atom_graph",
+            "params": {
+                "k": int(self.k),
+                "include_self_loops": bool(self.include_self_loops),
+                "include_hetero": bool(self.include_hetero),
+                "include_h": bool(self.include_h),
+                "altloc": str(self.altloc),
+                "amino_acids_only": bool(self.amino_acids_only),
+                "rbf_k": int(self.rbf_k),
+                "rbf_dmax": float(self.rbf_dmax),
+                "local_cutoff": int(self.local_cutoff),
+                "bfactor_norm": True,
+            },
+            "input": {
+                "source": src,
+                "chain_id": inp.chain_id,
+                "model_index": inp.model_index,
+                "format": fmt,
+            },
+            "feature_keys": {
+                "node_attr_keys": node_attr_keys,
+                "edge_attr_keys": edge_attr_keys,
+                "graph_attr_keys": graph_keys_list,
+            },
         }
 
         if self.use_cache:
             cache.set(key, data=data, meta=meta)
 
-        return StructureArtifact(self.name, data=data, meta=meta)
+        return StructureArtifact(data=data, meta=meta)

@@ -76,7 +76,7 @@ class AtomKNNGraph:
             hit = cache.get(key)
             if hit is not None:
                 data, meta = hit
-                return StructureArtifact(self.name, data=data, meta=meta)
+                return StructureArtifact(data=data, meta=meta)
 
         b = load_and_extract_atoms(
             inp,
@@ -106,7 +106,7 @@ class AtomKNNGraph:
             edge_dist = np.sqrt((d * d).sum(axis=1)).astype(np.float32)
 
         data: Dict[str, Any] = {
-            "pos": pos,
+            "pos": pos.astype(np.float32),
             "edge_index": edge_index.astype(np.int64),
             "edge_dist": edge_dist.astype(np.float32),
             "elem_index": b["elem_index"].astype(np.int16),
@@ -154,25 +154,53 @@ class AtomKNNGraph:
             if feats:
                 data["node_attr"] = np.concatenate(feats, axis=1).astype(np.float32)
 
+        encoder_version = getattr(self, "version", None) or "0.1.0"
+        src = inp.source
+        fmt = Path(src).suffix.lstrip(".").lower() or None
+
+        feature_keys: Dict[str, Any] = {
+            # baseline graph edge semantics
+            "edge_attr_keys": ["edge_dist"],
+        }
+
+        if "node_attr" in data:
+            node_attr_keys = []
+            if "elem" in mode:
+                node_attr_keys.append("elem_onehot")
+            if "role" in mode:
+                node_attr_keys.append("role_onehot")
+            if "bfactor" in mode:
+                node_attr_keys.append("bfactor")
+            if "occ" in mode:
+                node_attr_keys.append("occ")
+            feature_keys["node_attr_keys"] = node_attr_keys
+
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
+            "encoder_version": encoder_version,
+            "encoder_fingerprint": self.fingerprint(),
             "type": "graph",
             "level": "atom",
-            "family": "atom",
-            "input": inp.to_string(),
-            "k": int(self.k),
-            "include_self_loops": bool(self.include_self_loops),
-            "include_hetero": bool(self.include_hetero),
-            "include_h": bool(self.include_h),
-            "altloc": str(self.altloc),
-            "amino_acids_only": bool(self.amino_acids_only),
-            "mode": str(self.mode),
-            "n_atoms": int(n),
-            "n_edges": int(edge_index.shape[1]),
-            "shapes": {k: list(v.shape) for k, v in data.items() if hasattr(v, "shape")},
+            "family": "atom_graph",
+            "params": {
+                "k": int(self.k),
+                "include_self_loops": bool(self.include_self_loops),
+                "include_hetero": bool(self.include_hetero),
+                "include_h": bool(self.include_h),
+                "altloc": str(self.altloc),
+                "amino_acids_only": bool(self.amino_acids_only),
+                "mode": str(self.mode),
+            },
+            "input": {
+                "source": src,
+                "chain_id": inp.chain_id,
+                "model_index": inp.model_index,
+                "format": fmt,
+            },
+            "feature_keys": feature_keys,
         }
 
         if self.use_cache:
             cache.set(key, data=data, meta=meta)
 
-        return StructureArtifact(self.name, data=data, meta=meta)
+        return StructureArtifact(data=data, meta=meta)

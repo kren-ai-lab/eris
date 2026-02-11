@@ -34,7 +34,7 @@ class ResiduePointCloudCA:
             hit = cache.get(key)
             if hit is not None:
                 data, meta = hit
-                return StructureArtifact(self.name, data=data, meta=meta)
+                return StructureArtifact(data=data, meta=meta)
 
         pos, residue_ids, resname, aa_index, plddt, bfactor_ca = load_and_extract(inp)
         n = int(pos.shape[0])
@@ -42,7 +42,7 @@ class ResiduePointCloudCA:
         pos_out = pos.astype(np.float32)
 
         if self.center and n > 0:
-            centroid = pos_out.mean(axis=0, keepdims=True)
+            centroid = pos_out.mean(axis=0, keepdims=True).astype(np.float32)
             pos_out = pos_out - centroid
         else:
             centroid = np.zeros((1, 3), dtype=np.float32)
@@ -51,39 +51,60 @@ class ResiduePointCloudCA:
             s = float(self.scale)
             if s <= 0:
                 raise ValueError("scale must be > 0")
-            pos_out = pos_out / s
+            pos_out = (pos_out / s).astype(np.float32)
 
+        node_attr_mode = "onehot+physchem+plddt+bfactor"
         node_attr = build_node_attr(
             aa_index,
             plddt=plddt,
             bfactor_ca=bfactor_ca,
-            mode="onehot+physchem+plddt+bfactor",
+            mode=node_attr_mode,
         )
 
-        data = {
+        data: Dict[str, Any] = {
             "pos": pos_out.astype(np.float32),
             "centroid": centroid.astype(np.float32),
             "residue_ids": residue_ids.astype(np.str_),
             "resname": resname.astype(np.str_),
             "aa_index": aa_index.astype(np.int16),
-            "node_attr": node_attr,
+            "node_attr": node_attr.astype(np.float32),
         }
 
+        # keep raw signals if present (useful for downstream / debugging)
         if plddt is not None:
             data["plddt"] = plddt.astype(np.float32)
         if bfactor_ca is not None:
             data["bfactor_ca"] = bfactor_ca.astype(np.float32)
-        
+
+        encoder_version = getattr(self, "version", None) or "0.1.0"
+        src = inp.source
+        fmt = Path(src).suffix.lstrip(".").lower() or None
+
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
-            "input": inp.to_string(),
-            "center": bool(self.center),
-            "scale": None if self.scale is None else float(self.scale),
-            "n_residues": int(n),
-            "shapes": {k: list(v.shape) for k, v in data.items()},
+            "encoder_version": encoder_version,
+            "encoder_fingerprint": self.fingerprint(),
+            "type": "cloud",
+            "level": "ca",
+            "family": "cloud",
+            "params": {
+                "center": bool(self.center),
+                "scale": None if self.scale is None else float(self.scale),
+                "node_attr_mode": node_attr_mode,
+            },
+            "input": {
+                "source": src,
+                "chain_id": inp.chain_id,
+                "model_index": inp.model_index,
+                "format": fmt,
+            },
+            "feature_keys": {
+                # keep consistent with graphs: features per node/point
+                "node_attr_keys": ["aa_onehot", "physchem", "plddt", "bfactor"],
+            },
         }
 
         if self.use_cache:
             cache.set(key, data=data, meta=meta)
 
-        return StructureArtifact(self.name, data=data, meta=meta)
+        return StructureArtifact(data=data, meta=meta)

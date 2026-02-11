@@ -168,7 +168,7 @@ class VoxelGridCA:
             hit = cache.get(key)
             if hit is not None:
                 data, meta = hit
-                return StructureArtifact(self.name, data=data, meta=meta)
+                return StructureArtifact(data=data, meta=meta)
 
         pos, residue_ids, resname, aa_index, plddt, bfactor_ca = load_and_extract(inp)
         n = int(pos.shape[0])
@@ -179,7 +179,7 @@ class VoxelGridCA:
 
         # center
         if self.center:
-            centroid = pos0.mean(axis=0, keepdims=True)
+            centroid = pos0.mean(axis=0, keepdims=True).astype(np.float32)
             pos_c = pos0 - centroid
         else:
             centroid = np.zeros((1, 3), dtype=np.float32)
@@ -254,7 +254,6 @@ class VoxelGridCA:
             for i, j, k in ijk:
                 _gaussian_splat(grid[ch], (int(i), int(j), int(k)), sigma=sig, value=1.0)
                 if pool != "max" and counts is not None:
-                    # simple proxy count: center voxel hit
                     counts[ch, int(i), int(j), int(k)] += 1.0
             return ch + 1
 
@@ -300,10 +299,12 @@ class VoxelGridCA:
 
         if self.dtype == "float16":
             grid_out = grid.astype(np.float16)
+            out_dtype = "float16"
         else:
             grid_out = grid.astype(np.float32)
+            out_dtype = "float32"
 
-        data = {
+        data: Dict[str, Any] = {
             "grid": grid_out,
             "channels": np.asarray(ch_list, dtype=np.str_),
             "grid_size": np.asarray([G], dtype=np.int32),
@@ -318,26 +319,51 @@ class VoxelGridCA:
             "bfactor_ca": np.asarray(bfactor_ca, dtype=np.float32),
         }
 
+        # Expand channel names for aa_onehot to avoid ambiguity downstream
+        expanded_channels = []
+        for c in ch_list:
+            if c == "aa_onehot":
+                expanded_channels.extend([f"aa_onehot_{i}" for i in range(21)])
+            else:
+                expanded_channels.append(c)
+
+        encoder_version = getattr(self, "version", None) or "0.1.0"
+        src = inp.source
+        fmt = Path(src).suffix.lstrip(".").lower() or None
+
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
-            "input": inp.to_string(),
-            "grid_size": G,
-            "dtype": self.dtype,
-            "channels": ch_list,
-            "center": bool(self.center),
-            "fit": bool(self.fit),
-            "margin": float(self.margin),
-            "voxel_size": float(vs),
-            "sigma": float(self.sigma),
-            "pool": pool,
-            "clamp": bool(self.clamp),
-            "n_residues": int(n),
-            "n_points_in_grid": int(ijk.shape[0]),
-            "shapes": {k: list(v.shape) for k, v in data.items() if hasattr(v, "shape")},
+            "encoder_version": encoder_version,
+            "encoder_fingerprint": self.fingerprint(),
+            "type": "grid",
+            "level": "ca",
+            "family": "grid",
+            "params": {
+                "grid_size": int(G),
+                "dtype": str(self.dtype),
+                "channels": list(ch_list),
+                "center": bool(self.center),
+                "fit": bool(self.fit),
+                "margin": float(self.margin),
+                "voxel_size": float(vs),
+                "sigma": float(self.sigma),
+                "pool": str(pool),
+                "clamp": bool(self.clamp),
+            },
+            "input": {
+                "source": src,
+                "chain_id": inp.chain_id,
+                "model_index": inp.model_index,
+                "format": fmt,
+            },
+            "feature_keys": {
+                "grid_key": "grid",
+                "grid_channels": expanded_channels,
+                "grid_layout": "CXYZ",  # (C, G, G, G)
+            },
         }
 
         if self.use_cache:
             cache.set(key, data=data, meta=meta)
 
-        return StructureArtifact(self.name, data=data, meta=meta)
-
+        return StructureArtifact(data=data, meta=meta)

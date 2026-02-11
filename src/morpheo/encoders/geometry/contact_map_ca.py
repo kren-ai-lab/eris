@@ -27,6 +27,7 @@ class ContactMapCA:
             f"{self.name}|cutoff={self.cutoff}|include_self={self.include_self}|dtype={self.dtype}|use_cache={self.use_cache}"
         )
 
+
     def encode(self, inp: StructureInput) -> StructureArtifact:
         cache = self.cache or DiskCache()
         file_hash = sha256_file(Path(inp.source))
@@ -36,10 +37,10 @@ class ContactMapCA:
             hit = cache.get(key)
             if hit is not None:
                 data, meta = hit
-                return StructureArtifact(self.name, data=data, meta=meta)
+                return StructureArtifact(data=data, meta=meta)
 
         pos, residue_ids, resname, aa_index, plddt, bfactor_ca = load_and_extract(inp)
-        n = pos.shape[0]
+        n = int(pos.shape[0])
 
         diff = pos[:, None, :] - pos[None, :, :]
         dist = np.sqrt((diff ** 2).sum(axis=-1)).astype(np.float32)
@@ -53,7 +54,7 @@ class ContactMapCA:
         else:
             contact_out = contact.astype(np.uint8)
 
-        data = {
+        data: Dict[str, Any] = {
             "contact": contact_out,
             "pos": pos.astype(np.float32),
             "residue_ids": residue_ids.astype(np.str_),
@@ -63,18 +64,35 @@ class ContactMapCA:
             "bfactor_ca": bfactor_ca.astype(np.float32),
         }
 
+        encoder_version = getattr(self, "version", None) or "0.1.0"
+        src = inp.source
+        fmt = Path(src).suffix.lstrip(".").lower() or None
+
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
-            "input": inp.to_string(),
-            "cutoff": float(self.cutoff),
-            "include_self": bool(self.include_self),
-            "dtype": self.dtype,
-            "n_residues": int(n),
-            "shapes": {k: list(v.shape) for k, v in data.items()},
+            "encoder_version": encoder_version,
+            "encoder_fingerprint": self.fingerprint(),
+            "type": "matrix",
+            "level": "ca",
+            "family": "matrix",
+            "params": {
+                "cutoff": float(self.cutoff),
+                "include_self": bool(self.include_self),
+                "dtype": str(self.dtype),
+            },
+            "input": {
+                "source": src,
+                "chain_id": inp.chain_id,
+                "model_index": inp.model_index,
+                "format": fmt,
+            },
+            "feature_keys": {
+                "matrix_key": "contact",
+                "matrix_attr_keys": ["contact"],
+            },
         }
 
         if self.use_cache:
             cache.set(key, data=data, meta=meta)
 
-        return StructureArtifact(self.name, data=data, meta=meta)
-
+        return StructureArtifact(data=data, meta=meta)

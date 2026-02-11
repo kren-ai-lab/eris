@@ -10,7 +10,7 @@ from morpheo.core.cache import DiskCache, make_cache_key
 from morpheo.core.hashing import sha256_file, sha256_text
 from morpheo.core.io import load_and_extract_atoms
 from morpheo.core.types import StructureArtifact, StructureInput
-
+from morpheo.core.artifacts import ARTIFACT_SCHEMA_VERSION
 
 def _onehot(idx: np.ndarray, num: int) -> np.ndarray:
     idx = np.asarray(idx, dtype=np.int64).reshape(-1)
@@ -67,7 +67,7 @@ class AtomPointCloud:
             hit = cache.get(key)
             if hit is not None:
                 data, meta = hit
-                return StructureArtifact(self.name, data=data, meta=meta)
+                return StructureArtifact(data=data, meta=meta)
 
         b = load_and_extract_atoms(
             inp,
@@ -91,13 +91,12 @@ class AtomPointCloud:
             "aa_index_residue": b["aa_index_residue"].astype(np.int16),
         }
 
+        # Optional node_attr (features per atom)
         mode = (self.mode or "none").strip().lower()
         if mode != "none":
             feats = []
 
             if "elem" in mode:
-                # elem vocab size not exported here; assume max+1 (stable within run)
-                # If you want fixed size, we can hardcode len(_ELEM_VOCAB) in io.py and expose it.
                 e = data["elem_index"].astype(np.int64)
                 num_e = int(np.max(e)) + 1 if e.size else 1
                 feats.append(_onehot(e, num=num_e))
@@ -120,22 +119,51 @@ class AtomPointCloud:
             if feats:
                 data["node_attr"] = np.concatenate(feats, axis=1).astype(np.float32)
 
+        # ---- META (new schema contract) ----
+        encoder_version = getattr(self, "version", None) or "0.1.0"
+        src = inp.source
+        fmt = Path(src).suffix.lstrip(".").lower() or None
+
         meta: Dict[str, Any] = {
             "encoder_name": self.name,
+            "encoder_version": encoder_version,
+            "encoder_fingerprint": self.fingerprint(),
             "type": "cloud",
             "level": "atom",
-            "family": "atom",
-            "input": inp.to_string(),
-            "include_hetero": bool(self.include_hetero),
-            "include_h": bool(self.include_h),
-            "altloc": str(self.altloc),
-            "amino_acids_only": bool(self.amino_acids_only),
-            "mode": str(self.mode),
-            "n_atoms": int(data["pos"].shape[0]),
-            "shapes": {k: list(v.shape) for k, v in data.items() if hasattr(v, "shape")},
+            "family": "cloud",
+            "params": {
+                "include_hetero": bool(self.include_hetero),
+                "include_h": bool(self.include_h),
+                "altloc": str(self.altloc),
+                "amino_acids_only": bool(self.amino_acids_only),
+                "mode": str(self.mode),
+            },
+            "input": {
+                "source": src,
+                "chain_id": inp.chain_id,
+                "model_index": inp.model_index,
+                "format": fmt,
+            },
         }
+
+        # Feature keys (avoid heuristics downstream)
+        # For point-clouds we keep the same naming as graphs: node_attr keys.
+        if "node_attr" in data:
+            keys = []
+            if "elem" in mode:
+                keys.append("elem_onehot")
+            if "role" in mode:
+                keys.append("role_onehot")
+            if "bfactor" in mode:
+                keys.append("bfactor")
+            if "occ" in mode:
+                keys.append("occ")
+
+            meta["feature_keys"] = {
+                "node_attr_keys": keys
+            }
 
         if self.use_cache:
             cache.set(key, data=data, meta=meta)
 
-        return StructureArtifact(self.name, data=data, meta=meta)
+        return StructureArtifact(data=data, meta=meta)
