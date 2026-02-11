@@ -66,7 +66,6 @@ def _get_matrix(d: dict, key: str, n: int) -> np.ndarray:
         raise ValueError(f"'{key}' must have shape (N,D) with N={n}, got {m.shape}")
     return m.astype(np.float32)
 
-
 def to_pyg(
     artifact: StructureArtifact,
     x_mode: XMode = "auto",
@@ -81,9 +80,13 @@ def to_pyg(
     Auto behavior:
       - If 'node_attr' exists -> x = node_attr
       - Else if 'node_emb' exists -> x = node_emb
-      - Else fallback -> onehot(aa_index) + optional plddt if present
-      - If 'edge_attr' exists -> edge_attr = edge_attr
-      - Else if 'edge_dist' exists -> edge_attr = RBF(edge_dist)
+      - Else fallback (residue legacy) -> onehot(aa_index) + optional plddt if present
+      - Edge:
+          - If 'edge_attr' exists -> edge_attr = edge_attr
+          - Else if 'edge_dist' exists -> edge_attr = RBF(edge_dist)
+      - Graph:
+          - If 'graph_attr' exists -> attach as data.graph_attr tensor (1D)
+          - If 'graph_attr_keys' exists -> attach as python list
     """
     try:
         import torch
@@ -107,6 +110,7 @@ def to_pyg(
     edge_index = np.asarray(d["edge_index"], dtype=np.int64)
     if edge_index.ndim != 2 or edge_index.shape[0] != 2:
         raise ValueError(f"'edge_index' must have shape (2,E), got {edge_index.shape}")
+    e = int(edge_index.shape[1])
 
     # --- Node features
     x: np.ndarray
@@ -123,9 +127,13 @@ def to_pyg(
             x = node_emb.astype(np.float32)
 
         else:
-            # fallback legacy: onehot + (plddt if present)
+            # fallback legacy: residue onehot + (plddt if present)
             if "aa_index" not in d:
-                raise KeyError("Artifact missing 'aa_index' required to build x.")
+                raise KeyError(
+                    "Auto x requires 'node_attr' or 'node_emb'. "
+                    "Legacy fallback requires 'aa_index' (residue-level). "
+                    "This artifact has none."
+                )
             aa_index = np.asarray(d["aa_index"]).reshape(-1).astype(np.int64)
             if aa_index.shape[0] != n:
                 raise ValueError(f"'aa_index' must have shape (N,), N={n}, got {aa_index.shape}")
@@ -137,29 +145,32 @@ def to_pyg(
             x = np.concatenate(x_parts, axis=1).astype(np.float32)
 
     else:
-        # legacy modes: build x from aa_index (+ optional plddt/bfactor/emb)
+        # legacy explicit modes: build x from aa_index (+ optional plddt/bfactor/emb)
         if "aa_index" not in d:
-            raise KeyError("Artifact missing 'aa_index' required to build x.")
+            raise KeyError(
+                f"x_mode='{x_mode}' requires residue-level 'aa_index', but artifact has no 'aa_index'. "
+                "Use x_mode='auto' for node_attr/node_emb based artifacts (e.g., atom graphs)."
+            )
         aa_index = np.asarray(d["aa_index"]).reshape(-1).astype(np.int64)
         if aa_index.shape[0] != n:
             raise ValueError(f"'aa_index' must have shape (N,), N={n}, got {aa_index.shape}")
 
         x_parts: list[np.ndarray] = []
 
-        if x_mode.startswith("onehot"):
+        if str(x_mode).startswith("onehot"):
             x_parts.append(_onehot_from_aa_index(aa_index, num_classes=21))
         else:
             x_parts.append(aa_index.astype(np.float32).reshape(-1, 1))
 
-        if "+plddt" in x_mode:
+        if "+plddt" in str(x_mode):
             plddt = _get_vector(d, "plddt", n, fill_value=np.nan).reshape(-1, 1)
             x_parts.append(plddt)
 
-        if "+bfactor" in x_mode:
+        if "+bfactor" in str(x_mode):
             bfac = _get_vector(d, "bfactor_ca", n, fill_value=np.nan).reshape(-1, 1)
             x_parts.append(bfac)
 
-        if x_mode.endswith("+emb"):
+        if str(x_mode).endswith("+emb"):
             node_emb = _get_matrix(d, "node_emb", n)
             x_parts.append(node_emb)
 
@@ -170,14 +181,14 @@ def to_pyg(
 
     if "edge_attr" in d:
         ea = np.asarray(d["edge_attr"], dtype=np.float32)
-        if ea.ndim != 2 or ea.shape[0] != edge_index.shape[1]:
-            raise ValueError(f"'edge_attr' must have shape (E,F) with E={edge_index.shape[1]}, got {ea.shape}")
+        if ea.ndim != 2 or ea.shape[0] != e:
+            raise ValueError(f"'edge_attr' must have shape (E,F) with E={e}, got {ea.shape}")
         edge_attr = torch.from_numpy(ea).float()
 
     elif "edge_dist" in d:
         edge_dist = np.asarray(d["edge_dist"], dtype=np.float32).reshape(-1)
-        if edge_dist.shape[0] != edge_index.shape[1]:
-            raise ValueError(f"'edge_dist' must have length E={edge_index.shape[1]}, got {edge_dist.shape}")
+        if edge_dist.shape[0] != e:
+            raise ValueError(f"'edge_dist' must have length E={e}, got {edge_dist.shape}")
         ea = _rbf(edge_dist, num_kernels=int(rbf_k), dmax=float(rbf_dmax))
         edge_attr = torch.from_numpy(ea).float()
 
@@ -188,22 +199,23 @@ def to_pyg(
         edge_attr=edge_attr,
     )
 
-    # Optional: keep ids if you want (handy for debugging)
-    # NOTE: PyG expects tensors; store as python attr.
+    # --- Optional ids/labels (python attrs)
     if "residue_ids" in d:
         data.residue_ids = np.asarray(d["residue_ids"]).astype(str).tolist()
     if "resname" in d:
         data.resname = np.asarray(d["resname"]).astype(str).tolist()
+    if "atom_name" in d:
+        data.atom_name = np.asarray(d["atom_name"]).astype(str).tolist()
 
+    # --- Optional graph-level attrs
     if "graph_attr" in d:
         ga = np.asarray(d["graph_attr"], dtype=np.float32).reshape(-1)
         data.graph_attr = torch.from_numpy(ga).float()
 
     if "graph_attr_keys" in d:
         data.graph_attr_keys = np.asarray(d["graph_attr_keys"]).astype(str).tolist()
-        
-    return data
 
+    return data
 
 def load_pyg(
     artifact_dir: str | Path,

@@ -5,6 +5,7 @@ from morpheo.encoders.graphs.residue_contact_graph_ns import ResidueContactGraph
 from morpheo.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from morpheo.encoders.graphs.residue_knn_graph_ns import ResidueKNNGraphNS
 from morpheo.encoders.graphs.atom_knn_graph import AtomKNNGraph
+from morpheo.encoders.graphs.atom_knn_graph_ns import AtomKNNGraphNS  # noqa: F401
 
 register_encoder(
     "residue_contact_graph",
@@ -50,4 +51,13 @@ register_encoder(
     level="atom",
     family="atom",
     desc="Atom KNN graph.",
+)
+
+register_encoder(
+    "atom_knn_graph_ns",
+    lambda: AtomKNNGraphNS(),
+    type="graph",
+    level="atom",
+    family="atom",
+    desc="Atom KNN graph NS.",
 )

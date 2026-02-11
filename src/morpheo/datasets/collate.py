@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import torch
 
@@ -435,6 +435,161 @@ def collate_cloud_pad(
             out["graph_attr"] = torch.cat([b["graph_attr"].reshape(1, -1) for b in batch], dim=0)
             if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
                 out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
+
+    if "id" in batch[0]:
+        out["id"] = [b.get("id") for b in batch]
+    if "encoder" in batch[0]:
+        out["encoder"] = [b.get("encoder") for b in batch]
+
+    return out
+
+def collate_graph_pad_features(
+    batch: List[Dict[str, Any]],
+    *,
+    pad_value: float = 0.0,
+    pad_to: Optional[int] = None,  # if set, force F = pad_to
+    return_feat_mask: bool = False,
+) -> Dict[str, Any]:
+    """
+    Collate graphs WITHOUT PyG dependency, padding node feature dimension F.
+
+    Expects each sample has:
+      - x: (N,F)
+      - edge_index: (2,E)
+
+    Optional:
+      - edge_attr: (E,Fe)  (will NOT be padded; must match across batch if present)
+      - edge_dist: (E,)
+      - pos: (N,3)
+      - graph_attr: (G,)
+      - graph_attr_keys: list[str] (kept as python list if present)
+      - id, encoder
+
+    Returns:
+      - x: (sumN, Fmax) padded on feature dim
+      - edge_index: (2, sumE) with node offsets applied
+      - batch: (sumN,) graph id per node
+      - feat_dim: int (Fmax)
+      - feat_mask (optional): (sumN, Fmax) True where original features existed
+    """
+    xs = []
+    edge_indices = []
+    edge_dists = []
+    edge_attrs = []
+    poss = []
+    batch_vec = []
+
+    graph_attrs = []
+    graph_attr_keys = None  # keep first, assume same schema
+
+    node_offset = 0
+
+    # Determine Fmax
+    Fs = [int(b["x"].shape[1]) for b in batch]
+    Fmax = int(max(Fs)) if pad_to is None else int(pad_to)
+
+    # Edge_attr dimension must match if present across all samples
+    has_edge_attr = any("edge_attr" in b for b in batch)
+    edge_attr_dim = None
+    if has_edge_attr:
+        dims = []
+        for b in batch:
+            if "edge_attr" in b:
+                dims.append(int(b["edge_attr"].shape[1]))
+        if dims:
+            edge_attr_dim = dims[0]
+            if any(d != edge_attr_dim for d in dims):
+                raise RuntimeError(
+                    f"edge_attr dim mismatch across batch: {dims}. "
+                    "Use a separate collate or disable edge_attr mixing."
+                )
+
+    # graph_attr dim must match if present
+    has_graph_attr = any("graph_attr" in b for b in batch)
+    graph_attr_dim = None
+    if has_graph_attr:
+        dims = []
+        for b in batch:
+            if "graph_attr" in b and torch.is_tensor(b["graph_attr"]):
+                dims.append(int(b["graph_attr"].numel()))
+        if dims:
+            graph_attr_dim = dims[0]
+            if any(d != graph_attr_dim for d in dims):
+                raise RuntimeError(f"graph_attr dim mismatch across batch: {dims}")
+
+    feat_masks = [] if return_feat_mask else None
+
+    for i, b in enumerate(batch):
+        x = b["x"]
+        ei = b["edge_index"]
+
+        n = int(x.shape[0])
+        f = int(x.shape[1])
+
+        # pad x to Fmax
+        if f == Fmax:
+            xpad = x
+            if return_feat_mask:
+                feat_masks.append(torch.ones((n, Fmax), dtype=torch.bool, device=x.device))
+        elif f < Fmax:
+            xpad = torch.full((n, Fmax), float(pad_value), dtype=x.dtype, device=x.device)
+            xpad[:, :f] = x
+            if return_feat_mask:
+                m = torch.zeros((n, Fmax), dtype=torch.bool, device=x.device)
+                m[:, :f] = True
+                feat_masks.append(m)
+        else:
+            # If someone has more than pad_to/Fmax, truncate to keep deterministic
+            xpad = x[:, :Fmax]
+            if return_feat_mask:
+                feat_masks.append(torch.ones((n, Fmax), dtype=torch.bool, device=x.device))
+
+        xs.append(xpad)
+        edge_indices.append(ei + node_offset)
+
+        if "edge_dist" in b:
+            edge_dists.append(b["edge_dist"])
+
+        if has_edge_attr and ("edge_attr" in b):
+            edge_attrs.append(b["edge_attr"])
+
+        if "pos" in b:
+            poss.append(b["pos"])
+
+        batch_vec.append(torch.full((n,), i, dtype=torch.long, device=x.device))
+        node_offset += n
+
+        if "graph_attr" in b and torch.is_tensor(b["graph_attr"]):
+            graph_attrs.append(b["graph_attr"].reshape(-1))
+
+        if graph_attr_keys is None and ("graph_attr_keys" in b):
+            graph_attr_keys = b.get("graph_attr_keys")
+
+    out: Dict[str, Any] = {
+        "x": torch.cat(xs, dim=0),
+        "edge_index": torch.cat(edge_indices, dim=1),
+        "batch": torch.cat(batch_vec, dim=0),
+        "feat_dim": Fmax,
+    }
+
+    if return_feat_mask and feat_masks is not None:
+        out["feat_mask"] = torch.cat(feat_masks, dim=0)
+
+    if edge_dists:
+        out["edge_dist"] = torch.cat(edge_dists, dim=0)
+
+    if edge_attrs:
+        # concatenation requires same edge_attr_dim (checked above)
+        out["edge_attr"] = torch.cat(edge_attrs, dim=0)
+
+    if poss:
+        out["pos"] = torch.cat(poss, dim=0)
+
+    if graph_attrs:
+        out["graph_attr"] = torch.stack(graph_attrs, dim=0)  # (B,G)
+
+    if graph_attr_keys is not None:
+        out["graph_attr_keys"] = graph_attr_keys
 
     if "id" in batch[0]:
         out["id"] = [b.get("id") for b in batch]

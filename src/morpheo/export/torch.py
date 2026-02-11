@@ -26,7 +26,6 @@ def _to_tensor(x: Any, *, dtype: Optional[str] = None):
         t = t.to(dt)
     return t
 
-
 def to_torch(
     artifact: StructureArtifact,
     *,
@@ -46,9 +45,10 @@ def to_torch(
       - "matrix": require one of ('dist','dist_bins','contact','contact_bins')
       - "cloud": require 'pos'
 
-    Additions (auto features):
+    Auto features:
       - Graph: prefer 'node_attr' as x, then 'node_emb', else aa_index->onehot (+ optional plddt)
       - Graph: expose 'edge_attr' if present (keeps 'edge_dist' too)
+      - Graph: expose 'graph_attr' and 'graph_attr_keys' if present
       - Cloud: if cloud_x_mode == "auto" and 'node_attr' exists, use it as x; else fall back to onehot modes.
     """
     import torch
@@ -68,20 +68,18 @@ def to_torch(
             break
     has_matrix = matrix_key is not None
 
-    if prefer == "grid":
-        if not has_grid:
-            raise KeyError("Artifact has no 'grid'.")
-    elif prefer == "graph":
-        if not has_graph:
-            raise KeyError("Artifact has no 'edge_index'.")
-    elif prefer == "matrix":
-        if not has_matrix:
-            raise KeyError("Artifact has no matrix key ('dist','dist_bins','contact','contact_bins').")
-    elif prefer == "cloud":
-        if not has_pos:
-            raise KeyError("Artifact has no 'pos'.")
-    elif prefer != "grid_or_graph":
+    prefer = (prefer or "grid_or_graph").strip().lower()
+    if prefer not in {"grid_or_graph", "grid", "graph", "matrix", "cloud"}:
         raise ValueError("prefer must be one of: grid_or_graph, grid, graph, matrix, cloud")
+
+    if prefer == "grid" and (not has_grid):
+        raise KeyError("Artifact has no 'grid'.")
+    if prefer == "graph" and (not has_graph):
+        raise KeyError("Artifact has no 'edge_index'.")
+    if prefer == "matrix" and (not has_matrix):
+        raise KeyError("Artifact has no matrix key ('dist','dist_bins','contact','contact_bins').")
+    if prefer == "cloud" and (not has_pos):
+        raise KeyError("Artifact has no 'pos'.")
 
     # --- GRID
     if prefer in ("grid", "grid_or_graph") and has_grid:
@@ -97,15 +95,23 @@ def to_torch(
 
     # --- GRAPH
     elif prefer in ("graph", "grid_or_graph") and has_graph:
-        # NEW: prefer deterministic node_attr if present (ns encoders)
+
+        # Graph-level attributes (must be available in prefer="graph")
+        if "graph_attr" in d:
+            out["graph_attr"] = _to_tensor(d["graph_attr"], dtype="float32").reshape(-1)
+
+        if "graph_attr_keys" in d:
+            out["graph_attr_keys"] = np.asarray(d["graph_attr_keys"]).astype(str).tolist()
+
+        # Prefer deterministic node_attr (ns encoders)
         if "node_attr" in d:
             out["x"] = _to_tensor(d["node_attr"], dtype="float32")
 
-        # passthrough embeddings if present
+        # passthrough learned embeddings if present
         elif "node_emb" in d:
             out["x"] = _to_tensor(d["node_emb"], dtype="float32")
 
-        # fallback: build from aa_index (+ optional plddt)
+        # fallback: residue aa_index -> onehot (+ optional plddt)
         elif "aa_index" in d:
             aa = np.asarray(d["aa_index"]).astype(np.int64).reshape(-1)
             n = aa.shape[0]
@@ -116,25 +122,36 @@ def to_torch(
             feats = [onehot]
             if "plddt" in d:
                 p = np.asarray(d["plddt"], dtype=np.float32).reshape(-1, 1)
-                p = np.nan_to_num(p, nan=0.0)
+                p = np.nan_to_num(p, nan=0.0, posinf=0.0, neginf=0.0)
                 if float(np.nanmax(p)) > 1.5:
                     p = p / 100.0
                 feats.append(p)
 
             out["x"] = _to_tensor(np.concatenate(feats, axis=1), dtype="float32")
         else:
-            raise KeyError("Graph artifact lacks 'node_attr', 'aa_index' or 'node_emb' to build x.")
+            raise KeyError(
+                "Graph artifact lacks 'node_attr' and 'node_emb'. "
+                "Residue legacy fallback requires 'aa_index'."
+            )
 
         out["edge_index"] = _to_tensor(d["edge_index"], dtype="int64")
 
-        # NEW: pass edge_attr if present
+        # Edge attributes (preferred)
         if "edge_attr" in d:
             out["edge_attr"] = _to_tensor(d["edge_attr"], dtype="float32")
 
+        # Keep raw distances too (useful)
         if "edge_dist" in d:
             out["edge_dist"] = _to_tensor(d["edge_dist"], dtype="float32")
+
         if "pos" in d:
             out["pos"] = _to_tensor(d["pos"], dtype="float32")
+
+        # Graph-level attributes (important for your tests)
+        if "graph_attr" in d:
+            out["graph_attr"] = _to_tensor(d["graph_attr"], dtype="float32").reshape(-1)
+        if "graph_attr_keys" in d:
+            out["graph_attr_keys"] = np.asarray(d["graph_attr_keys"]).astype(str).tolist()
 
     # --- MATRIX
     elif prefer == "matrix" or (prefer == "grid_or_graph" and has_matrix):
@@ -170,18 +187,21 @@ def to_torch(
         if mode not in {"none", "auto", "onehot", "onehot+plddt", "onehot+plddt+bfactor"}:
             raise ValueError("cloud_x_mode must be: none | auto | onehot | onehot+plddt | onehot+plddt+bfactor")
 
-        # NEW: auto uses node_attr if available, else falls back to onehot
+        # auto uses node_attr if available, else falls back to onehot
         if mode == "auto":
             if "node_attr" in d:
                 out["x"] = _to_tensor(d["node_attr"], dtype="float32")
-                mode = "none"  # already set x, skip onehot construction
+                mode = "none"
             else:
                 mode = "onehot+plddt" if "plddt" in d else "onehot"
 
-        # Build point-wise x if requested and possible
+        # Build point-wise x if requested
         if mode != "none":
             if "aa_index" not in d:
-                raise KeyError("cloud_x_mode requires 'aa_index' in artifact.")
+                raise KeyError(
+                    "cloud_x_mode requested onehot features but artifact has no 'aa_index'. "
+                    "Use cloud_x_mode='auto' with 'node_attr', or set cloud_x_mode='none'."
+                )
 
             aa = np.asarray(d["aa_index"], dtype=np.int64).reshape(-1)
             n = aa.shape[0]
@@ -213,26 +233,33 @@ def to_torch(
             out["aa_index"] = _to_tensor(d["aa_index"], dtype="int64")
         if "plddt" in d:
             out["plddt"] = _to_tensor(
-                np.nan_to_num(np.asarray(d["plddt"], dtype=np.float32), nan=0.0),
+                np.nan_to_num(np.asarray(d["plddt"], dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0),
                 dtype="float32",
             )
         if "bfactor_ca" in d:
             out["bfactor_ca"] = _to_tensor(
-                np.nan_to_num(np.asarray(d["bfactor_ca"], dtype=np.float32), nan=0.0),
+                np.nan_to_num(np.asarray(d["bfactor_ca"], dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0),
                 dtype="float32",
             )
 
-    # --- Optional graph-level attributes (always expose if present)
-    if "graph_attr" in d:
-        out["graph_attr"] = _to_tensor(d["graph_attr"], dtype="float32").reshape(-1)
+        # Graph-level attrs are still useful on cloud artifacts too
+        if "graph_attr" in d:
+            out["graph_attr"] = _to_tensor(d["graph_attr"], dtype="float32").reshape(-1)
+        if "graph_attr_keys" in d:
+            out["graph_attr_keys"] = np.asarray(d["graph_attr_keys"]).astype(str).tolist()
 
-    if "graph_attr_keys" in d:
-        out["graph_attr_keys"] = np.asarray(d["graph_attr_keys"]).astype(str).tolist()
-
-    # --- Attach optional debug metadata
-    for k in ("residue_ids", "resname"):
+    # --- Attach optional debug metadata (python lists)
+    for k in ("residue_ids", "resname", "atom_name"):
         if k in d:
             out[k] = np.asarray(d[k]).astype(str).tolist()
+
+    # more optional atom-level debug (keep as list, not tensor)
+    for k in ("seq_pos_residue", "aa_index_residue"):
+        if k in d:
+            try:
+                out[k] = np.asarray(d[k]).reshape(-1).tolist()
+            except Exception:
+                pass
 
     if device is not None:
         for k, v in list(out.items()):
@@ -240,7 +267,6 @@ def to_torch(
                 out[k] = v.to(device)
 
     return out
-
 
 def load_torch(
     artifact_dir: str | Path,
