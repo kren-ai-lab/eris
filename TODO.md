@@ -48,23 +48,6 @@
 
 ---
 
-## 3) Registry y taxonomía de encoders
-
-* **Registro único**
-
-  * `EncoderInfo`: `name`, `type`, `level`, `family`, `description`, `params_schema`
-* **Fingerprint**
-
-  * `fingerprint()` obligatorio (hash params + versión)
-* **CLI**
-
-  * `morpheo encoders` tabla (y `--verbose`)
-* **DoD**
-
-  * lo que dice el registry coincide con lo que se escribe en `meta.json`
-
----
-
 ## 4) Features determinísticos completos (residue + atom + graph)
 
 ### 4.1 Residue node features

@@ -8,17 +8,26 @@ register_encoder(
     lambda: ResiduePointCloudCA(),
     type="cloud",
     level="ca",
-    family="residue",
-    desc="Residue point cloud from CA coordinates (+ residue ids, aa_index, plddt/bfactor if available).",
+    family="cloud",
+    description="Residue point cloud from CA coordinates (+ residue ids, aa_index, plddt/bfactor if available).",
+    params_schema={
+        "center": {"type": "bool", "default": True},
+        "scale": {"type": ["null", "float"], "default": None},
+    },
 )
 
-### Checking
 register_encoder(
     "atom_point_cloud",
     lambda: AtomPointCloud(),
     type="cloud",
     level="atom",
-    family="atom",
-    desc="Atom point cloud.",
+    family="cloud",
+    description="Atom point cloud.",
+    params_schema={
+        "include_hetero": {"type": "bool", "default": False},
+        "include_h": {"type": "bool", "default": False},
+        "altloc": {"type": "str", "default": "first"},
+        "amino_acids_only": {"type": "bool", "default": False},
+        "mode": {"type": "str", "default": "none"},
+    },
 )
-

@@ -1,35 +1,69 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Dict, Optional, Any, List
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
 
 
 @dataclass(frozen=True)
 class EncoderInfo:
     name: str
-    type: str  # graph|grid|matrix|cloud
-    level: str = "ca"      # ca|all_atom|surface (future)
-    family: str = "residue"  # residue|atom|surface (future)
-    desc: str = ""
+    type: str   # graph|matrix|cloud|grid|mesh
+    level: str  # ca|residue|atom
+    family: str # residue_graph|atom_graph|matrix|cloud|grid|mesh
+    description: str = ""
+    params_schema: Dict[str, Any] = field(default_factory=dict)
 
 
 _REGISTRY: Dict[str, Callable[[], Any]] = {}
 _INFO: Dict[str, EncoderInfo] = {}
 
 
+def _require_callable(obj: Any, attr: str, name: str) -> None:
+    fn = getattr(obj, attr, None)
+    if fn is None or not callable(fn):
+        raise TypeError(f"Encoder '{name}' must implement {attr}().")
+
+
 def register_encoder(
     name: str,
     factory: Callable[[], Any],
     *,
-    type: str = "graph",
-    level: str = "ca",
-    family: str = "residue",
-    desc: str = "",
+    type: str,
+    level: str,
+    family: str,
+    description: str = "",
+    params_schema: Optional[Dict[str, Any]] = None,
+    allow_override: bool = False,
 ) -> None:
-    if name in _REGISTRY:
+    """
+    Register an encoder factory and its metadata.
+
+    Requirements (no BaseEncoder needed):
+      - encoder.encode(...) must exist (callable)
+      - encoder.fingerprint() must exist (callable) and return str
+      - encoder.version is optional; if present should be str
+    """
+    if (not allow_override) and (name in _REGISTRY):
         raise KeyError(f"Encoder already registered: {name}")
+
+    enc = factory()
+
+    _require_callable(enc, "encode", name)
+    _require_callable(enc, "fingerprint", name)
+
+    fp = enc.fingerprint()
+    if not isinstance(fp, str) or not fp.strip():
+        raise TypeError(f"Encoder '{name}'.fingerprint() must return a non-empty str.")
+
     _REGISTRY[name] = factory
-    _INFO[name] = EncoderInfo(name=name, type=type, level=level, family=family, desc=desc)
+    _INFO[name] = EncoderInfo(
+        name=name,
+        type=type,
+        level=level,
+        family=family,
+        description=description,
+        params_schema=params_schema or {},
+    )
 
 
 def get_encoder(name: str) -> Any:

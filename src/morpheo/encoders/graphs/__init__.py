@@ -12,8 +12,12 @@ register_encoder(
     lambda: ResidueContactGraph(),
     type="graph",
     level="ca",
-    family="residue",
-    desc="Residue contact graph from CA distances (thresholded).",
+    family="residue_graph",
+    description="Residue contact graph from CA distances (thresholded).",
+    params_schema={
+        "cutoff": {"type": "float", "default": 8.0},
+        "include_self_loops": {"type": "bool", "default": False},
+    },
 )
 
 register_encoder(
@@ -21,8 +25,12 @@ register_encoder(
     lambda: ResidueContactGraphNS(),
     type="graph",
     level="ca",
-    family="residue",
-    desc="Residue contact graph (CA) with node/edge features baseline (e.g., aa_index, plddt/bfactor, RBF edge).",
+    family="residue_graph",
+    description="Residue contact graph (CA) with baseline node/edge/graph features (aa_index, physchem, plddt/bfactor, RBF, seq separation, local flags).",
+    params_schema={
+        "cutoff": {"type": "float", "default": 8.0},
+        "include_self_loops": {"type": "bool", "default": False},
+    },
 )
 
 register_encoder(
@@ -30,8 +38,13 @@ register_encoder(
     lambda: ResidueKNNGraph(),
     type="graph",
     level="ca",
-    family="residue",
-    desc="Residue kNN graph built on CA coordinates (fixed k).",
+    family="residue_graph",
+    description="Residue kNN graph built on CA coordinates (fixed k).",
+    params_schema={
+        "k": {"type": "int", "default": 16},
+        "symmetrize": {"type": "bool", "default": False},
+        "include_self_loops": {"type": "bool", "default": False},
+    },
 )
 
 register_encoder(
@@ -39,18 +52,31 @@ register_encoder(
     lambda: ResidueKNNGraphNS(),
     type="graph",
     level="ca",
-    family="residue",
-    desc="Residue kNN graph (CA) with node/edge features baseline (e.g., aa_index, plddt/bfactor, RBF edge).",
+    family="residue_graph",
+    description="Residue kNN graph (CA) with baseline node/edge/graph features (aa_index, physchem, plddt/bfactor, RBF, seq separation, local flags).",
+    params_schema={
+        "k": {"type": "int", "default": 16},
+        "symmetrize": {"type": "bool", "default": False},
+        "include_self_loops": {"type": "bool", "default": False},
+    },
 )
 
-### Checking
 register_encoder(
     "atom_knn_graph",
     lambda: AtomKNNGraph(),
     type="graph",
     level="atom",
-    family="atom",
-    desc="Atom KNN graph.",
+    family="atom_graph",
+    description="Atom kNN graph built on atomic coordinates (fixed k).",
+    params_schema={
+        "k": {"type": "int", "default": 16},
+        "include_self_loops": {"type": "bool", "default": False},
+        "include_hetero": {"type": "bool", "default": False},
+        "include_h": {"type": "bool", "default": False},
+        "altloc": {"type": "str", "default": "first"},
+        "amino_acids_only": {"type": "bool", "default": False},
+        "mode": {"type": "str", "default": "none"},
+    },
 )
 
 register_encoder(
@@ -58,6 +84,17 @@ register_encoder(
     lambda: AtomKNNGraphNS(),
     type="graph",
     level="atom",
-    family="atom",
-    desc="Atom KNN graph NS.",
+    family="atom_graph",
+    description="Atom kNN graph with baseline deterministic node/edge/graph features (elem/role/bfactor/occ, dist+RBF, seq separation, local flags, graph stats).",
+    params_schema={
+        "k": {"type": "int", "default": 16},
+        "include_self_loops": {"type": "bool", "default": False},
+        "include_hetero": {"type": "bool", "default": False},
+        "include_h": {"type": "bool", "default": False},
+        "altloc": {"type": "str", "default": "first"},
+        "amino_acids_only": {"type": "bool", "default": False},
+        "rbf_k": {"type": "int", "default": 16},
+        "rbf_dmax": {"type": "float", "default": 20.0},
+        "local_cutoff": {"type": "int", "default": 4},
+    },
 )
