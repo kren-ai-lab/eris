@@ -220,13 +220,18 @@ class StructureArtifact:
         self.meta["counts"] = infer_counts(self.data)
         self.meta["feature_keys"] = infer_feature_keys(self.meta, self.data)
 
+
+    def validate(self, strict = False):
+        validate_artifact(self.meta, self.data, strict=strict)
+
+
     def save(self, outdir: Path, *, validate: bool = True) -> None:
         outdir.mkdir(parents=True, exist_ok=True)
 
         self.finalize()
 
         if validate:
-            validate_artifact(self.meta, self.data, strict=True)
+            self.validate(strict=True)
 
         np.savez_compressed(outdir / "data.npz", **self.data)
         (outdir / "meta.json").write_text(json.dumps(self.meta, indent=2, sort_keys=True), encoding="utf-8")
@@ -246,5 +251,5 @@ class StructureArtifact:
         art = StructureArtifact(data=data, meta=meta)
         # do not auto-finalize on load; validate the stored content
         if validate:
-            validate_artifact(meta, data, strict=strict)
+            art.validate(strict=strict)
         return art
