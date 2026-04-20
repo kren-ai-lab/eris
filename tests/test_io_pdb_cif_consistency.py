@@ -10,9 +10,9 @@ def _load_ca(path: Path):
     return extract_ca_bundle(ch, amino_acids_only=True, altloc="max_occupancy", missing_ca="skip")
 
 def test_pdb_cif_ca_bundle_comparable():
-    pos_pdb, ids_pdb, res_pdb, aa_pdb, plddt_pdb, bfac_pdb = _load_ca(DATA/"1AQ2.pdb")
-    pos_cif, ids_cif, res_cif, aa_cif, plddt_cif, bfac_cif = _load_ca(DATA/"1AQ2.cif")
+    strc_pdb = _load_ca(DATA/"1AQ2.pdb")
+    strc_cif = _load_ca(DATA/"1AQ2.cif")
 
-    assert np.array_equal(ids_pdb, ids_cif)
-    assert np.allclose(pos_pdb, pos_cif, atol=1e-3, rtol=1e-5)
-    assert np.allclose(bfac_pdb, bfac_cif, atol=1e-3, rtol=1e-5)
+    assert np.array_equal(strc_pdb["residue_ids"], strc_cif["residue_ids"])
+    assert np.allclose(strc_pdb["pos"], strc_cif["pos"], atol=1e-3, rtol=1e-5)
+    assert np.allclose(strc_pdb["bfactor_ca"], strc_cif["bfactor_ca"], atol=1e-3, rtol=1e-5)

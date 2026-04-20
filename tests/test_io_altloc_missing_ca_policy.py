@@ -35,7 +35,7 @@ END
 def test_altloc_max_occupancy_selects_highest_occ_ca():
     chain = _chain_from_pdb_string(_PDB_ALTLOC_AND_MISSING_CA)
 
-    pos, residue_ids, resname, aa_index, plddt, bfac = extract_ca_bundle(
+    strc = extract_ca_bundle(
         chain,
         amino_acids_only=True,
         altloc="max_occupancy",
@@ -43,22 +43,22 @@ def test_altloc_max_occupancy_selects_highest_occ_ca():
     )
 
     # Residue 2 lacks CA, so only residue 1 remains
-    assert pos.shape == (1, 3)
+    assert strc["pos"].shape == (1, 3)
     # max occupancy altloc for CA should be B -> x=13.0
-    assert np.isclose(pos[0, 0], 13.0, atol=1e-6)
+    assert np.isclose(strc["pos"][0, 0], 13.0, atol=1e-6)
 
 
 def test_missing_ca_skip_drops_residues_without_ca():
     chain = _chain_from_pdb_string(_PDB_ALTLOC_AND_MISSING_CA)
 
-    pos, residue_ids, *_ = extract_ca_bundle(
+    strc = extract_ca_bundle(
         chain,
         amino_acids_only=True,
         altloc="max_occupancy",
         missing_ca="skip",
     )
-    assert pos.shape[0] == 1
-    assert residue_ids.shape[0] == 1
+    assert strc["pos"].shape[0] == 1
+    assert strc["residue_ids"].shape[0] == 1
 
 
 def test_missing_ca_error_raises():
@@ -76,7 +76,7 @@ def test_missing_ca_error_raises():
 def test_missing_ca_nan_keeps_residue_with_nans():
     chain = _chain_from_pdb_string(_PDB_ALTLOC_AND_MISSING_CA)
 
-    pos, residue_ids, resname, aa_index, plddt, bfac = extract_ca_bundle(
+    strc = extract_ca_bundle(
         chain,
         amino_acids_only=True,
         altloc="max_occupancy",
@@ -84,13 +84,13 @@ def test_missing_ca_nan_keeps_residue_with_nans():
     )
 
     # Residue 1 has CA; residue 2 is kept as NaNs
-    assert pos.shape == (2, 3)
-    assert residue_ids.shape == (2,)
+    assert strc["pos"].shape == (2, 3)
+    assert strc["residue_ids"].shape == (2,)
 
     # Residue 1 uses altloc B -> x=13.0
-    assert np.isclose(pos[0, 0], 13.0, atol=1e-6)
+    assert np.isclose(strc["pos"][0, 0], 13.0, atol=1e-6)
 
     # Residue 2 missing CA -> NaNs
-    assert np.isnan(pos[1]).all()
-    assert np.isnan(plddt[1])
-    assert np.isnan(bfac[1])
+    assert np.isnan(strc["pos"][1]).all()
+    assert np.isnan(strc["plddt"][1])
+    assert np.isnan(strc["bfactor_ca"][1])

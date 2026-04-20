@@ -151,7 +151,7 @@ def extract_ca_bundle(
           - "error": raise with a compact report
           - "nan": keep residue with pos = [nan, nan, nan] (and bfactor/plddt as nan)
 
-    Returns
+    Returns dict with:
     -------
     pos : (N,3) float32
     residue_ids : (N,) str
@@ -236,15 +236,24 @@ def extract_ca_bundle(
     if not coords:
         raise StructureLoadError("No CA residues found in selected chain (after filters/policies).")
 
-    pos = np.asarray(coords, dtype=np.float32)
-    residue_ids = np.asarray(ids, dtype=np.str_)
-    resname = np.asarray(resnames, dtype=np.str_)
-    aa_index = np.asarray(aa_idx, dtype=np.int16)
-    plddt = np.asarray(plddt_list, dtype=np.float32)
-    bfactor_ca = np.asarray(bfac_list, dtype=np.float32)
+    # pos = np.asarray(coords, dtype=np.float32)
+    # residue_ids = np.asarray(ids, dtype=np.str_)
+    # resname = np.asarray(resnames, dtype=np.str_)
+    # aa_index = np.asarray(aa_idx, dtype=np.int16)
+    # plddt = np.asarray(plddt_list, dtype=np.float32)
+    # bfactor_ca = np.asarray(bfac_list, dtype=np.float32)
 
-    return pos, residue_ids, resname, aa_index, plddt, bfactor_ca
+    # return pos, residue_ids, resname, aa_index, plddt, bfactor_ca
 
+    return  {
+        "pos": np.asarray(coords, dtype=np.float32),
+        "residue_ids": np.asarray(ids, dtype=np.str_),
+        "resname": np.asarray(resnames, dtype=np.str_),
+        "aa_index": np.asarray(aa_idx, dtype=np.int16),
+        "plddt": np.asarray(plddt_list, dtype=np.float32),
+        "bfactor_ca": np.asarray(bfac_list, dtype=np.float32),
+    }
+    
 
 def load_and_extract(
     inp: StructureInput,

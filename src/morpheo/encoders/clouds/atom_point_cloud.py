@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, ClassVar
 
 import numpy as np
 
-from morpheo.core.cache import DiskCache, make_cache_key
-from morpheo.core.hashing import sha256_file, sha256_text
+from morpheo.core.base_encoder import BaseAtomEncoder
+from morpheo.core.encoder_metadata import build_params, build_attr_keys, NODE_ATTR_KEY_MAP
 from morpheo.core.io import load_and_extract_atoms
 from morpheo.core.types import StructureArtifact, StructureInput
-from morpheo.core.artifacts import ARTIFACT_SCHEMA_VERSION
+#from morpheo.core.artifacts import ARTIFACT_SCHEMA_VERSION
 
 def _onehot(idx: np.ndarray, num: int) -> np.ndarray:
     idx = np.asarray(idx, dtype=np.int64).reshape(-1)
@@ -21,7 +21,7 @@ def _onehot(idx: np.ndarray, num: int) -> np.ndarray:
 
 
 @dataclass
-class AtomPointCloud:
+class AtomPointCloud(BaseAtomEncoder):
     """
     Atom-level point cloud.
 
@@ -38,37 +38,21 @@ class AtomPointCloud:
       - aa_index_residue (N,)
 
     Optional:
-      - node_attr (N,F) if mode != "none"
+      - node_attr (N,F) if node_attr_mode != "none"
     """
-    name: str = "atom_point_cloud"
+    name: ClassVar[str] = "atom_point_cloud_ca"
+    representation_type: ClassVar[str] = "point_cloud"
+    family: ClassVar[str] = "cloud"
+    level: ClassVar[str] = "ca"
+    
     include_hetero: bool = False
     include_h: bool = False
     altloc: str = "first"  # "first" or "A"
     amino_acids_only: bool = False
+    node_attr_mode: str = "elem+role+bfactor+occ"
+    
 
-    # feature mode for node_attr
-    # "none" | "elem" | "elem+role" | "elem+role+bfactor+occ"
-    mode: str = "elem+role+bfactor+occ"
-
-    use_cache: bool = True
-    cache: Optional[DiskCache] = None
-
-    def fingerprint(self) -> str:
-        return sha256_text(
-            f"{self.name}|het={self.include_hetero}|h={self.include_h}|altloc={self.altloc}|aa_only={self.amino_acids_only}|mode={self.mode}|use_cache={self.use_cache}"
-        )
-
-    def encode(self, inp: StructureInput) -> StructureArtifact:
-        cache = self.cache or DiskCache()
-        file_hash = sha256_file(Path(inp.source))
-        key = make_cache_key(self.name, self.fingerprint(), file_hash, inp.to_string())
-
-        if self.use_cache:
-            hit = cache.get(key)
-            if hit is not None:
-                data, meta = hit
-                return StructureArtifact(data=data, meta=meta)
-
+    def _create_data(self, inp: StructureInput) -> Dict[str, Any]:
         b = load_and_extract_atoms(
             inp,
             include_hetero=self.include_hetero,
@@ -92,7 +76,7 @@ class AtomPointCloud:
         }
 
         # Optional node_attr (features per atom)
-        mode = (self.mode or "none").strip().lower()
+        mode = (self.node_attr_mode or "none").strip().lower()
         if mode != "none":
             feats = []
 
@@ -118,52 +102,41 @@ class AtomPointCloud:
 
             if feats:
                 data["node_attr"] = np.concatenate(feats, axis=1).astype(np.float32)
+        pass
 
-        # ---- META (new schema contract) ----
-        encoder_version = getattr(self, "version", None) or "0.1.0"
-        src = inp.source
-        fmt = Path(src).suffix.lstrip(".").lower() or None
 
-        meta: Dict[str, Any] = {
-            "encoder_name": self.name,
-            "encoder_version": encoder_version,
-            "encoder_fingerprint": self.fingerprint(),
-            "type": "cloud",
-            "level": "atom",
-            "family": "cloud",
-            "params": {
-                "include_hetero": bool(self.include_hetero),
-                "include_h": bool(self.include_h),
-                "altloc": str(self.altloc),
-                "amino_acids_only": bool(self.amino_acids_only),
-                "mode": str(self.mode),
-            },
-            "input": {
-                "source": src,
-                "chain_id": inp.chain_id,
-                "model_index": inp.model_index,
-                "format": fmt,
-            },
+
+    def _create_metadata(self, inp: StructureInput) -> Dict[str, Any]:
+        meta = self._base_metadata(inp)
+
+        # if "node_attr" in data:
+        #     keys = []
+        #     if "elem" in self.mode:
+        #         keys.append("elem_onehot")
+        #     if "role" in self.mode:
+        #         keys.append("role_onehot")
+        #     if "bfactor" in self.mode:
+        #         keys.append("bfactor")
+        #     if "occ" in self.mode:
+        #         keys.append("occ")
+
+        #     meta["feature_keys"] = {
+        #         "node_attr_keys": keys
+        #     }
+        
+
+        meta["params"] = build_params(
+            include_hetero = bool(self.include_hetero),
+            include_h = bool(self.include_h),
+            altloc = str(self.altloc),
+            amino_acids_only = bool(self.amino_acids_only),
+            mode = str(self.node_attr_mode),
+        )
+
+        meta["feature_keys"] = {
+            "node_attr_keys": build_attr_keys(
+                self.node_attr_mode, NODE_ATTR_KEY_MAP
+            ),
         }
 
-        # Feature keys (avoid heuristics downstream)
-        # For point-clouds we keep the same naming as graphs: node_attr keys.
-        if "node_attr" in data:
-            keys = []
-            if "elem" in mode:
-                keys.append("elem_onehot")
-            if "role" in mode:
-                keys.append("role_onehot")
-            if "bfactor" in mode:
-                keys.append("bfactor")
-            if "occ" in mode:
-                keys.append("occ")
-
-            meta["feature_keys"] = {
-                "node_attr_keys": keys
-            }
-
-        if self.use_cache:
-            cache.set(key, data=data, meta=meta)
-
-        return StructureArtifact(data=data, meta=meta)
+        return meta
