@@ -2,20 +2,58 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple, ClassVar
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from morpheo.core.cache import DiskCache, make_cache_key
-from morpheo.core.hashing import sha256_file, sha256_text
-from morpheo.core.io import load_and_extract_atoms
 from morpheo.core.types import StructureArtifact, StructureInput
+from morpheo.core.base_encoder import BaseAtomEncoder, EncodingContext
+from morpheo.core.contracts import AtomContract
+from morpheo.core.representations import GraphRepresentation
+
+if TYPE_CHECKING:
+    from morpheo.core.contracts.base_contract import GranularityContract
+    from morpheo.core.representations.base_rep import BaseRepresentation
+
+
+# -----------------------------
+# Fixed dims (must be stable!)
+# -----------------------------
+ELEM_DIM = 17   # must match io.py _ELEM_VOCAB length
+ROLE_DIM = 6    # roles 0..5 in io.py _atom_role
+
+
+def _onehot_fixed(idx: np.ndarray, dim: int) -> np.ndarray:
+    idx = np.asarray(idx, dtype=np.int64).reshape(-1)
+    out = np.zeros((idx.shape[0], dim), dtype=np.float32)
+    m = (idx >= 0) & (idx < dim)
+    out[np.arange(idx.shape[0])[m], idx[m]] = 1.0
+    return out
+
+
+def _rbf(dist: np.ndarray, *, k: int = 16, dmax: float = 20.0) -> np.ndarray:
+    """
+    Gaussian RBF features over distance.
+    Returns (E,k).
+    """
+    d = np.asarray(dist, dtype=np.float32).reshape(-1, 1)
+    # centers in [0, dmax]
+    centers = np.linspace(0.0, float(dmax), int(k), dtype=np.float32).reshape(1, -1)
+    # sigma: spacing
+    if k <= 1:
+        sigma = 1.0
+    else:
+        sigma = float(dmax) / float(k - 1)
+        sigma = max(sigma, 1e-6)
+    rbf = np.exp(-((d - centers) ** 2) / (2.0 * (sigma ** 2))).astype(np.float32)
+    return rbf
 
 
 def _knn_edge_index(pos: np.ndarray, k: int) -> np.ndarray:
     """
     Naive O(N^2) kNN (directed).
-    Returns edge_index (2,E) int64.
+    edge_index shape (2,E)
     """
     pos = np.asarray(pos, dtype=np.float32)
     n = int(pos.shape[0])
@@ -34,173 +72,212 @@ def _knn_edge_index(pos: np.ndarray, k: int) -> np.ndarray:
     return np.stack([src, dst], axis=0)
 
 
+def _edge_dist(pos: np.ndarray, edge_index: np.ndarray) -> np.ndarray:
+    if edge_index.shape[1] == 0:
+        return np.zeros((0,), dtype=np.float32)
+    src = edge_index[0]
+    dst = edge_index[1]
+    d = pos[src] - pos[dst]
+    return np.sqrt((d * d).sum(axis=1)).astype(np.float32)
+
+#Repeated?
+def _build_node_attr(
+    *,
+    elem_index: np.ndarray,
+    atom_role: np.ndarray,
+    bfactor: np.ndarray,
+    occ: np.ndarray,
+    bfactor_norm: bool = True,
+) -> np.ndarray:
+    """
+    node_attr: [onehot(elem,17), onehot(role,6), bfactor(1), occ(1)] => (N,25)
+    """
+    e = _onehot_fixed(elem_index, ELEM_DIM)            # (N,17)
+    r = _onehot_fixed(atom_role, ROLE_DIM)            # (N,6)
+
+    bf = np.nan_to_num(np.asarray(bfactor, dtype=np.float32), nan=0.0).reshape(-1, 1)
+    oc = np.nan_to_num(np.asarray(occ, dtype=np.float32), nan=0.0).reshape(-1, 1)
+
+    if bfactor_norm:
+        # if it looks like AF2 pLDDT or typical bfactor scale, normalize to 0..1 via /100
+        if float(np.nanmax(bf)) > 1.5:
+            bf = bf / 100.0
+
+    return np.concatenate([e, r, bf.astype(np.float32), oc.astype(np.float32)], axis=1).astype(np.float32)
+
+
+def _build_edge_attr(
+    *,
+    edge_dist: np.ndarray,
+    edge_index: np.ndarray,
+    seq_pos_residue: np.ndarray,
+    rbf_k: int = 16,
+    rbf_dmax: float = 20.0,
+    local_cutoff: int = 4,
+) -> np.ndarray:
+    """
+    edge_attr: [dist(1), rbf(16), seq_sep(1), local(1)] => (E,19)
+    """
+    d = np.asarray(edge_dist, dtype=np.float32).reshape(-1, 1)  # (E,1)
+    rbf = _rbf(edge_dist, k=rbf_k, dmax=rbf_dmax)               # (E,K)
+
+    if edge_index.shape[1] == 0:
+        seq_sep = np.zeros((0, 1), dtype=np.float32)
+        local = np.zeros((0, 1), dtype=np.float32)
+    else:
+        sp = np.asarray(seq_pos_residue, dtype=np.int64).reshape(-1)
+        src = edge_index[0]
+        dst = edge_index[1]
+        sep = np.abs(sp[src] - sp[dst]).astype(np.float32).reshape(-1, 1)
+        seq_sep = sep
+        local = (sep <= float(local_cutoff)).astype(np.float32).reshape(-1, 1)
+
+    return np.concatenate([d, rbf, seq_sep, local], axis=1).astype(np.float32)
+
+
+def _graph_stats(edge_index: np.ndarray, edge_dist: np.ndarray, n: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Returns:
+      graph_attr (G,) float32
+      graph_attr_keys (G,) str
+    """
+    e = int(edge_index.shape[1])
+    # degree (directed)
+    deg = np.zeros((n,), dtype=np.float32)
+    if e > 0:
+        src = edge_index[0]
+        np.add.at(deg, src, 1.0)
+
+    mean_deg = float(np.mean(deg)) if n > 0 else 0.0
+    std_deg = float(np.std(deg)) if n > 0 else 0.0
+
+    if e > 0:
+        md = float(np.mean(edge_dist))
+        sd = float(np.std(edge_dist))
+    else:
+        md, sd = 0.0, 0.0
+
+    graph_attr = np.asarray(
+        [float(n), float(e), mean_deg, std_deg, md, sd],
+        dtype=np.float32,
+    )
+    graph_attr_keys = np.asarray(
+        ["n_nodes", "n_edges", "deg_mean", "deg_std", "edge_dist_mean", "edge_dist_std"],
+        dtype=np.str_,
+    )
+    return graph_attr, graph_attr_keys
+
+
 @dataclass
-class AtomKNNGraph:
+class AtomKNNGraph(BaseAtomEncoder):
     """
-    Atom-level kNN graph built on atomic coordinates.
+    Atom-level kNN graph (CA-independent) with deterministic node/edge features baseline.
 
-    Stores:
-      - pos (N,3)
-      - edge_index (2,E)
-      - edge_dist (E,)
-      - plus atom descriptors: elem_index, atom_role, bfactor, occ, residue_ids, etc.
-
-    Optional:
-      - node_attr (N,F) if mode != "none"
+    Outputs:
+      - pos, edge_index, edge_dist
+      - node_attr (fixed dim)
+      - edge_attr (dist+rbf+seq+local)
+      - graph_attr (+ keys)
+      - plus raw per-atom fields: elem_index, atom_role, bfactor, occ, residue_ids, atom_name, etc.
     """
-    name: str = "atom_knn_graph"
+    # Identity
+    name: ClassVar[str] = "atom_knn_graph"
+    representation: ClassVar[BaseRepresentation] = GraphRepresentation()
+
+    # Instance 
     k: int = 16
+    include_self_loops: bool = False
+
     include_hetero: bool = False
     include_h: bool = False
     altloc: str = "first"
     amino_acids_only: bool = False
 
-    # "none" | "elem+role+bfactor+occ" (same as cloud)
-    mode: str = "elem+role+bfactor+occ"
+    # edge feature params
+    rbf_k: int = 16
+    rbf_dmax: float = 20.0
+    local_cutoff: int = 4
 
-    include_self_loops: bool = False
-    use_cache: bool = True
-    cache: Optional[DiskCache] = None
+    def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
+        strc = ctx.raw_structure
+        centroid = ctx.centroid
+        pos_out = ctx.pos
 
-    def fingerprint(self) -> str:
-        return sha256_text(
-            f"{self.name}|k={self.k}|het={self.include_hetero}|h={self.include_h}|altloc={self.altloc}|aa_only={self.amino_acids_only}|mode={self.mode}|self_loops={self.include_self_loops}|use_cache={self.use_cache}"
-        )
-
-    def encode(self, inp: StructureInput) -> StructureArtifact:
-        cache = self.cache or DiskCache()
-        file_hash = sha256_file(Path(inp.source))
-        key = make_cache_key(self.name, self.fingerprint(), file_hash, inp.to_string())
-
-        if self.use_cache:
-            hit = cache.get(key)
-            if hit is not None:
-                data, meta = hit
-                return StructureArtifact(data=data, meta=meta)
-
-        b = load_and_extract_atoms(
-            inp,
-            include_hetero=self.include_hetero,
-            include_h=self.include_h,
-            altloc=self.altloc,
-            amino_acids_only=self.amino_acids_only,
-        )
-
-        pos = b["pos"].astype(np.float32)
+        pos = pos_out.astype(np.float32)
         n = int(pos.shape[0])
 
         edge_index = _knn_edge_index(pos, k=int(self.k))
 
-        if not self.include_self_loops and edge_index.shape[1] > 0:
+        if (not self.include_self_loops) and edge_index.shape[1] > 0:
             src = edge_index[0]
             dst = edge_index[1]
             keep = src != dst
             edge_index = edge_index[:, keep]
 
-        if edge_index.shape[1] == 0:
-            edge_dist = np.zeros((0,), dtype=np.float32)
-        else:
-            src = edge_index[0]
-            dst = edge_index[1]
-            d = pos[src] - pos[dst]
-            edge_dist = np.sqrt((d * d).sum(axis=1)).astype(np.float32)
+        edge_dist = _edge_dist(pos, edge_index)
+
+        # deterministic baseline attributes
+        node_attr = _build_node_attr(
+            elem_index=strc["elem_index"],
+            atom_role=strc["atom_role"],
+            bfactor=strc["bfactor"],
+            occ=strc["occ"],
+            bfactor_norm=True,
+        )
+
+        edge_attr = _build_edge_attr(
+            edge_dist=edge_dist,
+            edge_index=edge_index,
+            seq_pos_residue=strc["seq_pos_residue"],
+            rbf_k=int(self.rbf_k),
+            rbf_dmax=float(self.rbf_dmax),
+            local_cutoff=int(self.local_cutoff),
+        )
+
+        graph_attr, graph_attr_keys = _graph_stats(edge_index, edge_dist, n=n)
 
         data: Dict[str, Any] = {
             "pos": pos.astype(np.float32),
+            "centroid": centroid.astype(np.float32),
             "edge_index": edge_index.astype(np.int64),
             "edge_dist": edge_dist.astype(np.float32),
-            "elem_index": b["elem_index"].astype(np.int16),
-            "atom_role": b["atom_role"].astype(np.int8),
-            "bfactor": b["bfactor"].astype(np.float32),
-            "occ": b["occ"].astype(np.float32),
-            "residue_ids": b["residue_ids"].astype(np.str_),
-            "resname": b["resname"].astype(np.str_),
-            "atom_name": b["atom_name"].astype(np.str_),
-            "seq_pos_residue": b["seq_pos_residue"].astype(np.int32),
-            "aa_index_residue": b["aa_index_residue"].astype(np.int16),
+            "node_attr": node_attr.astype(np.float32),
+            "edge_attr": edge_attr.astype(np.float32),
+            "graph_attr": graph_attr.astype(np.float32),
+            "graph_attr_keys": graph_attr_keys.astype(np.str_),
+
+            # raw atom fields (useful + deterministic)
+            "elem_index": strc["elem_index"].astype(np.int16),
+            "atom_role": strc["atom_role"].astype(np.int8),
+            "bfactor": strc["bfactor"].astype(np.float32),
+            "occ": strc["occ"].astype(np.float32),
+            "residue_ids": strc["residue_ids"].astype(np.str_),
+            "resname": strc["resname"].astype(np.str_),
+            "atom_name": strc["atom_name"].astype(np.str_),
+            "seq_pos_residue": strc["seq_pos_residue"].astype(np.int32),
+            "aa_index_residue": strc["aa_index_residue"].astype(np.int16),
         }
 
-        # Optional: store node_attr for torch/pyg to pick up as x
-        mode = (self.mode or "none").strip().lower()
-        if mode != "none":
-            feats = []
+        return data
 
-            if "elem" in mode:
-                e = data["elem_index"].astype(np.int64)
-                num_e = int(np.max(e)) + 1 if e.size else 1
-                oh_e = np.zeros((n, num_e), dtype=np.float32)
-                m = (e >= 0) & (e < num_e)
-                oh_e[np.arange(n)[m], e[m]] = 1.0
-                feats.append(oh_e)
 
-            if "role" in mode:
-                r = data["atom_role"].astype(np.int64)
-                num_r = int(np.max(r)) + 1 if r.size else 1
-                oh_r = np.zeros((n, num_r), dtype=np.float32)
-                m = (r >= 0) & (r < num_r)
-                oh_r[np.arange(n)[m], r[m]] = 1.0
-                feats.append(oh_r)
-
-            if "bfactor" in mode:
-                bf = np.nan_to_num(data["bfactor"], nan=0.0).reshape(-1, 1).astype(np.float32)
-                if float(np.nanmax(bf)) > 1.5:
-                    bf = bf / 100.0
-                feats.append(bf)
-
-            if "occ" in mode:
-                oc = np.nan_to_num(data["occ"], nan=0.0).reshape(-1, 1).astype(np.float32)
-                feats.append(oc)
-
-            if feats:
-                data["node_attr"] = np.concatenate(feats, axis=1).astype(np.float32)
-
-        encoder_version = getattr(self, "version", None) or "0.1.0"
-        src = inp.source
-        fmt = Path(src).suffix.lstrip(".").lower() or None
-
-        feature_keys: Dict[str, Any] = {
-            # baseline graph edge semantics
-            "edge_attr_keys": ["edge_dist"],
-        }
-
-        if "node_attr" in data:
-            node_attr_keys = []
-            if "elem" in mode:
-                node_attr_keys.append("elem_onehot")
-            if "role" in mode:
-                node_attr_keys.append("role_onehot")
-            if "bfactor" in mode:
-                node_attr_keys.append("bfactor")
-            if "occ" in mode:
-                node_attr_keys.append("occ")
-            feature_keys["node_attr_keys"] = node_attr_keys
-
-        meta: Dict[str, Any] = {
-            "encoder_name": self.name,
-            "encoder_version": encoder_version,
-            "encoder_fingerprint": self.fingerprint(),
-            "type": "graph",
-            "level": "atom",
-            "family": "atom_graph",
-            "params": {
+    def _update_params_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
+        meta["params"].update({
                 "k": int(self.k),
                 "include_self_loops": bool(self.include_self_loops),
                 "include_hetero": bool(self.include_hetero),
                 "include_h": bool(self.include_h),
                 "altloc": str(self.altloc),
                 "amino_acids_only": bool(self.amino_acids_only),
-                "mode": str(self.mode),
-            },
-            "input": {
-                "source": src,
-                "chain_id": inp.chain_id,
-                "model_index": inp.model_index,
-                "format": fmt,
-            },
-            "feature_keys": feature_keys,
-        }
+                "rbf_k": int(self.rbf_k),
+                "rbf_dmax": float(self.rbf_dmax),
+                "local_cutoff": int(self.local_cutoff),
+                "bfactor_norm": True,
+        })
 
-        if self.use_cache:
-            cache.set(key, data=data, meta=meta)
+            # "feature_keys": {
+            # "node_attr_keys": node_attr_keys,
+            # "edge_attr_keys": edge_attr_keys,
+            # "graph_attr_keys": graph_keys_list,
 
-        return StructureArtifact(data=data, meta=meta)
+        return meta

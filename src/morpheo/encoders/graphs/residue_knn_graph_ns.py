@@ -175,11 +175,11 @@ class ResidueKNNGraphNS:
                 data, meta = hit
                 return StructureArtifact(data=data, meta=meta)
 
-        pos, residue_ids, resname, aa_index, plddt, bfactor_ca = load_and_extract(inp)
-        n = int(pos.shape[0])
+        strc = load_and_extract(inp)
+        n = int(strc["pos"].shape[0])
 
         # candidates within cutoff (no NxN)
-        candidates = _collect_neighbor_candidates(pos, cutoff=float(self.cutoff))
+        candidates = _collect_neighbor_candidates(strc["pos"], cutoff=float(self.cutoff))
 
         edge_index, edge_dist = _knn_edges_from_candidates(
             candidates=candidates,
@@ -194,10 +194,10 @@ class ResidueKNNGraphNS:
 
         node_attr_mode = "onehot+physchem+plddt+bfactor"
         node_attr = build_node_attr(
-            aa_index,
-            plddt=plddt,
-            bfactor_ca=bfactor_ca,
-            mode=node_attr_mode,
+            strc["aa_index"],
+            plddt=strc["plddt"],
+            bfactor_ca=strc["bfactor_ca"],
+            mode=strc["node_attr_mode"],
         )
 
         edge_attr_mode = "dist+rbf+seq+local"
@@ -224,10 +224,10 @@ class ResidueKNNGraphNS:
         )
 
         data: Dict[str, Any] = {
-            "pos": pos.astype(np.float32),
-            "residue_ids": residue_ids.astype(np.str_),
-            "resname": resname.astype(np.str_),
-            "aa_index": aa_index.astype(np.int16),
+            "pos": strc["pos"].astype(np.float32),
+            "residue_ids": strc["residue_ids"].astype(np.str_),
+            "resname": strc["resname"].astype(np.str_),
+            "aa_index": strc["aa_index"].astype(np.int16),
             "edge_index": edge_index.astype(np.int64),
             "edge_dist": edge_dist.astype(np.float32),
             "node_attr": node_attr.astype(np.float32),
@@ -236,10 +236,10 @@ class ResidueKNNGraphNS:
             "graph_attr_keys": np.asarray(graph_attr_keys, dtype=np.str_),
         }
 
-        if plddt is not None:
-            data["plddt"] = plddt.astype(np.float32)
-        if bfactor_ca is not None:
-            data["bfactor_ca"] = bfactor_ca.astype(np.float32)
+        if strc["plddt"] is not None:
+            data["plddt"] = strc["plddt"].astype(np.float32)
+        if strc["bfactor_ca"] is not None:
+            data["bfactor_ca"] = strc["bfactor_ca"].astype(np.float32)
 
         encoder_version = getattr(self, "version", None) or "0.1.0"
         src = inp.source

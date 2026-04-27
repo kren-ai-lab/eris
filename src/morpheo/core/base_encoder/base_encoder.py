@@ -2,55 +2,77 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, ClassVar
+from typing import Any, Dict, Optional, ClassVar, Tuple
 from typing import TYPE_CHECKING
 
 import json
+import numpy as np
 from pathlib import Path
 
+from morpheo.core.encoder_metadata import check_params
 from morpheo.core.cache import DiskCache, make_cache_key
 from morpheo.core.types import StructureArtifact, StructureInput
+from morpheo.core.contracts import UniversalContract
 
 
 if TYPE_CHECKING:
     from morpheo.core.cache import DiskCache
-    from typing import Any, Dict
+    from morpheo.core.contracts.base_contract import BaseContract
+    from morpheo.core.contracts.base_contract import GranularityContract
+    from morpheo.core.representations.base_rep import BaseRepresentation
+
+
+@dataclass
+class EncodingContext:
+    inp: StructureInput
+    raw_structure: dict | None = None
+    centroid: np.ndarray | None = None
+    pos: np.ndarray | None = None
 
 
 @dataclass
 class BaseEncoder(ABC):
     """
     Base class for all encoders.
-    Defiens the contract for each subclass.
+    Defines the contract for each subclass.
     """
-
-    version: ClassVar[str] = "0.1.0"
+    #Identity 
+    version: ClassVar[str] = "0.1.0" #Extraer desde versión instalada / pyproject
     name: ClassVar[str]
-    representation_type: ClassVar[str] # old type
-    family: ClassVar[str]
-    level: ClassVar[str]
+    granularity_contract: ClassVar[GranularityContract]
+    representation: ClassVar[BaseRepresentation]
 
+    #Instance attr
     use_cache: bool = True
     cache: Optional[DiskCache] = None
+    center: bool = True           # center coordinates around centroid
+    scale: Optional[float] = None # if set, divide coords by this constant
 
 
-    # def __post_init__(self):
-    #     mandatory = ["name", "representation_type", "family", "level"]        
-    #     cls = type(self)
+    def __post_init__(self):
+        mandatory = ["name", "granularity_contract", "representation"]        
+        cls = type(self)
 
-    #     missing = [
-    #         attr for attr in mandatory
-    #         if not hasattr(cls, attr)
-    #     ]
+        missing = [
+            attr for attr in mandatory
+            if not hasattr(cls, attr)
+        ]
 
-    #     if missing:
-    #         raise ValueError(
-    #             f"Missing mandatory ClassVar in {cls.__name__}: {missing}"
-    #         )
+        if missing:
+            raise ValueError(
+                f"Missing mandatory ClassVar in {cls.__name__}: {missing}"
+            )
+        
+    
+    def contracts(self):
+        return (
+            [UniversalContract(), self.granularity_contract]
+            + self.representation.contracts()
+        )
 
-
+    # Add to exclude granularity_contract and representation?
     def get_params(self) -> Dict[str, Any]:
-        EXCLUDE = {"cache"}
+        EXCLUDE = {"cache", "granularity_contract", "representation"}
 
         return {
             k: v
@@ -65,6 +87,9 @@ class BaseEncoder(ABC):
         payload = {
             "name": self.name,
             "version": self.version,
+            "representation": self.representation.representation_type,
+            #"family": self.representation.family,
+            "level": self.granularity_contract.level,
             "params": self.get_params(),
         }
 
@@ -89,55 +114,115 @@ class BaseEncoder(ABC):
         return key, cache, None
     
 
+    def _normalize_structure(self, pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        n = int(pos.shape[0])
+        pos_out = pos.astype(np.float32)
+
+        if self.center and n > 0:
+            centroid = pos_out.mean(axis=0, keepdims=True).astype(np.float32)
+            pos_out = pos_out - centroid
+        else:
+            centroid = np.zeros((1, 3), dtype=np.float32)
+
+        if self.scale is not None:
+            s = float(self.scale)
+            if s <= 0:
+                raise ValueError("scale must be > 0")
+            pos_out = (pos_out / s).astype(np.float32)
+
+        return centroid, pos_out
+
+    
+    def _assemble_output(
+        self,
+        data: Dict[str, Any],
+        meta: Dict[str, Any],
+        #ctx: EncodingContext,
+    ) -> StructureArtifact:
+        for contract in self.contracts():
+            contract.validate(data)
+
+        meta["feature_keys"] = self._build_feature_keys(data, meta)
+
+        meta["encoder_fingerprint"] = self.fingerprint()
+
+        return StructureArtifact(data=data, meta=meta)
+
+
+    def _build_feature_keys(self, data, meta):
+        return self.representation.feature_keys(data, meta)
+
+
     def encode(self, inp: StructureInput) -> StructureArtifact:
         key, cache, artifact = self._check_cache(inp)
         if artifact is not None:
             return artifact
+        
+        ctx = EncodingContext(inp=inp)
+        self._prepare_data(ctx=ctx)
 
-        data =  self._create_data(inp=inp)
-        meta = self._create_metadata(inp=inp)
+        data = self._create_data(ctx=ctx)
+        meta = self._base_metadata(ctx=ctx)
+        meta = self._update_params_metadata(meta=meta)
+        meta = self._finalize_metadata(meta=meta)
 
+        artifact: StructureArtifact = self._assemble_output(data=data, meta=meta)
+        
         if self.use_cache:
-            cache.set(key, data=data, meta=meta)
+            cache.set(key, data=artifact.data, meta=artifact.meta)
 
-        return StructureArtifact(data=data, meta=meta)
+        return artifact
     
 
     @abstractmethod
-    def _create_data(self, inp: StructureInput) -> Dict[str, Any]:
+    def _prepare_data(self, ctx: EncodingContext):
+        pass
+
+    @abstractmethod
+    def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
         """
-        Must be implemented in base class.
+        Must be implemented in child class.
         """
         pass
 
 
     @abstractmethod
-    def _create_metadata(self, inp: StructureInput) -> Dict[str, Any]:
+    def _update_params_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Must be implemented in base class.
+        Must be implemented in child class.
         """
         pass
 
     
-    def _base_metadata(self, inp: StructureInput) -> Dict[str, Any]:
+    def _base_metadata(self, ctx: EncodingContext) -> Dict[str, Any]:
+        inp = ctx.inp
         src = inp.source
         fmt = Path(src).suffix.lstrip(".").lower() or None
 
         return {
             "encoder_name": self.name,
             "encoder_version": self.version,
-            "encoder_fingerprint": self.fingerprint(),
-            "type": self.representation_type,
-            "family": self.family,
-            "level": self.level,
+            "type": self.representation.representation_type,
+            #"family": self.family,
+            "level": self.granularity_contract.level,
             "input": {
                 "source": src,
                 "chain_id": inp.chain_id,
                 "model_index": inp.model_index,
                 "format": fmt,
             },
+            "params": {
+                "center": bool(self.center),
+                "scale": None if self.scale is None else float(self.scale),
+            },
         }
     
+   
+    def _finalize_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
+        if "params" in meta:
+            meta["params"] = check_params(**meta["params"])
+        return meta
+
 
     def validate_output(self, artifact: StructureArtifact) -> None:
         artifact.validate(strict=True)

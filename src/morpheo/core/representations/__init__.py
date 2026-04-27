@@ -1,0 +1,2 @@
+from morpheo.core.representations.graph_rep import GraphRepresentation
+from morpheo.core.representations.point_cloud_rep import PointCloudRepresentation

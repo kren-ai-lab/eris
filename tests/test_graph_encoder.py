@@ -36,12 +36,12 @@ def _check_artifact_graph_basic(art):
     # ---- meta contract (minimal) ----
     meta = art.meta
     for k in ["schema_version", "encoder_name", "encoder_version", "encoder_fingerprint",
-              "type", "level", "family", "params", "input", "dtypes", "counts", "feature_keys"]:
+              "type", "level", "params", "input", "dtypes", "counts", "feature_keys"]: #,family
         assert k in meta, f"missing meta key: {k}"
 
     assert meta["type"] == "graph"
     assert meta["level"] in {"ca", "residue"}  # depends on your convention; you’re using "ca"
-    assert meta["family"] == "residue_graph"
+    #assert meta["family"] == "residue_graph"
 
     assert isinstance(meta["params"], dict)
     assert isinstance(meta["input"], dict)

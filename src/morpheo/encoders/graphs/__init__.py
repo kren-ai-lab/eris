@@ -1,30 +1,16 @@
 from morpheo.core.registry import register_encoder
 
 from morpheo.encoders.graphs.residue_contact_graph import ResidueContactGraph
-from morpheo.encoders.graphs.residue_contact_graph_ns import ResidueContactGraphNS
 from morpheo.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from morpheo.encoders.graphs.residue_knn_graph_ns import ResidueKNNGraphNS
-from morpheo.encoders.graphs.atom_knn_graph import AtomKNNGraph
-from morpheo.encoders.graphs.atom_knn_graph_ns import AtomKNNGraphNS  # noqa: F401
+from morpheo.encoders.graphs.atom_knn_graph import AtomKNNGraph  # noqa: F401
+
 
 register_encoder(
     "residue_contact_graph",
     lambda: ResidueContactGraph(),
     type="graph",
-    level="ca",
-    family="residue_graph",
-    description="Residue contact graph from CA distances (thresholded).",
-    params_schema={
-        "cutoff": {"type": "float", "default": 8.0},
-        "include_self_loops": {"type": "bool", "default": False},
-    },
-)
-
-register_encoder(
-    "residue_contact_graph_ns",
-    lambda: ResidueContactGraphNS(),
-    type="graph",
-    level="ca",
+    level="residue",
     family="residue_graph",
     description="Residue contact graph (CA) with baseline node/edge/graph features (aa_index, physchem, plddt/bfactor, RBF, seq separation, local flags).",
     params_schema={
@@ -61,27 +47,10 @@ register_encoder(
     },
 )
 
-register_encoder(
-    "atom_knn_graph",
-    lambda: AtomKNNGraph(),
-    type="graph",
-    level="atom",
-    family="atom_graph",
-    description="Atom kNN graph built on atomic coordinates (fixed k).",
-    params_schema={
-        "k": {"type": "int", "default": 16},
-        "include_self_loops": {"type": "bool", "default": False},
-        "include_hetero": {"type": "bool", "default": False},
-        "include_h": {"type": "bool", "default": False},
-        "altloc": {"type": "str", "default": "first"},
-        "amino_acids_only": {"type": "bool", "default": False},
-        "mode": {"type": "str", "default": "none"},
-    },
-)
 
 register_encoder(
     "atom_knn_graph_ns",
-    lambda: AtomKNNGraphNS(),
+    lambda: AtomKNNGraph(),
     type="graph",
     level="atom",
     family="atom_graph",

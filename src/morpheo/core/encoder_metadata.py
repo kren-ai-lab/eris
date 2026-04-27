@@ -16,7 +16,7 @@ EDGE_ATTR_KEY_MAP = {
 }
 
 
-def build_params(**kwargs) -> dict:
+def check_params(**kwargs) -> dict:
     """
     Build encoder params metadata (drop None values).
     """

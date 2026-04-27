@@ -1,51 +1,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, Optional, ClassVar, Tuple
+from typing import Any, Dict, ClassVar
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from morpheo.core.base_encoder import BaseResidueEncoder
-from morpheo.core.encoder_metadata import build_params, build_attr_keys, NODE_ATTR_KEY_MAP
-from morpheo.core.io import load_and_extract
-from morpheo.core.encoder_metadata import build_params
-from morpheo.core.types import StructureArtifact, StructureInput
+from morpheo.core.base_encoder import BaseResidueEncoder, EncodingContext
 from morpheo.features.node import build_node_attr
+from morpheo.core.representations import PointCloudRepresentation
+
+if TYPE_CHECKING:
+    from morpheo.core.representations.base_rep import BaseRepresentation
 
 @dataclass
 class ResiduePointCloudCA(BaseResidueEncoder):
+    #Identity
     name: ClassVar[str] = "residue_point_cloud_ca"
-    representation_type: ClassVar[str] = "point_cloud"
-    family: ClassVar[str] = "cloud"
-    level: ClassVar[str] = "ca"
+    representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
 
-    center: bool = True           # center coordinates around centroid
-    scale: Optional[float] = None # if set, divide coords by this constant
-    node_attr_mode: str = "onehot+physchem+plddt+bfactor"    
+    #Instance
+    node_attr_mode: str = "onehot+physchem+plddt+bfactor"
 
-    def _normalize_structure(self, pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        n = int(pos.shape[0])
-        pos_out = pos.astype(np.float32)
-
-        if self.center and n > 0:
-            centroid = pos_out.mean(axis=0, keepdims=True).astype(np.float32)
-            pos_out = pos_out - centroid
-        else:
-            centroid = np.zeros((1, 3), dtype=np.float32)
-
-        if self.scale is not None:
-            s = float(self.scale)
-            if s <= 0:
-                raise ValueError("scale must be > 0")
-            pos_out = (pos_out / s).astype(np.float32)
-
-        return centroid, pos_out
-    
-
-    def _create_data(self, inp: StructureInput) -> Dict[str, Any]:
-        strc = load_and_extract(inp)
-        centroid, pos_out = self._normalize_structure(pos=strc["pos"])
+    def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
+        strc = ctx.raw_structure
+        centroid = ctx.centroid
+        pos_out = ctx.pos
 
         node_attr = build_node_attr(
             strc["aa_index"],
@@ -72,19 +52,10 @@ class ResiduePointCloudCA(BaseResidueEncoder):
         return data
 
 
-    def _create_metadata(self, inp: StructureInput) -> Dict[str, Any]:
-        meta = self._base_metadata(inp)
-
-        meta["params"] = build_params(
-            center=bool(self.center),
-            scale=None if self.scale is None else float(self.scale),
-            node_attr_mode=self.node_attr_mode,
-        )
-
-        meta["feature_keys"] = {
-            "node_attr_keys": build_attr_keys(
-                self.node_attr_mode, NODE_ATTR_KEY_MAP
-            ),
-        }
+    def _update_params_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
+        
+        meta["params"].update({
+            "node_attr_mode": self.node_attr_mode,
+        })
 
         return meta

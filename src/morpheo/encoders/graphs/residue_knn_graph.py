@@ -38,14 +38,14 @@ class ResidueKNNGraph:
                 data, meta = hit
                 return StructureArtifact(data=data, meta=meta)
 
-        pos, residue_ids, resname, aa_index, plddt, bfactor_ca = load_and_extract(inp)
-        n = int(pos.shape[0])
+        strc = load_and_extract(inp)
+        n = int(strc["pos"].shape[0])
 
         if n <= 1:
             edge_index = np.zeros((2, 0), dtype=np.int64)
             edge_dist = np.zeros((0,), dtype=np.float32)
         else:
-            diff = pos[:, None, :] - pos[None, :, :]
+            diff = strc["pos"][:, None, :] - strc["pos"][None, :, :]
             dist = np.sqrt((diff ** 2).sum(axis=-1)).astype(np.float32)
 
             if not self.include_self_loops:
@@ -66,12 +66,12 @@ class ResidueKNNGraph:
                 edge_dist = np.concatenate([edge_dist, edge_dist], axis=0)
 
         data: Dict[str, Any] = {
-            "pos": pos.astype(np.float32),
-            "residue_ids": residue_ids.astype(np.str_),
-            "resname": resname.astype(np.str_),
-            "aa_index": aa_index.astype(np.int16),
-            "plddt": plddt.astype(np.float32),
-            "bfactor_ca": bfactor_ca.astype(np.float32),
+            "pos": strc["pos"].astype(np.float32),
+            "residue_ids": strc["residue_ids"].astype(np.str_),
+            "resname": strc["resname"].astype(np.str_),
+            "aa_index": strc["aa_index"].astype(np.int16),
+            "plddt": strc["plddt"].astype(np.float32),
+            "bfactor_ca": strc["bfactor_ca"].astype(np.float32),
             "edge_index": edge_index.astype(np.int64),
             "edge_dist": edge_dist.astype(np.float32),
         }

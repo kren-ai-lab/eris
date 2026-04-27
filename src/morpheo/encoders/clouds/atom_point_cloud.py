@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, Optional, ClassVar
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from morpheo.core.base_encoder import BaseAtomEncoder
-from morpheo.core.encoder_metadata import build_params, build_attr_keys, NODE_ATTR_KEY_MAP
-from morpheo.core.io import load_and_extract_atoms
-from morpheo.core.types import StructureArtifact, StructureInput
+from morpheo.core.base_encoder import BaseAtomEncoder, EncodingContext
 #from morpheo.core.artifacts import ARTIFACT_SCHEMA_VERSION
+from morpheo.core.contracts import AtomContract
+from morpheo.core.representations import PointCloudRepresentation
+
+if TYPE_CHECKING:
+    from morpheo.core.contracts.base_contract import GranularityContract
+    from morpheo.core.representations.base_rep import BaseRepresentation
 
 def _onehot(idx: np.ndarray, num: int) -> np.ndarray:
     idx = np.asarray(idx, dtype=np.int64).reshape(-1)
@@ -40,10 +43,9 @@ class AtomPointCloud(BaseAtomEncoder):
     Optional:
       - node_attr (N,F) if node_attr_mode != "none"
     """
+    #Identity
     name: ClassVar[str] = "atom_point_cloud_ca"
-    representation_type: ClassVar[str] = "point_cloud"
-    family: ClassVar[str] = "cloud"
-    level: ClassVar[str] = "ca"
+    representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
     
     include_hetero: bool = False
     include_h: bool = False
@@ -52,27 +54,24 @@ class AtomPointCloud(BaseAtomEncoder):
     node_attr_mode: str = "elem+role+bfactor+occ"
     
 
-    def _create_data(self, inp: StructureInput) -> Dict[str, Any]:
-        b = load_and_extract_atoms(
-            inp,
-            include_hetero=self.include_hetero,
-            include_h=self.include_h,
-            altloc=self.altloc,
-            amino_acids_only=self.amino_acids_only,
-        )
+    def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
+        strc = ctx.raw_structure
+        centroid = ctx.centroid
+        pos_out = ctx.pos
 
         # Base data always stored
         data: Dict[str, Any] = {
-            "pos": b["pos"].astype(np.float32),
-            "elem_index": b["elem_index"].astype(np.int16),
-            "atom_role": b["atom_role"].astype(np.int8),
-            "bfactor": b["bfactor"].astype(np.float32),
-            "occ": b["occ"].astype(np.float32),
-            "residue_ids": b["residue_ids"].astype(np.str_),
-            "resname": b["resname"].astype(np.str_),
-            "atom_name": b["atom_name"].astype(np.str_),
-            "seq_pos_residue": b["seq_pos_residue"].astype(np.int32),
-            "aa_index_residue": b["aa_index_residue"].astype(np.int16),
+            "pos": pos_out.astype(np.float32),
+            "centroid": centroid.astype(np.float32),
+            "elem_index": strc["elem_index"].astype(np.int16),
+            "atom_role": strc["atom_role"].astype(np.int8),
+            "bfactor": strc["bfactor"].astype(np.float32),
+            "occ": strc["occ"].astype(np.float32),
+            "residue_ids": strc["residue_ids"].astype(np.str_),
+            "resname": strc["resname"].astype(np.str_),
+            "atom_name": strc["atom_name"].astype(np.str_),
+            "seq_pos_residue": strc["seq_pos_residue"].astype(np.int32),
+            "aa_index_residue": strc["aa_index_residue"].astype(np.int16),
         }
 
         # Optional node_attr (features per atom)
@@ -106,37 +105,14 @@ class AtomPointCloud(BaseAtomEncoder):
 
 
 
-    def _create_metadata(self, inp: StructureInput) -> Dict[str, Any]:
-        meta = self._base_metadata(inp)
+    def _update_params_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
 
-        # if "node_attr" in data:
-        #     keys = []
-        #     if "elem" in self.mode:
-        #         keys.append("elem_onehot")
-        #     if "role" in self.mode:
-        #         keys.append("role_onehot")
-        #     if "bfactor" in self.mode:
-        #         keys.append("bfactor")
-        #     if "occ" in self.mode:
-        #         keys.append("occ")
-
-        #     meta["feature_keys"] = {
-        #         "node_attr_keys": keys
-        #     }
-        
-
-        meta["params"] = build_params(
-            include_hetero = bool(self.include_hetero),
-            include_h = bool(self.include_h),
-            altloc = str(self.altloc),
-            amino_acids_only = bool(self.amino_acids_only),
-            mode = str(self.node_attr_mode),
+        meta["params"].update({
+            "include_hetero": bool(self.include_hetero),
+            "include_h": bool(self.include_h),
+            "altloc": str(self.altloc),
+            "amino_acids_only": bool(self.amino_acids_only),
+            "mode": str(self.node_attr_mode),}
         )
-
-        meta["feature_keys"] = {
-            "node_attr_keys": build_attr_keys(
-                self.node_attr_mode, NODE_ATTR_KEY_MAP
-            ),
-        }
 
         return meta
