@@ -261,7 +261,7 @@ class AtomKNNGraph(BaseAtomEncoder):
         return data
 
 
-    def _update_params_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
+    def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         meta["params"].update({
                 "k": int(self.k),
                 "include_self_loops": bool(self.include_self_loops),

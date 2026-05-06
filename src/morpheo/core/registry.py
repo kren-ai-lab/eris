@@ -66,10 +66,10 @@ def register_encoder(
     )
 
 
-def get_encoder(name: str) -> Any:
+def get_encoder(name: str, **kwargs):
     if name not in _REGISTRY:
         raise KeyError(f"Unknown encoder: {name}")
-    return _REGISTRY[name]()
+    return _REGISTRY[name](**kwargs)
 
 
 def list_encoders() -> List[str]:

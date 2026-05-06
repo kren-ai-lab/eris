@@ -196,7 +196,7 @@ class ResidueContactGraph(BaseResidueEncoder):
         return data
     
 
-    def _update_params_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
+    def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
 
         meta["params"].update({
             "cutoff": float(self.cutoff),

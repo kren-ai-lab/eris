@@ -1,13 +1,13 @@
 from morpheo.core.registry import register_encoder
 
-from morpheo.encoders.clouds.residue_point_cloud_ca import ResiduePointCloudCA
+from morpheo.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
 from morpheo.encoders.clouds.atom_point_cloud import AtomPointCloud  # noqa: F401
 
 register_encoder(
-    "residue_point_cloud_ca",
-    lambda: ResiduePointCloudCA(),
+    "residue_point_cloud",
+    lambda **kw: ResiduePointCloudCA(**kw),
     type="cloud",
-    level="ca",
+    level="residue",
     family="cloud",
     description="Residue point cloud from CA coordinates (+ residue ids, aa_index, plddt/bfactor if available).",
     params_schema={

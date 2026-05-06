@@ -5,7 +5,7 @@ from morpheo.encoders.grids.voxel_grid_ca import VoxelGridCA
 
 register_encoder(
     "voxel_grid_ca",
-    lambda: VoxelGridCA(),
+    lambda **kw: VoxelGridCA(**kw),
     type="grid",
     level="ca",
     family="grid",

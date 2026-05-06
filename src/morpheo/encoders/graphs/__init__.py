@@ -2,13 +2,12 @@ from morpheo.core.registry import register_encoder
 
 from morpheo.encoders.graphs.residue_contact_graph import ResidueContactGraph
 from morpheo.encoders.graphs.residue_knn_graph import ResidueKNNGraph
-from morpheo.encoders.graphs.residue_knn_graph_ns import ResidueKNNGraphNS
 from morpheo.encoders.graphs.atom_knn_graph import AtomKNNGraph  # noqa: F401
 
 
 register_encoder(
     "residue_contact_graph",
-    lambda: ResidueContactGraph(),
+    lambda **kw: ResidueContactGraph(**kw),
     type="graph",
     level="residue",
     family="residue_graph",
@@ -19,25 +18,12 @@ register_encoder(
     },
 )
 
-register_encoder(
-    "residue_knn_graph",
-    lambda: ResidueKNNGraph(),
-    type="graph",
-    level="ca",
-    family="residue_graph",
-    description="Residue kNN graph built on CA coordinates (fixed k).",
-    params_schema={
-        "k": {"type": "int", "default": 16},
-        "symmetrize": {"type": "bool", "default": False},
-        "include_self_loops": {"type": "bool", "default": False},
-    },
-)
 
 register_encoder(
-    "residue_knn_graph_ns",
-    lambda: ResidueKNNGraphNS(),
+    "residue_knn_graph",
+    lambda **kw: ResidueKNNGraph(**kw),
     type="graph",
-    level="ca",
+    level="residue",
     family="residue_graph",
     description="Residue kNN graph (CA) with baseline node/edge/graph features (aa_index, physchem, plddt/bfactor, RBF, seq separation, local flags).",
     params_schema={
@@ -49,8 +35,8 @@ register_encoder(
 
 
 register_encoder(
-    "atom_knn_graph_ns",
-    lambda: AtomKNNGraph(),
+    "atom_knn_graph",
+    lambda **kw: AtomKNNGraph(**kw),
     type="graph",
     level="atom",
     family="atom_graph",

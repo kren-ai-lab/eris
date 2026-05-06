@@ -1,18 +1,21 @@
-# src/morpheo/encoders/grids/voxel_grid_ca.py
-
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Dict, ClassVar
+from typing import TYPE_CHECKING
+
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, List
 
 import numpy as np
 
-from morpheo.core.cache import DiskCache, make_cache_key
 from morpheo.core.hashing import sha256_file, sha256_text
-from morpheo.core.io import load_and_extract
-from morpheo.core.registry import register_encoder
-from morpheo.core.types import StructureArtifact, StructureInput
+from morpheo.core.base_encoder import BaseResidueEncoder, EncodingContext
+from morpheo.features.node import build_node_attr
+from morpheo.core.representations import VoxelGridRepresentation
+
+if TYPE_CHECKING:
+    from morpheo.core.representations.base_rep import BaseRepresentation
 
 
 def _bbox(pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -126,14 +129,15 @@ def _accumulate_onehot(
 
 
 @dataclass
-class VoxelGridCA:
+class VoxelGridCA(BaseResidueEncoder):
     name: str = "voxel_grid_ca"
+    representation: ClassVar[BaseRepresentation] = VoxelGridRepresentation()
 
     grid_size: int = 64
     dtype: str = "float32"
 
     # multi-channel spec
-    channels: Any = "occupancy"  # e.g. "density+aa_onehot+plddt"
+    channels: Any = "occupancy"  # e.g. "density+aa_onehot+plddt" Por ahora solo str: "a+b+c", si no, se rompe el fingerprint
 
     # spatial normalization
     center: bool = True
@@ -150,40 +154,10 @@ class VoxelGridCA:
     # value handling
     clamp: bool = True  # clip final grid to [0,1] (recommended for occupancy/density)
 
-    use_cache: bool = True
-    cache: Optional[DiskCache] = None
-
-    def fingerprint(self) -> str:
-        ch = "+".join(_parse_channels(self.channels))
-        return sha256_text(
-            f"{self.name}|G={self.grid_size}|dtype={self.dtype}|channels={ch}|center={self.center}|fit={self.fit}|margin={self.margin}|voxel_size={self.voxel_size}|sigma={self.sigma}|pool={self.pool}|clamp={self.clamp}|use_cache={self.use_cache}"
-        )
-
-    def encode(self, inp: StructureInput) -> StructureArtifact:
-        cache = self.cache or DiskCache()
-        file_hash = sha256_file(Path(inp.source))
-        key = make_cache_key(self.name, self.fingerprint(), file_hash, inp.to_string())
-
-        if self.use_cache:
-            hit = cache.get(key)
-            if hit is not None:
-                data, meta = hit
-                return StructureArtifact(data=data, meta=meta)
-
-        pos, residue_ids, resname, aa_index, plddt, bfactor_ca = load_and_extract(inp)
-        n = int(pos.shape[0])
-        if n == 0:
-            raise ValueError("No residues found to voxelize.")
-
-        pos0 = pos.astype(np.float32)
-
-        # center
-        if self.center:
-            centroid = pos0.mean(axis=0, keepdims=True).astype(np.float32)
-            pos_c = pos0 - centroid
-        else:
-            centroid = np.zeros((1, 3), dtype=np.float32)
-            pos_c = pos0
+    def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
+        strc = ctx.raw_structure
+        centroid = ctx.centroid
+        pos_out = ctx.pos
 
         G = int(self.grid_size)
         if G < 8:
@@ -196,7 +170,7 @@ class VoxelGridCA:
                 raise ValueError("voxel_size must be > 0.")
         else:
             if self.fit:
-                mn, mx = _bbox(pos_c)
+                mn, mx = _bbox(pos_out)
                 mn = mn - float(self.margin)
                 mx = mx + float(self.margin)
                 span = (mx - mn).max()
@@ -210,16 +184,16 @@ class VoxelGridCA:
         origin = np.array([-half, -half, -half], dtype=np.float32)
 
         # map points to voxels
-        ijk = np.floor((pos_c - origin[None, :]) / vs).astype(np.int64)
+        ijk = np.floor((pos_out - origin[None, :]) / vs).astype(np.int64)
         valid = (
             (ijk[:, 0] >= 0) & (ijk[:, 0] < G) &
             (ijk[:, 1] >= 0) & (ijk[:, 1] < G) &
             (ijk[:, 2] >= 0) & (ijk[:, 2] < G)
         )
         ijk = ijk[valid]
-        aa_v = np.asarray(aa_index, dtype=np.int64).reshape(-1)[valid]
-        plddt_v = np.asarray(plddt, dtype=np.float32).reshape(-1)[valid]
-        bfac_v = np.asarray(bfactor_ca, dtype=np.float32).reshape(-1)[valid]
+        aa_v = np.asarray(strc["aa_index"], dtype=np.int64).reshape(-1)[valid]
+        plddt_v = np.asarray(strc["plddt"], dtype=np.float32).reshape(-1)[valid]
+        bfac_v = np.asarray(strc["bfactor_ca"], dtype=np.float32).reshape(-1)[valid]
 
         ch_list = _parse_channels(self.channels)
 
@@ -304,6 +278,9 @@ class VoxelGridCA:
             grid_out = grid.astype(np.float32)
             out_dtype = "float32"
 
+        # Update ctx
+        ctx.runtime["voxel_size_effective"] = float(vs)
+
         data: Dict[str, Any] = {
             "grid": grid_out,
             "channels": np.asarray(ch_list, dtype=np.str_),
@@ -312,11 +289,11 @@ class VoxelGridCA:
             "origin": origin.astype(np.float32),
             "centroid": centroid.astype(np.float32),
 
-            "residue_ids": residue_ids.astype(np.str_),
-            "resname": resname.astype(np.str_),
-            "aa_index": np.asarray(aa_index, dtype=np.int16),
-            "plddt": np.asarray(plddt, dtype=np.float32),
-            "bfactor_ca": np.asarray(bfactor_ca, dtype=np.float32),
+            "residue_ids": strc["residue_ids"].astype(np.str_),
+            "resname": strc["resname"].astype(np.str_),
+            "aa_index": np.asarray(strc["aa_index"], dtype=np.int16),
+            "plddt": np.asarray(strc["plddt"], dtype=np.float32),
+            "bfactor_ca": np.asarray(strc["bfactor_ca"], dtype=np.float32),
         }
 
         # Expand channel names for aa_onehot to avoid ambiguity downstream
@@ -327,43 +304,23 @@ class VoxelGridCA:
             else:
                 expanded_channels.append(c)
 
-        encoder_version = getattr(self, "version", None) or "0.1.0"
-        src = inp.source
-        fmt = Path(src).suffix.lstrip(".").lower() or None
+        return data
 
-        meta: Dict[str, Any] = {
-            "encoder_name": self.name,
-            "encoder_version": encoder_version,
-            "encoder_fingerprint": self.fingerprint(),
-            "type": "grid",
-            "level": "ca",
-            "family": "grid",
-            "params": {
-                "grid_size": int(G),
+
+    def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+        runtime = ctx.runtime
+        
+        meta["params"].update({
+                "grid_size": int(self.grid_size),
                 "dtype": str(self.dtype),
-                "channels": list(ch_list),
+                "channels": list(self.channels), #corregir luego a la lista
                 "center": bool(self.center),
                 "fit": bool(self.fit),
                 "margin": float(self.margin),
-                "voxel_size": float(vs),
+                "voxel_size": float(runtime["voxel_size_effective"]),
                 "sigma": float(self.sigma),
-                "pool": str(pool),
+                "pool": str(self.pool),
                 "clamp": bool(self.clamp),
-            },
-            "input": {
-                "source": src,
-                "chain_id": inp.chain_id,
-                "model_index": inp.model_index,
-                "format": fmt,
-            },
-            "feature_keys": {
-                "grid_key": "grid",
-                "grid_channels": expanded_channels,
-                "grid_layout": "CXYZ",  # (C, G, G, G)
-            },
-        }
-
-        if self.use_cache:
-            cache.set(key, data=data, meta=meta)
-
-        return StructureArtifact(data=data, meta=meta)
+            },)
+        
+        return meta

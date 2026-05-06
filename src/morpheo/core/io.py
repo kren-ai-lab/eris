@@ -1,7 +1,9 @@
 from __future__ import annotations
+import logging
+logger = logging.getLogger(__name__)
 
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple, Callable, TypeVar
 
 import gemmi
 import numpy as np
@@ -9,6 +11,8 @@ import numpy as np
 from morpheo.exceptions import MorpheoError
 from morpheo.core.types import StructureInput
 from morpheo.core.aminoacids import AA3_TO_AA1, AA1_TO_INDEX, UNKNOWN_INDEX
+
+T = TypeVar("T")
 
 
 class StructureLoadError(MorpheoError):
@@ -255,6 +259,24 @@ def extract_ca_bundle(
     }
     
 
+
+def load_select_and_extract(inp, extractor: Callable[[object], T]) -> T:
+    try:
+        st = load_structure(Path(inp.source))
+        ch = select_chain(st, inp.chain_id, inp.model_index)
+        return extractor(ch)
+    except Exception:
+        logger.exception(
+            "Failed to load structure",
+            extra={
+                "source": str(inp.source),
+                "chain_id": inp.chain_id,
+                "model_index": inp.model_index,
+            },
+        )
+        raise
+
+
 def load_and_extract(
     inp: StructureInput,
     amino_acids_only: bool = True,
@@ -262,14 +284,15 @@ def load_and_extract(
     altloc: str = "first",
     missing_ca: str = "skip",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    st = load_structure(Path(inp.source))
-    ch = select_chain(st, inp.chain_id, inp.model_index)
-    return extract_ca_bundle(
-        ch,
-        amino_acids_only=amino_acids_only,
-        altloc=altloc,
-        missing_ca=missing_ca,
-    )
+    def _extract(ch):
+        return extract_ca_bundle(
+            ch,
+            amino_acids_only=amino_acids_only,
+            altloc=altloc,
+            missing_ca=missing_ca,
+        )
+    return load_select_and_extract(inp, _extract)
+
 
 
 # -----------------------
@@ -464,6 +487,7 @@ def extract_atom_bundle(
     }
 
 
+
 def load_and_extract_atoms(
     inp: StructureInput,
     *,
@@ -477,14 +501,14 @@ def load_and_extract_atoms(
     """
     Atom-level extraction wrapper using StructureInput.
     """
-    st = load_structure(Path(inp.source))
-    ch = select_chain(st, inp.chain_id, inp.model_index)
-    return extract_atom_bundle(
-        ch,
-        include_hetero=include_hetero,
-        include_h=include_h,
-        drop_water=drop_water,
-        keep_ions=keep_ions,
-        altloc=altloc,
-        amino_acids_only=amino_acids_only,
-    )
+    def _extract(ch):
+        return extract_atom_bundle(
+            ch,
+            include_hetero=include_hetero,
+            include_h=include_h,
+            drop_water=drop_water,
+            keep_ions=keep_ions,
+            altloc=altloc,
+            amino_acids_only=amino_acids_only,
+        )
+    return load_select_and_extract(inp, _extract)

@@ -22,3 +22,5 @@ class PointCloudRepresentation(BaseRepresentation):
                 keys["node_attr_keys"] = build_attr_keys(
                     mode, NODE_ATTR_KEY_MAP
                 )
+
+        return keys

@@ -101,11 +101,12 @@ class AtomPointCloud(BaseAtomEncoder):
 
             if feats:
                 data["node_attr"] = np.concatenate(feats, axis=1).astype(np.float32)
-        pass
+        
+        return data
 
 
 
-    def _update_params_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
+    def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
 
         meta["params"].update({
             "include_hetero": bool(self.include_hetero),

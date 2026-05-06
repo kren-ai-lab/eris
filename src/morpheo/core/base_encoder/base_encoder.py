@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, ClassVar, Tuple
@@ -9,6 +12,7 @@ import json
 import numpy as np
 from pathlib import Path
 
+from morpheo import exceptions as exc
 from morpheo.core.encoder_metadata import check_params
 from morpheo.core.cache import DiskCache, make_cache_key
 from morpheo.core.types import StructureArtifact, StructureInput
@@ -18,8 +22,35 @@ from morpheo.core.contracts import UniversalContract
 if TYPE_CHECKING:
     from morpheo.core.cache import DiskCache
     from morpheo.core.contracts.base_contract import BaseContract
-    from morpheo.core.contracts.base_contract import GranularityContract
+    from morpheo.core.contracts.granularity import GranularityContract
     from morpheo.core.representations.base_rep import BaseRepresentation
+
+
+def _structure_validation(ctx: EncodingContext):
+    strc = ctx.raw_structure
+    n = int(strc["pos"].shape[0])
+
+
+    if n < 1:
+        logger.error(
+                f"Structure: {ctx.inp.source} does not contain residues/atoms.",
+                extra={"n_nodes": n,
+                       "input": ctx.inp.source},
+            )
+        raise exc.ExecutionError(f"Structure: {ctx.inp.source} does not contain residues/atoms.")
+    
+    if n < 20:
+        logger.warning(
+                "Low node count. Structure loaded.",
+                extra={"n_nodes": n},
+            )
+
+    else:
+        logger.info(
+                "Structure loaded.",
+                extra={"n_nodes": n},
+            )
+
 
 
 @dataclass
@@ -28,6 +59,7 @@ class EncodingContext:
     raw_structure: dict | None = None
     centroid: np.ndarray | None = None
     pos: np.ndarray | None = None
+    runtime: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -116,6 +148,9 @@ class BaseEncoder(ABC):
 
     def _normalize_structure(self, pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         n = int(pos.shape[0])
+        if n == 0:
+            raise ValueError("No residues found to encode.")
+        
         pos_out = pos.astype(np.float32)
 
         if self.center and n > 0:
@@ -132,22 +167,6 @@ class BaseEncoder(ABC):
 
         return centroid, pos_out
 
-    
-    def _assemble_output(
-        self,
-        data: Dict[str, Any],
-        meta: Dict[str, Any],
-        #ctx: EncodingContext,
-    ) -> StructureArtifact:
-        for contract in self.contracts():
-            contract.validate(data)
-
-        meta["feature_keys"] = self._build_feature_keys(data, meta)
-
-        meta["encoder_fingerprint"] = self.fingerprint()
-
-        return StructureArtifact(data=data, meta=meta)
-
 
     def _build_feature_keys(self, data, meta):
         return self.representation.feature_keys(data, meta)
@@ -160,10 +179,11 @@ class BaseEncoder(ABC):
         
         ctx = EncodingContext(inp=inp)
         self._prepare_data(ctx=ctx)
+        _structure_validation(ctx=ctx)
 
         data = self._create_data(ctx=ctx)
         meta = self._base_metadata(ctx=ctx)
-        meta = self._update_params_metadata(meta=meta)
+        meta = self._update_params_metadata(meta=meta, ctx=ctx)
         meta = self._finalize_metadata(meta=meta)
 
         artifact: StructureArtifact = self._assemble_output(data=data, meta=meta)
@@ -174,22 +194,43 @@ class BaseEncoder(ABC):
         return artifact
     
 
+    def _prepare_data(self, ctx: EncodingContext):  
+        logger.info(
+            "Loading structure",
+            extra={
+                "source": str(ctx.inp.source),
+                "granularity": self.granularity_contract.level,
+            },
+        )
+
+        strc = self._load_structure(ctx)
+        ctx.raw_structure = strc
+
+        centroid, pos_out = self._normalize_structure(pos=strc["pos"])
+        ctx.centroid = centroid.astype(np.float32)
+        ctx.pos = pos_out.astype(np.float32)
+
+    
     @abstractmethod
-    def _prepare_data(self, ctx: EncodingContext):
+    def _load_structure(self, ctx: EncodingContext) -> Dict[str, Any]:
+        """
+        Implemented in base atom and base residue classes.
+        """
         pass
+
 
     @abstractmethod
     def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
         """
-        Must be implemented in child class.
+        Must be implemented in encoder class.
         """
         pass
 
 
     @abstractmethod
-    def _update_params_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
+    def _update_params_metadata(self, ctx: EncodingContext) -> Dict[str, Any]:
         """
-        Must be implemented in child class.
+        Must be implemented in encoder class.
         """
         pass
 
@@ -222,6 +263,22 @@ class BaseEncoder(ABC):
         if "params" in meta:
             meta["params"] = check_params(**meta["params"])
         return meta
+    
+
+    def _assemble_output(
+        self,
+        data: Dict[str, Any],
+        meta: Dict[str, Any],
+        #ctx: EncodingContext,
+    ) -> StructureArtifact:
+        for contract in self.contracts():
+            contract.validate(data)
+
+        meta["feature_keys"] = self._build_feature_keys(data, meta)
+
+        meta["encoder_fingerprint"] = self.fingerprint()
+
+        return StructureArtifact(data=data, meta=meta)
 
 
     def validate_output(self, artifact: StructureArtifact) -> None:

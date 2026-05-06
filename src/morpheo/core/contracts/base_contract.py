@@ -7,8 +7,5 @@ class BaseContract(ABC):
     def validate(self, data: Dict[str, Any]):
         ...
 
-class GranularityContract(BaseContract):
-    level: ClassVar[str]
-
 class EncoderContract(BaseContract):
     contract_name: ClassVar[str]
