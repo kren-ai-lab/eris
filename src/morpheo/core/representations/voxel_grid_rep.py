@@ -1,9 +1,6 @@
 from typing import Any, Dict, ClassVar
 
 from morpheo.core.representations.base_rep import BaseRepresentation
-from morpheo.core.contracts.point_cloud_contract import PointCloudContract
-from morpheo.core.encoder_metadata import build_attr_keys, NODE_ATTR_KEY_MAP
-
 
 class VoxelGridRepresentation(BaseRepresentation):
     representation_type: ClassVar[str] = "voxel_grid"

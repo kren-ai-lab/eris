@@ -104,7 +104,7 @@ class BaseEncoder(ABC):
 
     # Add to exclude granularity_contract and representation?
     def get_params(self) -> Dict[str, Any]:
-        EXCLUDE = {"cache", "granularity_contract", "representation"}
+        EXCLUDE = {"cache", "use_cache", "granularity_contract", "representation"}
 
         return {
             k: v
