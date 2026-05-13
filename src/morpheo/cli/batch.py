@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
+
 import csv
 import json
 from dataclasses import dataclass
@@ -90,6 +93,66 @@ def _apply_params(enc: Any, params: Optional[Dict[str, Any]]) -> None:
             setattr(enc, k, v)
 
 
+# def batch_encode(
+#     manifest_path: Path,
+#     encoders: Sequence[str],
+#     out: Path,
+#     *,
+#     overwrite: bool = False,
+#     no_cache: bool = False,
+#     params: Optional[Dict[str, Dict[str, Any]]] = None,
+#     fail_fast: bool = False,
+# ) -> Dict[str, int]:
+#     """
+#     Run multiple encoders over a manifest and save artifacts under:
+#       out/<id>/<encoder>/{data.npz,meta.json}
+
+#     params:
+#       dict like:
+#         {
+#           "voxel_grid_ca": {"grid_size": 64, "sigma": 1.5},
+#           "residue_knn_graph_ns": {"k": 16}
+#         }
+#     """
+#     rows = read_manifest(manifest_path)
+#     out.mkdir(parents=True, exist_ok=True)
+
+#     stats = {"processed": 0, "ok": 0, "failed": 0, "skipped": 0}
+
+#     for r in rows:
+#         inp = StructureInput(source=r.path, chain_id=r.chain, model_index=r.model)
+
+#         for enc_name in encoders:
+#             stats["processed"] += 1
+#             outdir = out / r.id / enc_name
+#             data_npz = outdir / "data.npz"
+
+#             if (not overwrite) and data_npz.exists():
+#                 stats["skipped"] += 1
+#                 continue
+
+#             try:
+#                 enc = get_encoder(enc_name)
+
+#                 if no_cache and hasattr(enc, "use_cache"):
+#                     setattr(enc, "use_cache", False)
+
+#                 _apply_params(enc, (params or {}).get(enc_name))
+
+#                 outdir.mkdir(parents=True, exist_ok=True)
+#                 art = enc.encode(inp)
+#                 art.save(outdir)
+
+#                 stats["ok"] += 1
+
+#             except Exception:
+#                 stats["failed"] += 1
+#                 if fail_fast:
+#                     raise
+
+#     return stats
+
+
 def batch_encode(
     manifest_path: Path,
     encoders: Sequence[str],
@@ -114,37 +177,76 @@ def batch_encode(
     rows = read_manifest(manifest_path)
     out.mkdir(parents=True, exist_ok=True)
 
-    stats = {"processed": 0, "ok": 0, "failed": 0, "skipped": 0}
+    stats = {"tasks": 0, "ok": 0, "failed": 0, "skipped": 0, "encoder_failed": 0}
+    built_encoders = {}
+    
+    for name in encoders:
+        try:
+            kwargs = (params or {}).get(name, {})
+            enc = get_encoder(name, **kwargs)
 
-    for r in rows:
-        inp = StructureInput(source=r.path, chain_id=r.chain, model_index=r.model)
+            if no_cache and hasattr(enc, "use_cache"):
+                enc.use_cache = False
 
-        for enc_name in encoders:
-            stats["processed"] += 1
-            outdir = out / r.id / enc_name
+            built_encoders[name] = enc
+
+        except Exception:
+            logger.exception(f"Failed to build encoder {name}")
+            
+            stats["encoder_failed"] += 1
+            if fail_fast:
+                raise
+
+
+    for row in rows:
+        inp = StructureInput(source=str(row.path), chain_id=row.chain, model_index=row.model)
+        logger.debug("Processing input", 
+                     extra={
+                         "input_id": row.id,
+                         "source": str(row.path)})
+        
+        for enc_name, enc in built_encoders.items():
+            stats["tasks"] += 1
+            outdir = out / row.id / enc_name
             data_npz = outdir / "data.npz"
 
-            if (not overwrite) and data_npz.exists():
+            if not overwrite and data_npz.exists():
                 stats["skipped"] += 1
+                
+                logger.debug(
+                    "Skipping existing artifact",
+                    extra={
+                        "input_id": row.id,
+                        "encoder": enc_name
+                    }
+                )
+
                 continue
 
             try:
-                enc = get_encoder(enc_name)
-
-                if no_cache and hasattr(enc, "use_cache"):
-                    setattr(enc, "use_cache", False)
-
-                _apply_params(enc, (params or {}).get(enc_name))
-
-                outdir.mkdir(parents=True, exist_ok=True)
                 art = enc.encode(inp)
+                outdir.mkdir(parents=True, exist_ok=True)
                 art.save(outdir)
 
                 stats["ok"] += 1
 
             except Exception:
+                
+                logger.exception(
+                    "Encoding failed",
+                    extra={
+                        "input_id": row.id,
+                        "encoder": enc_name,
+                        "source": str(row.path)
+                    }
+                )
+
                 stats["failed"] += 1
                 if fail_fast:
                     raise
 
     return stats
+
+
+            
+

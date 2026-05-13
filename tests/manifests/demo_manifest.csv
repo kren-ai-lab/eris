@@ -1,6 +1,6 @@
 id,path,chain,model
-1AQ2_cif,src/tests/data/1AQ2.cif,,0
-1AQ2_pdb,src/tests/data/1AQ2.pdb,,0
-3EC1_pdb,src/tests/data/3EC1.pdb,,0
-6I7R_cif,src/tests/data/6I7R.cif,,0
-9RP9_pdb,src/tests/data/9RP9.pdb,,0
+1AQ2_cif,../tests/data/1AQ2.cif,,0
+1AQ2_pdb,../tests/data/1AQ2.pdb,,0
+3EC1_pdb,../tests/data/3EC1.pdb,,0
+6I7R_cif,../tests/data/6I7R.cif,,0
+9RP9_pdb,../tests/data/9RP9.pdb,,0

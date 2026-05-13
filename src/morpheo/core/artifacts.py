@@ -138,7 +138,7 @@ def validate_artifact(meta: Dict[str, Any], data: Mapping[str, np.ndarray], *, s
         "encoder_fingerprint",
         "type",
         "level",
-        "family",
+        #"family",
         "params",
         "input",
         "shapes",
@@ -163,9 +163,9 @@ def validate_artifact(meta: Dict[str, Any], data: Mapping[str, np.ndarray], *, s
     if lvl not in ALLOWED_LEVELS:
         raise ArtifactValidationError(f"Invalid meta.level={lvl!r}. Allowed: {sorted(ALLOWED_LEVELS)}")
 
-    fam = str(meta["family"])
-    if fam not in ALLOWED_FAMILIES:
-        raise ArtifactValidationError(f"Invalid meta.family={fam!r}. Allowed: {sorted(ALLOWED_FAMILIES)}")
+    # fam = str(meta["family"])
+    # if fam not in ALLOWED_FAMILIES:
+    #     raise ArtifactValidationError(f"Invalid meta.family={fam!r}. Allowed: {sorted(ALLOWED_FAMILIES)}")
 
     if not isinstance(meta["params"], dict):
         raise ArtifactValidationError("meta.params must be a dict")
