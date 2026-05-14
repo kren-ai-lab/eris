@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from morpheo.core.base_encoder import BaseResidueEncoder, EncodingContext
-from morpheo.features.node import build_node_attr
+from morpheo.features.residue import build_node_attr
 from morpheo.core.representations import PointCloudRepresentation
 
 if TYPE_CHECKING:

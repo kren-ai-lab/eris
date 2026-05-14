@@ -10,13 +10,12 @@ from morpheo.core.base_encoder import BaseResidueEncoder, EncodingContext
 from morpheo.core.representations import GraphRepresentation
 from morpheo.core.contracts import ResidueContract
 from morpheo.core.encoder_metadata import build_attr_keys, NODE_ATTR_KEY_MAP, EDGE_ATTR_KEY_MAP #build_params,
-from morpheo.features.node import build_node_attr
+from morpheo.features.residue import build_node_attr
 from morpheo.features.edge import build_edge_attr
 from morpheo.features.graph_stats import compute_graph_stats, pack_graph_stats
 
 
 if TYPE_CHECKING:
-    from morpheo.core.contracts.base_contract import BaseContract
     from morpheo.core.representations.base_rep import BaseRepresentation
 
 

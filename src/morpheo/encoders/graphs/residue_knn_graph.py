@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from morpheo.features.node import build_node_attr
+from morpheo.features.residue import build_node_attr
 from morpheo.features.edge import build_edge_attr
 from morpheo.features.graph_stats import compute_graph_stats, pack_graph_stats
 
 from morpheo.core.base_encoder import BaseResidueEncoder, EncodingContext
-from morpheo.features.node import build_node_attr
+from morpheo.features.residue import build_node_attr
 from morpheo.core.representations import GraphRepresentation
 
 if TYPE_CHECKING:
@@ -91,6 +91,7 @@ def _collect_local_neighbor_candidates(pos: np.ndarray, cutoff: float) -> List[L
 
     return neigh
 
+
 def _collect_global_neighbor_candidates(pos: np.ndarray) -> List[List[Tuple[int, float]]]:
     """
     Collect all neighbor candidates without considering cutoff.
@@ -115,7 +116,6 @@ def _collect_global_neighbor_candidates(pos: np.ndarray) -> List[List[Tuple[int,
             neigh[i].append((j, dist))
 
     return neigh
-
 
 
 def _knn_edges_from_candidates(

@@ -9,20 +9,10 @@ import numpy as np
 
 from morpheo.core.base_encoder import BaseResidueEncoder, EncodingContext
 from morpheo.core.representations import ContactMapBinsRepresentation
+from morpheo.features.utils import validate_bin_edges
 
 if TYPE_CHECKING:
     from morpheo.core.representations.base_rep import BaseRepresentation
-
-
-def _validate_edges(edges: Sequence[float]) -> np.ndarray:
-    arr = np.asarray(list(edges), dtype=np.float32).reshape(-1)
-    if arr.size < 2:
-        raise ValueError("edges must have at least 2 values (bin boundaries).")
-    if not np.all(np.isfinite(arr)):
-        raise ValueError("edges contains non-finite values.")
-    if not np.all(arr[1:] > arr[:-1]):
-        raise ValueError("edges must be strictly increasing.")
-    return arr
 
 
 @dataclass
@@ -75,7 +65,7 @@ class ContactMapBinsCA(BaseResidueEncoder):
 
         # Build edges
         if self.edges is not None:
-            edges = _validate_edges(self.edges)
+            edges = validate_bin_edges(self.edges)
         else:
             edges = np.linspace(float(self.dmin), float(self.dmax), int(self.num_bins) + 1, dtype=np.float32)
 

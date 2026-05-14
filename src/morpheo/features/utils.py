@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Set
+from typing import List, Set, Sequence
 
 import numpy as np
 
@@ -35,3 +35,13 @@ def ensure_1d(x: np.ndarray, n: int, name: str) -> np.ndarray:
     if a.ndim != 1 or a.shape[0] != n:
         raise ValueError(f"{name} must be shape (N,), got {a.shape}")
     return a
+
+def validate_bin_edges(edges: Sequence[float]) -> np.ndarray:
+    arr = np.asarray(list(edges), dtype=np.float32).reshape(-1)
+    if arr.size < 2:
+        raise ValueError("edges must have at least 2 values (bin boundaries).")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError("edges contains non-finite values.")
+    if not np.all(arr[1:] > arr[:-1]):
+        raise ValueError("edges must be strictly increasing.")
+    return arr

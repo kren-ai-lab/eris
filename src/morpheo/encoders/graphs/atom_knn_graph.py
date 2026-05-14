@@ -1,53 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, ClassVar
 from typing import TYPE_CHECKING
 
 import numpy as np
 
-from morpheo.core.types import StructureArtifact, StructureInput
 from morpheo.core.base_encoder import BaseAtomEncoder, EncodingContext
-from morpheo.core.contracts import AtomContract
 from morpheo.core.representations import GraphRepresentation
+from morpheo.features.atom import build_node_attr
+from morpheo.features.edge import build_edge_attr
+from morpheo.features.graph_stats import compute_graph_stats, pack_graph_stats
 
 if TYPE_CHECKING:
-    from morpheo.core.contracts.base_contract import GranularityContract
     from morpheo.core.representations.base_rep import BaseRepresentation
-
-
-# -----------------------------
-# Fixed dims (must be stable!)
-# -----------------------------
-ELEM_DIM = 17   # must match io.py _ELEM_VOCAB length
-ROLE_DIM = 6    # roles 0..5 in io.py _atom_role
-
-
-def _onehot_fixed(idx: np.ndarray, dim: int) -> np.ndarray:
-    idx = np.asarray(idx, dtype=np.int64).reshape(-1)
-    out = np.zeros((idx.shape[0], dim), dtype=np.float32)
-    m = (idx >= 0) & (idx < dim)
-    out[np.arange(idx.shape[0])[m], idx[m]] = 1.0
-    return out
-
-
-def _rbf(dist: np.ndarray, *, k: int = 16, dmax: float = 20.0) -> np.ndarray:
-    """
-    Gaussian RBF features over distance.
-    Returns (E,k).
-    """
-    d = np.asarray(dist, dtype=np.float32).reshape(-1, 1)
-    # centers in [0, dmax]
-    centers = np.linspace(0.0, float(dmax), int(k), dtype=np.float32).reshape(1, -1)
-    # sigma: spacing
-    if k <= 1:
-        sigma = 1.0
-    else:
-        sigma = float(dmax) / float(k - 1)
-        sigma = max(sigma, 1e-6)
-    rbf = np.exp(-((d - centers) ** 2) / (2.0 * (sigma ** 2))).astype(np.float32)
-    return rbf
 
 
 def _knn_edge_index(pos: np.ndarray, k: int) -> np.ndarray:
@@ -80,93 +46,6 @@ def _edge_dist(pos: np.ndarray, edge_index: np.ndarray) -> np.ndarray:
     d = pos[src] - pos[dst]
     return np.sqrt((d * d).sum(axis=1)).astype(np.float32)
 
-#Repeated?
-def _build_node_attr(
-    *,
-    elem_index: np.ndarray,
-    atom_role: np.ndarray,
-    bfactor: np.ndarray,
-    occ: np.ndarray,
-    bfactor_norm: bool = True,
-) -> np.ndarray:
-    """
-    node_attr: [onehot(elem,17), onehot(role,6), bfactor(1), occ(1)] => (N,25)
-    """
-    e = _onehot_fixed(elem_index, ELEM_DIM)            # (N,17)
-    r = _onehot_fixed(atom_role, ROLE_DIM)            # (N,6)
-
-    bf = np.nan_to_num(np.asarray(bfactor, dtype=np.float32), nan=0.0).reshape(-1, 1)
-    oc = np.nan_to_num(np.asarray(occ, dtype=np.float32), nan=0.0).reshape(-1, 1)
-
-    if bfactor_norm:
-        # if it looks like AF2 pLDDT or typical bfactor scale, normalize to 0..1 via /100
-        if float(np.nanmax(bf)) > 1.5:
-            bf = bf / 100.0
-
-    return np.concatenate([e, r, bf.astype(np.float32), oc.astype(np.float32)], axis=1).astype(np.float32)
-
-
-def _build_edge_attr(
-    *,
-    edge_dist: np.ndarray,
-    edge_index: np.ndarray,
-    seq_pos_residue: np.ndarray,
-    rbf_k: int = 16,
-    rbf_dmax: float = 20.0,
-    local_cutoff: int = 4,
-) -> np.ndarray:
-    """
-    edge_attr: [dist(1), rbf(16), seq_sep(1), local(1)] => (E,19)
-    """
-    d = np.asarray(edge_dist, dtype=np.float32).reshape(-1, 1)  # (E,1)
-    rbf = _rbf(edge_dist, k=rbf_k, dmax=rbf_dmax)               # (E,K)
-
-    if edge_index.shape[1] == 0:
-        seq_sep = np.zeros((0, 1), dtype=np.float32)
-        local = np.zeros((0, 1), dtype=np.float32)
-    else:
-        sp = np.asarray(seq_pos_residue, dtype=np.int64).reshape(-1)
-        src = edge_index[0]
-        dst = edge_index[1]
-        sep = np.abs(sp[src] - sp[dst]).astype(np.float32).reshape(-1, 1)
-        seq_sep = sep
-        local = (sep <= float(local_cutoff)).astype(np.float32).reshape(-1, 1)
-
-    return np.concatenate([d, rbf, seq_sep, local], axis=1).astype(np.float32)
-
-
-def _graph_stats(edge_index: np.ndarray, edge_dist: np.ndarray, n: int) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Returns:
-      graph_attr (G,) float32
-      graph_attr_keys (G,) str
-    """
-    e = int(edge_index.shape[1])
-    # degree (directed)
-    deg = np.zeros((n,), dtype=np.float32)
-    if e > 0:
-        src = edge_index[0]
-        np.add.at(deg, src, 1.0)
-
-    mean_deg = float(np.mean(deg)) if n > 0 else 0.0
-    std_deg = float(np.std(deg)) if n > 0 else 0.0
-
-    if e > 0:
-        md = float(np.mean(edge_dist))
-        sd = float(np.std(edge_dist))
-    else:
-        md, sd = 0.0, 0.0
-
-    graph_attr = np.asarray(
-        [float(n), float(e), mean_deg, std_deg, md, sd],
-        dtype=np.float32,
-    )
-    graph_attr_keys = np.asarray(
-        ["n_nodes", "n_edges", "deg_mean", "deg_std", "edge_dist_mean", "edge_dist_std"],
-        dtype=np.str_,
-    )
-    return graph_attr, graph_attr_keys
-
 
 @dataclass
 class AtomKNNGraph(BaseAtomEncoder):
@@ -188,12 +67,14 @@ class AtomKNNGraph(BaseAtomEncoder):
     k: int = 16
     include_self_loops: bool = False
 
-    include_hetero: bool = False
-    include_h: bool = False
-    altloc: str = "first"
-    amino_acids_only: bool = False
+    # include_hetero: bool = False
+    # include_h: bool = False
+    # altloc: str = "first"
+    # amino_acids_only: bool = False
 
+    node_attr_mode: str = "elem+role+bfactor+occ"
     # edge feature params
+    edge_mode = "dist+rbf+seq+local"
     rbf_k: int = 16
     rbf_dmax: float = 20.0
     local_cutoff: int = 4
@@ -217,24 +98,27 @@ class AtomKNNGraph(BaseAtomEncoder):
         edge_dist = _edge_dist(pos, edge_index)
 
         # deterministic baseline attributes
-        node_attr = _build_node_attr(
+        node_attr = build_node_attr(
             elem_index=strc["elem_index"],
             atom_role=strc["atom_role"],
             bfactor=strc["bfactor"],
             occ=strc["occ"],
             bfactor_norm=True,
+            mode=self.node_attr_mode
         )
 
-        edge_attr = _build_edge_attr(
+        edge_attr = build_edge_attr(
             edge_dist=edge_dist,
             edge_index=edge_index,
-            seq_pos_residue=strc["seq_pos_residue"],
+            mode = self.edge_mode,
+            seq_pos=strc["seq_pos_residue"],
             rbf_k=int(self.rbf_k),
             rbf_dmax=float(self.rbf_dmax),
             local_cutoff=int(self.local_cutoff),
         )
 
-        graph_attr, graph_attr_keys = _graph_stats(edge_index, edge_dist, n=n)
+        stats = compute_graph_stats(edge_index, edge_dist, n=n)
+        graph_attr, graph_attr_keys = pack_graph_stats(stats)
 
         data: Dict[str, Any] = {
             "pos": pos.astype(np.float32),
@@ -265,19 +149,14 @@ class AtomKNNGraph(BaseAtomEncoder):
         meta["params"].update({
                 "k": int(self.k),
                 "include_self_loops": bool(self.include_self_loops),
-                "include_hetero": bool(self.include_hetero),
-                "include_h": bool(self.include_h),
-                "altloc": str(self.altloc),
-                "amino_acids_only": bool(self.amino_acids_only),
+                # "include_hetero": bool(self.include_hetero),
+                # "include_h": bool(self.include_h),
+                # "altloc": str(self.altloc),
+                # "amino_acids_only": bool(self.amino_acids_only),
                 "rbf_k": int(self.rbf_k),
                 "rbf_dmax": float(self.rbf_dmax),
                 "local_cutoff": int(self.local_cutoff),
                 "bfactor_norm": True,
         })
-
-            # "feature_keys": {
-            # "node_attr_keys": node_attr_keys,
-            # "edge_attr_keys": edge_attr_keys,
-            # "graph_attr_keys": graph_keys_list,
 
         return meta

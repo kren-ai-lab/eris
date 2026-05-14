@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 
 from morpheo.features.utils import parse_mode
-from morpheo.features.rbf import rbf as rbf_encode
+from morpheo.features.rbf import compute_rbf as rbf_encode
 
 
 def build_edge_attr(

@@ -9,9 +9,7 @@ from typing import Any, Dict, Optional, Tuple, List
 
 import numpy as np
 
-from morpheo.core.hashing import sha256_file, sha256_text
 from morpheo.core.base_encoder import BaseResidueEncoder, EncodingContext
-from morpheo.features.node import build_node_attr
 from morpheo.core.representations import VoxelGridRepresentation
 
 if TYPE_CHECKING:
