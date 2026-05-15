@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from morpheo.features.residue import build_node_attr
-from morpheo.features.constants import AA_VOCAB, UNKNOWN_INDEX, PHYSchem_KEYS, AAINDEX_BASIC_KEYS
+from morpheo.features.node.residue import build_node_attr
+from morpheo.features.node.constants import AA_VOCAB, UNKNOWN_INDEX, PHYSchem_KEYS, AAINDEX_BASIC_KEYS
 
 
 def test_build_node_attr_keys_and_shapes_full():

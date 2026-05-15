@@ -7,7 +7,7 @@ from morpheo.encoders.geometry.contact_map_bins_ca import ContactMapBinsCA
 
 
 register_encoder(
-    "distogram_ca",
+    "distogram_residue",
     lambda: DistogramCA(),
     type="matrix",
     level="ca",
@@ -19,7 +19,7 @@ register_encoder(
 )
 
 register_encoder(
-    "distogram_bins_ca",
+    "distogram_bins_residue",
     lambda: DistogramBinsCA(),
     type="matrix",
     level="ca",
@@ -36,7 +36,7 @@ register_encoder(
 )
 
 register_encoder(
-    "contact_map_ca",
+    "contact_map_residue",
     lambda: ContactMapCA(),
     type="matrix",
     level="ca",
@@ -50,7 +50,7 @@ register_encoder(
 )
 
 register_encoder(
-    "contact_map_bins_ca",
+    "contact_map_bins_residue",
     lambda: ContactMapBinsCA(),
     type="matrix",
     level="ca",

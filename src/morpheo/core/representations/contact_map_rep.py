@@ -4,7 +4,7 @@ from morpheo.core.representations.base_rep import BaseRepresentation
 from morpheo.core.contracts.conctact_map_contract import ContactMapContract
 
 class ContactMapRepresentation(BaseRepresentation):
-    representation_type: ClassVar[str] = "contact_map"
+    representation_type: ClassVar[str] = "matrix"
 
     def contracts(self):
         return [ContactMapContract()]
@@ -20,7 +20,7 @@ class ContactMapRepresentation(BaseRepresentation):
 
 
 class ContactMapBinsRepresentation(BaseRepresentation):
-    representation_type: ClassVar[str] = "contact_map"
+    representation_type: ClassVar[str] = "matrix"
 
     def contracts(self):
         return [ContactMapContract()]

@@ -6,7 +6,7 @@ from morpheo.core.encoder_metadata import build_attr_keys, NODE_ATTR_KEY_MAP
 
 
 class PointCloudRepresentation(BaseRepresentation):
-    representation_type: ClassVar[str] = "point_cloud"
+    representation_type: ClassVar[str] = "cloud"
 
     def contracts(self):
         return [PointCloudContract()]

@@ -93,7 +93,7 @@ class ContactMapBinsCA(BaseResidueEncoder):
 
         # Update ctx
         ctx.runtime["num_bins"] = int(K)
-        ctx.runtime["edges"] = edges.tolist(),
+        ctx.runtime["edges"] = edges.tolist()
 
         data: Dict[str, Any] = {
             "contact_bins": contact_bins,
@@ -120,7 +120,7 @@ class ContactMapBinsCA(BaseResidueEncoder):
                 "dmin": None if self.edges is not None else float(self.dmin),
                 "dmax": None if self.edges is not None else float(self.dmax),
                 "num_bins": int(runtime["num_bins"]),
-                "edges": runtime["edges"].tolist()
+                "edges": runtime["edges"]
             })
 
         return meta

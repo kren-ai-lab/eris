@@ -5,7 +5,7 @@ from morpheo.core.contracts.distogram_contract import DistogramContract
 
 
 class DistogramRepresentation(BaseRepresentation):
-    representation_type: ClassVar[str] = "distogram"
+    representation_type: ClassVar[str] = "matrix"
 
     def contracts(self):
         return [DistogramContract()]
@@ -21,7 +21,7 @@ class DistogramRepresentation(BaseRepresentation):
     
 
 class DistogramBinsRepresentation(BaseRepresentation):
-    representation_type: ClassVar[str] = "distogram"
+    representation_type: ClassVar[str] = "matrix"
 
     def contracts(self):
         return [DistogramContract()]

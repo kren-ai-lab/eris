@@ -8,7 +8,7 @@ import numpy as np
 
 from morpheo.core.base_encoder import BaseAtomEncoder, EncodingContext
 from morpheo.core.representations import PointCloudRepresentation
-from morpheo.features.atom import build_node_attr
+from morpheo.features.node.atom import build_node_attr
 
 if TYPE_CHECKING:
     from morpheo.core.representations.base_rep import BaseRepresentation
@@ -35,7 +35,7 @@ class AtomPointCloud(BaseAtomEncoder):
       - node_attr (N,F) if node_attr_mode != "none"
     """
     #Identity
-    name: ClassVar[str] = "atom_point_cloud_ca"
+    name: ClassVar[str] = "atom_point_cloud"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
     
     # include_hetero: bool = False

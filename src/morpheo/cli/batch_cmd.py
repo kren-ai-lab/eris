@@ -14,7 +14,7 @@ app = typer.Typer(add_completion=False, help="Batch encoding utilities.")
 @app.command()
 def run(
     manifest: Path = typer.Option(..., "--manifest", exists=True, readable=True),
-    encoder: List[str] = typer.Option(..., "--encoder", help="Repeatable. Example: --encoder residue_contact_graph_ns"),
+    encoder: List[str] = typer.Option(..., "--encoder", help="Repeatable. Example: --encoder residue_knn_graph"),
     out: Path = typer.Option(Path("out"), "--out"),
     overwrite: bool = typer.Option(False, "--overwrite"),
     no_cache: bool = typer.Option(False, "--no-cache"),

@@ -91,7 +91,7 @@ class DistogramBinsCA(BaseResidueEncoder):
 
         # Update ctx
         ctx.runtime["num_bins"] = int(K)
-        ctx.runtime["edges"] = edges.tolist(),
+        ctx.runtime["edges"] = edges.tolist()
 
         data: Dict[str, Any] = {
             "dist_bins": dist_bins,
@@ -117,8 +117,8 @@ class DistogramBinsCA(BaseResidueEncoder):
                 "dtype": str(self.dtype),
                 "dmin": None if self.edges is not None else float(self.dmin),
                 "dmax": None if self.edges is not None else float(self.dmax),
-                "num_bins": int(runtime["K"]),
-                "edges": runtime["edges"].tolist(),
+                "num_bins": int(runtime["num_bins"]),
+                "edges": runtime["edges"],
             })
 
         return meta

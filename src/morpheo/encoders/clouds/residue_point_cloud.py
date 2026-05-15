@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from morpheo.core.base_encoder import BaseResidueEncoder, EncodingContext
-from morpheo.features.residue import build_node_attr
+from morpheo.features.node.residue import build_node_attr
 from morpheo.core.representations import PointCloudRepresentation
 
 if TYPE_CHECKING:
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 @dataclass
 class ResiduePointCloudCA(BaseResidueEncoder):
     #Identity
-    name: ClassVar[str] = "residue_point_cloud_ca"
+    name: ClassVar[str] = "residue_point_cloud"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
 
     #Instance

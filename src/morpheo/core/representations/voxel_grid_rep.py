@@ -3,7 +3,7 @@ from typing import Any, Dict, ClassVar
 from morpheo.core.representations.base_rep import BaseRepresentation
 
 class VoxelGridRepresentation(BaseRepresentation):
-    representation_type: ClassVar[str] = "voxel_grid"
+    representation_type: ClassVar[str] = "grid"
 
     def contracts(self):
         return []

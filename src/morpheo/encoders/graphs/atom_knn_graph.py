@@ -8,43 +8,44 @@ import numpy as np
 
 from morpheo.core.base_encoder import BaseAtomEncoder, EncodingContext
 from morpheo.core.representations import GraphRepresentation
-from morpheo.features.atom import build_node_attr
-from morpheo.features.edge import build_edge_attr
+from morpheo.features.node.atom import build_node_attr
+from morpheo.features.edge.edge import build_edge_attr
 from morpheo.features.graph_stats import compute_graph_stats, pack_graph_stats
+from morpheo.features.spatial.knn import knn_edges
 
 if TYPE_CHECKING:
     from morpheo.core.representations.base_rep import BaseRepresentation
 
 
-def _knn_edge_index(pos: np.ndarray, k: int) -> np.ndarray:
-    """
-    Naive O(N^2) kNN (directed).
-    edge_index shape (2,E)
-    """
-    pos = np.asarray(pos, dtype=np.float32)
-    n = int(pos.shape[0])
-    if n <= 1:
-        return np.zeros((2, 0), dtype=np.int64)
+# def _knn_edge_index(pos: np.ndarray, k: int) -> np.ndarray:
+#     """
+#     Naive O(N^2) kNN (directed).
+#     edge_index shape (2,E)
+#     """
+#     pos = np.asarray(pos, dtype=np.float32)
+#     n = int(pos.shape[0])
+#     if n <= 1:
+#         return np.zeros((2, 0), dtype=np.int64)
 
-    k_eff = int(max(1, min(k, n - 1)))
+#     k_eff = int(max(1, min(k, n - 1)))
 
-    diff = pos[:, None, :] - pos[None, :, :]
-    dist = np.sqrt((diff ** 2).sum(axis=-1)).astype(np.float32)
-    np.fill_diagonal(dist, np.inf)
+#     diff = pos[:, None, :] - pos[None, :, :]
+#     dist = np.sqrt((diff ** 2).sum(axis=-1)).astype(np.float32)
+#     np.fill_diagonal(dist, np.inf)
 
-    nn = np.argpartition(dist, kth=k_eff - 1, axis=1)[:, :k_eff]  # (N,k)
-    src = np.repeat(np.arange(n, dtype=np.int64), k_eff)
-    dst = nn.reshape(-1).astype(np.int64)
-    return np.stack([src, dst], axis=0)
+#     nn = np.argpartition(dist, kth=k_eff - 1, axis=1)[:, :k_eff]  # (N,k)
+#     src = np.repeat(np.arange(n, dtype=np.int64), k_eff)
+#     dst = nn.reshape(-1).astype(np.int64)
+#     return np.stack([src, dst], axis=0)
 
 
-def _edge_dist(pos: np.ndarray, edge_index: np.ndarray) -> np.ndarray:
-    if edge_index.shape[1] == 0:
-        return np.zeros((0,), dtype=np.float32)
-    src = edge_index[0]
-    dst = edge_index[1]
-    d = pos[src] - pos[dst]
-    return np.sqrt((d * d).sum(axis=1)).astype(np.float32)
+# def _edge_dist(pos: np.ndarray, edge_index: np.ndarray) -> np.ndarray:
+#     if edge_index.shape[1] == 0:
+#         return np.zeros((0,), dtype=np.float32)
+#     src = edge_index[0]
+#     dst = edge_index[1]
+#     d = pos[src] - pos[dst]
+#     return np.sqrt((d * d).sum(axis=1)).astype(np.float32)
 
 
 @dataclass
@@ -65,6 +66,8 @@ class AtomKNNGraph(BaseAtomEncoder):
 
     # Instance 
     k: int = 16
+    cutoff: float | None = 12.0 # max search radius for candidates (must be >= typical neighbor distances) None = Global mode
+    symmetric: bool = True
     include_self_loops: bool = False
 
     # include_hetero: bool = False
@@ -73,6 +76,7 @@ class AtomKNNGraph(BaseAtomEncoder):
     # amino_acids_only: bool = False
 
     node_attr_mode: str = "elem+role+bfactor+occ"
+    
     # edge feature params
     edge_mode = "dist+rbf+seq+local"
     rbf_k: int = 16
@@ -87,15 +91,23 @@ class AtomKNNGraph(BaseAtomEncoder):
         pos = pos_out.astype(np.float32)
         n = int(pos.shape[0])
 
-        edge_index = _knn_edge_index(pos, k=int(self.k))
+        # edge_index = _knn_edge_index(pos, k=int(self.k))
 
-        if (not self.include_self_loops) and edge_index.shape[1] > 0:
-            src = edge_index[0]
-            dst = edge_index[1]
-            keep = src != dst
-            edge_index = edge_index[:, keep]
+        # if (not self.include_self_loops) and edge_index.shape[1] > 0:
+        #     src = edge_index[0]
+        #     dst = edge_index[1]
+        #     keep = src != dst
+        #     edge_index = edge_index[:, keep]
 
-        edge_dist = _edge_dist(pos, edge_index)
+        # edge_dist = _edge_dist(pos, edge_index)
+
+        edge_index, edge_dist = knn_edges(
+            pos=pos_out,
+            k=int(self.k),
+            cutoff= self.cutoff,
+            symmetric=bool(self.symmetric)
+        )
+
 
         # deterministic baseline attributes
         node_attr = build_node_attr(
@@ -117,7 +129,7 @@ class AtomKNNGraph(BaseAtomEncoder):
             local_cutoff=int(self.local_cutoff),
         )
 
-        stats = compute_graph_stats(edge_index, edge_dist, n=n)
+        stats = compute_graph_stats(edge_index, edge_dist, n_nodes=n)
         graph_attr, graph_attr_keys = pack_graph_stats(stats)
 
         data: Dict[str, Any] = {
@@ -128,7 +140,7 @@ class AtomKNNGraph(BaseAtomEncoder):
             "node_attr": node_attr.astype(np.float32),
             "edge_attr": edge_attr.astype(np.float32),
             "graph_attr": graph_attr.astype(np.float32),
-            "graph_attr_keys": graph_attr_keys.astype(np.str_),
+            "graph_attr_keys": np.asarray(graph_attr_keys, dtype=np.str_),
 
             # raw atom fields (useful + deterministic)
             "elem_index": strc["elem_index"].astype(np.int16),

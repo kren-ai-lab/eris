@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Optional, Tuple, Union
 import numpy as np
 
-from morpheo.features.constants import (
+from morpheo.features.node.constants import (
     AA_VOCAB,
     UNKNOWN_INDEX,
     PHYSchem,
