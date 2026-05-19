@@ -7,7 +7,7 @@ import pytest
 
 import gemmi
 
-from morpheo.core.io import extract_ca_bundle
+from eris.core.io import extract_ca_bundle
 
 
 def _chain_from_pdb_string(pdb_text: str, chain_id: str = "A", model_index: int = 0) -> gemmi.Chain:

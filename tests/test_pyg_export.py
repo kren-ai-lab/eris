@@ -22,12 +22,12 @@ def test_export_pyg_graph_ns_auto():
     pytest.importorskip("torch")
     pytest.importorskip("torch_geometric")
 
-    from morpheo.export.pyg import load_pyg
+    from eris.export.pyg import load_pyg
 
     artifact_dir = _find_artifact_dir("**/residue_contact_graph_ns")
     if artifact_dir is None:
         pytest.skip(
-            "Artifact not found. Run: morpheo encode --input tests/data/1AQ2.pdb "
+            "Artifact not found. Run: eris encode --input tests/data/1AQ2.pdb "
             "--encoder residue_contact_graph_ns --out out"
         )
 
@@ -56,12 +56,12 @@ def test_export_pyg_graph_fallback_rbf():
     pytest.importorskip("torch")
     pytest.importorskip("torch_geometric")
 
-    from morpheo.export.pyg import load_pyg
+    from eris.export.pyg import load_pyg
 
     artifact_dir = _find_artifact_dir("**/residue_contact_graph")
     if artifact_dir is None:
         pytest.skip(
-            "Artifact not found. Run: morpheo encode --input tests/data/1AQ2.pdb "
+            "Artifact not found. Run: eris encode --input tests/data/1AQ2.pdb "
             "--encoder residue_contact_graph --out out"
         )
 
@@ -80,8 +80,8 @@ def test_export_pyg_missing_edge_index_raises():
     pytest.importorskip("torch")
     pytest.importorskip("torch_geometric")
 
-    from morpheo.core.artifacts import StructureArtifact
-    from morpheo.export.pyg import to_pyg
+    from eris.core.artifacts import StructureArtifact
+    from eris.export.pyg import to_pyg
 
     # Minimal in-memory artifact with missing edge_index
     art = StructureArtifact(
@@ -92,7 +92,6 @@ def test_export_pyg_missing_edge_index_raises():
             "encoder_fingerprint": "test",
             "type": "cloud",     # explicitly not a graph
             "level": "ca",
-            "family": "cloud",
             "params": {},
             "input": {"source": "memory", "chain_id": None, "model_index": 0, "format": None},
             "feature_keys": {},

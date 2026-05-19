@@ -7,7 +7,7 @@ import pytest
 
 def _get_data(obj):
     """
-    MorpheoFolderDataset may return either:
+    ErisFolderDataset may return either:
       - a StructureArtifact (obj.data)
       - a dict sample already (obj itself)
     """
@@ -22,13 +22,13 @@ def test_collate_graph_includes_graph_attr():
     pytest.importorskip("torch")
     from torch.utils.data import DataLoader, Subset
 
-    from morpheo.datasets import MorpheoFolderDataset, collate_graph
+    from eris.datasets import ErisFolderDataset, collate_graph
 
     idx = Path("out/index.csv")
     if not idx.exists():
-        pytest.skip("Missing out/index.csv (run morpheo pack --root out --out out/index.csv)")
+        pytest.skip("Missing out/index.csv (run eris pack --root out --out out/index.csv)")
 
-    ds = MorpheoFolderDataset(str(idx), prefer="graph")
+    ds = ErisFolderDataset(str(idx), prefer="graph")
 
     # Find at least 2 samples that include graph_attr
     picks = []

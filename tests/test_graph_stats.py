@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from morpheo.features.graph_stats import compute_graph_stats, pack_graph_stats
+from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
 
 
 def test_graph_stats_basic():

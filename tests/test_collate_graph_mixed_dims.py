@@ -5,7 +5,7 @@ import pytest
 
 def test_collate_graph_pads_mixed_x_and_edge_attr():
     torch = pytest.importorskip("torch")
-    from morpheo.datasets.collate import collate_graph
+    from eris.datasets.collate import collate_graph
 
     # sample 1: N=5, x F=22, E=3, edge_attr Fe=8
     x1 = torch.zeros((5, 22), dtype=torch.float32)
@@ -85,7 +85,7 @@ def test_collate_graph_pads_mixed_x_and_edge_attr():
 
 def test_collate_graph_strict_raises_on_mixed_dims():
     torch = pytest.importorskip("torch")
-    from morpheo.datasets.collate import collate_graph_strict
+    from eris.datasets.collate import collate_graph_strict
 
     x1 = torch.zeros((3, 4), dtype=torch.float32)
     x2 = torch.zeros((3, 5), dtype=torch.float32)

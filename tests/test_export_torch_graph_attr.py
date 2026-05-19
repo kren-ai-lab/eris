@@ -7,18 +7,18 @@ import pytest
 
 def test_export_torch_graph_attr_present():
     torch = pytest.importorskip("torch")
-    from morpheo.export.torch import load_torch
+    from eris.export.torch import load_torch
 
     out_root = Path("out")
     if not out_root.exists():
-        pytest.skip("Missing out/ directory. Run morpheo encode + morpheo pack first.")
+        pytest.skip("Missing out/ directory. Run eris encode + eris pack first.")
 
     # Prefer a known NS encoder, but don't hardcode the protein ID
     candidates = list(out_root.glob("**/residue_contact_graph_ns"))
     if not candidates:
         pytest.skip(
             "No residue_contact_graph_ns artifacts found. "
-            "Run: morpheo encode --input src/tests/data/1AQ2.pdb "
+            "Run: eris encode --input src/tests/data/1AQ2.pdb "
             "--encoder residue_contact_graph_ns --out out"
         )
 

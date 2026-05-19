@@ -12,7 +12,7 @@
 * **DoD global**
 
   * `pip install -e .`
-  * `morpheo --help`
+  * `eris --help`
   * `pytest -q`
   * CI verde + build OK
 
@@ -29,7 +29,6 @@
   * `encoder_name`, `encoder_version` (o git hash), `encoder_fingerprint`
   * `type` (graph/matrix/cloud/grid/mesh)
   * `level` (residue/ca/atom)
-  * `family` (residue_graph, atom_graph, matrix, cloud, grid, mesh)
   * `params` (config del encoder)
   * `input` (source, chain_id, model_index, format)
   * `shapes`, `dtypes`
@@ -40,7 +39,7 @@
   * `validate_artifact(...)` + errores accionables
 * **Inspección**
 
-  * `morpheo info <artifact_dir>` (imprime + valida)
+  * `eris info <artifact_dir>` (imprime + valida)
 * **DoD**
 
   * round-trip exacto `save/load`
@@ -182,7 +181,7 @@
 * ejemplo con 1 PLM (ESM2 o el que ya usas en Sylphy) pero como **extra**
 * **DoD**
 
-  * `pip install morpheo[plm]` habilita demo
+  * `pip install eris[plm]` habilita demo
   * sin extra, no rompe nada
 
 ### 6.3 Atom embeddings (realista)
@@ -221,11 +220,11 @@
 
 ## 8) Dataset, collates y pack indexing (uso real)
 
-### 8.1 `morpheo pack`
+### 8.1 `eris pack`
 
 * index con columnas estándar:
 
-  * `id`, `encoder`, `type`, `level`, `family`, `artifact_dir`
+  * `id`, `encoder`, `type`, `level`, `artifact_dir`
   * dims: `node_dim`, `edge_dim`, `graph_attr_dim`
   * counts: `n_nodes`, `n_edges`
   * matrix/grid/cloud specifics (shape/channels/bin_edges flag)
@@ -233,7 +232,7 @@
 
   * filtrar por tipo/encoder sin abrir npz
 
-### 8.2 `MorpheoFolderDataset`
+### 8.2 `ErisFolderDataset`
 
 * `prefer=graph|matrix|cloud|grid|mesh`
 * carga lazy + validación
@@ -257,16 +256,16 @@
 
 ## 9) CLI y UX para usuarios reales
 
-* `morpheo encode`
+* `eris encode`
 
   * `--encoder`, `--chain`, `--model-index`, `--params`, `--no-cache`, `--validate`
-* `morpheo batch`
+* `eris batch`
 
   * manifest CSV/TSV, resume, report de errores
-* `morpheo pack`
-* `morpheo encoders`
-* `morpheo info`
-* `morpheo cache clear` + `cache stats`
+* `eris pack`
+* `eris encoders`
+* `eris info`
+* `eris cache clear` + `cache stats`
 * **DoD**
 
   * 3 comandos reproducibles en README que generan artifacts + pack + dataset
@@ -337,7 +336,7 @@
 
 1. `pip install -e .` y CLI usable
 2. encoders residue + atom + matrix + cloud + grid (+ mesh si se exige)
-3. artifacts con schema + validación + `morpheo info`
+3. artifacts con schema + validación + `eris info`
 4. exporters torch + pyg (y mesh torch si aplica)
 5. pack + dataset + collates funcionando por tipo
 6. docs + notebooks reproducibles con data del repo

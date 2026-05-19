@@ -1,6 +1,6 @@
 from pathlib import Path
 import numpy as np
-from morpheo.core.io import extract_ca_bundle, load_structure, select_chain
+from eris.core.io import extract_ca_bundle, load_structure, select_chain
 
 DATA = Path(__file__).resolve().parent / "data"
 

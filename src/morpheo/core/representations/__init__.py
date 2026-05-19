@@ -1,5 +1,0 @@
-from morpheo.core.representations.graph_rep import GraphRepresentation
-from morpheo.core.representations.point_cloud_rep import PointCloudRepresentation
-from morpheo.core.representations.voxel_grid_rep import VoxelGridRepresentation
-from morpheo.core.representations.contact_map_rep import ContactMapRepresentation, ContactMapBinsRepresentation
-from morpheo.core.representations.distogram_rep import DistogramRepresentation, DistogramBinsRepresentation

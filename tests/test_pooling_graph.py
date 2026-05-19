@@ -5,7 +5,7 @@ import pytest
 
 def test_pool_graph_basic():
     torch = pytest.importorskip("torch")
-    from morpheo.pooling import pool_graph
+    from eris.pooling import pool_graph
 
     # 3 nodes, 2-dim features
     x = torch.tensor([[1.0, 2.0],
@@ -37,7 +37,7 @@ def test_pool_graph_basic():
 
 def test_pool_graph_no_edges_ok():
     torch = pytest.importorskip("torch")
-    from morpheo.pooling import pool_graph
+    from eris.pooling import pool_graph
 
     x = torch.randn(5, 4)
     sample = {"x": x}  # no edges, no graph_attr

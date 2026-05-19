@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from morpheo.core.registry import get_encoder, get_encoder_info
-from morpheo.core.types import StructureInput
+from eris.core.registry import get_encoder, get_encoder_info
+from eris.core.types import StructureInput
 
 DATA = Path("tests/data/1AQ2.pdb")
 
@@ -16,5 +16,4 @@ def test_registry_matches_meta():
 
     assert art.meta["type"] == info.type
     assert art.meta["level"] == info.level
-    #assert art.meta["family"] == info.family
     assert art.meta["encoder_fingerprint"] == enc.fingerprint()

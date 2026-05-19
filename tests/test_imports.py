@@ -1,2 +1,2 @@
 def test_import():
-    import morpheo  # noqa: F401
+    import eris  # noqa: F401

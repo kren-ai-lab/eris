@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from morpheo.core.registry import get_encoder
-from morpheo.core.types import StructureInput
+from eris.core.registry import get_encoder
+from eris.core.types import StructureInput
 
 DATA = Path("tests/data/1AQ2.pdb")
 
@@ -36,12 +36,11 @@ def _check_artifact_graph_basic(art):
     # ---- meta contract (minimal) ----
     meta = art.meta
     for k in ["schema_version", "encoder_name", "encoder_version", "encoder_fingerprint",
-              "type", "level", "params", "input", "dtypes", "counts", "feature_keys"]: #,family
+              "type", "level", "params", "input", "dtypes", "counts", "feature_keys"]:
         assert k in meta, f"missing meta key: {k}"
 
     assert meta["type"] == "graph"
     assert meta["level"] in {"ca", "residue"}  # depends on your convention; you’re using "ca"
-    #assert meta["family"] == "residue_graph"
 
     assert isinstance(meta["params"], dict)
     assert isinstance(meta["input"], dict)
