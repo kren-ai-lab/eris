@@ -37,17 +37,13 @@ class ResiduePointCloudCA(BaseResidueEncoder):
         data: Dict[str, Any] = {
             "pos": pos_out.astype(np.float32),
             "centroid": centroid.astype(np.float32),
+            "node_attr": node_attr.astype(np.float32),
             "residue_ids": strc["residue_ids"].astype(np.str_),
             "resname": strc["resname"].astype(np.str_),
             "aa_index": strc["aa_index"].astype(np.int16),
-            "node_attr": node_attr.astype(np.float32),
+            "plddt": strc["plddt"].astype(np.float32),
+            "bfactor_ca": strc["bfactor_ca"].astype(np.float32),
         }
-
-        # keep raw signals if present (useful for downstream / debugging)
-        if strc["plddt"] is not None:
-            data["plddt"] = strc["plddt"].astype(np.float32)
-        if strc["bfactor_ca"] is not None:
-            data["bfactor_ca"] = strc["bfactor_ca"].astype(np.float32)
 
         return data
 

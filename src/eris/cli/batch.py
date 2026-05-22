@@ -84,13 +84,13 @@ def read_manifest(path: Path) -> List[ManifestRow]:
     raise ValueError(f"Unsupported manifest format: {path.suffix} (use .csv, .jsonl, or .json)")
 
 
-def _apply_params(enc: Any, params: Optional[Dict[str, Any]]) -> None:
-    if not params:
-        return
-    # soft-apply: only set attributes that exist
-    for k, v in params.items():
-        if hasattr(enc, k):
-            setattr(enc, k, v)
+# def _apply_params(enc: Any, params: Optional[Dict[str, Any]]) -> None:
+#     if not params:
+#         return
+#     # soft-apply: only set attributes that exist
+#     for k, v in params.items():
+#         if hasattr(enc, k):
+#             setattr(enc, k, v)
 
 
 # def batch_encode(

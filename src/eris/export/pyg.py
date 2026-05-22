@@ -1,92 +1,23 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Dict, Any, Optional
 
 import numpy as np
 
 from eris.core.types import StructureArtifact
+from eris.export.torch import to_torch
 
 
-XMode = Literal[
-    "auto",
-    "aa_index",
-    "onehot",
-    "aa_index+plddt",
-    "onehot+plddt",
-    "aa_index+bfactor",
-    "onehot+bfactor",
-    "aa_index+plddt+emb",
-    "onehot+plddt+emb",
-]
 
-
-def _onehot_from_aa_index(aa_index: np.ndarray, num_classes: int = 21) -> np.ndarray:
-    aa_index = np.asarray(aa_index).astype(np.int64).reshape(-1)
-    out = np.zeros((aa_index.shape[0], num_classes), dtype=np.float32)
-    valid = (aa_index >= 0) & (aa_index < num_classes)
-    out[np.arange(aa_index.shape[0])[valid], aa_index[valid]] = 1.0
-    return out
-
-
-def _rbf(dist: np.ndarray, num_kernels: int = 16, dmin: float = 0.0, dmax: float = 20.0) -> np.ndarray:
+def torch_dict_to_pyg(out: Dict[str, Any], *, device: Optional[str] = None):
     """
-    RBF encoding for distances.
+    Convert the canonical torch dict (from to_torch()) into torch_geometric.data.Data.
 
-    dist: (E,)
-    returns: (E, K)
-    """
-    dist = np.asarray(dist, dtype=np.float32).reshape(-1, 1)
-    centers = np.linspace(dmin, dmax, num_kernels, dtype=np.float32).reshape(1, -1)
-    step = float(centers[0, 1] - centers[0, 0]) if num_kernels > 1 else 1.0
-    gamma = 1.0 / (step * step + 1e-8)
-    return np.exp(-gamma * (dist - centers) ** 2).astype(np.float32)
-
-
-def _get_vector(d: dict, key: str, n: int, fill_value: float = np.nan) -> np.ndarray:
-    """
-    Fetch vector (N,) from artifact; if missing, returns fill.
-    """
-    if key not in d:
-        return np.full((n,), fill_value, dtype=np.float32)
-    v = np.asarray(d[key])
-    if v.ndim != 1 or v.shape[0] != n:
-        raise ValueError(f"'{key}' must have shape (N,), got {v.shape}")
-    return v.astype(np.float32)
-
-
-def _get_matrix(d: dict, key: str, n: int) -> np.ndarray:
-    """
-    Fetch matrix (N,D) from artifact; raises if missing or mismatch.
-    """
-    if key not in d:
-        raise KeyError(f"Artifact missing '{key}'.")
-    m = np.asarray(d[key])
-    if m.ndim != 2 or m.shape[0] != n:
-        raise ValueError(f"'{key}' must have shape (N,D) with N={n}, got {m.shape}")
-    return m.astype(np.float32)
-
-def to_pyg(
-    artifact: StructureArtifact,
-    x_mode: XMode = "auto",
-    rbf_k: int = 16,
-    rbf_dmax: float = 20.0,
-):
-    """
-    Convert Eris artifact -> torch_geometric.data.Data.
-
-    Requires torch + torch_geometric installed.
-
-    Auto behavior:
-      - If 'node_attr' exists -> x = node_attr
-      - Else if 'node_emb' exists -> x = node_emb
-      - Else fallback (residue legacy) -> onehot(aa_index) + optional plddt if present
-      - Edge:
-          - If 'edge_attr' exists -> edge_attr = edge_attr
-          - Else if 'edge_dist' exists -> edge_attr = RBF(edge_dist)
-      - Graph:
-          - If 'graph_attr' exists -> attach as data.graph_attr tensor (1D)
-          - If 'graph_attr_keys' exists -> attach as python list
+    Strategy:
+      1) Infer representation kind (graph/grid/matrix/cloud) from keys.
+      2) Build Data using the appropriate schema.
+      3) Attach remaining tensors/metadata as extra attributes (serializable via torch.save).
     """
     try:
         import torch
@@ -94,134 +25,167 @@ def to_pyg(
     except Exception as e:
         raise ImportError("PyG export requires torch + torch_geometric installed.") from e
 
-    d = artifact.data
+    # ---------
+    # 1) Infer kind (prefer explicit signals)
+    # ---------
+    has_edge_index = "edge_index" in out
+    has_pos = "pos" in out
+    has_grid_signals = any(k in out for k in ("channels", "grid_size", "voxel_size", "origin"))  # grid hints
+    has_matrix_signals = any(k in out for k in ("matrix_key", "bin_edges", "n"))                 # matrix hints
 
-    # --- Required basics
-    if "pos" not in d:
-        raise KeyError("Artifact missing 'pos'.")
-    if "edge_index" not in d:
-        raise KeyError("Artifact missing 'edge_index'.")
-
-    pos = np.asarray(d["pos"], dtype=np.float32)
-    if pos.ndim != 2 or pos.shape[1] != 3:
-        raise ValueError(f"'pos' must have shape (N,3), got {pos.shape}")
-    n = pos.shape[0]
-
-    edge_index = np.asarray(d["edge_index"], dtype=np.int64)
-    if edge_index.ndim != 2 or edge_index.shape[0] != 2:
-        raise ValueError(f"'edge_index' must have shape (2,E), got {edge_index.shape}")
-    e = int(edge_index.shape[1])
-
-    # --- Node features
-    x: np.ndarray
-
-    if x_mode == "auto":
-        if "node_attr" in d:
-            node_attr = np.asarray(d["node_attr"], dtype=np.float32)
-            if node_attr.ndim != 2 or node_attr.shape[0] != n:
-                raise ValueError(f"'node_attr' must have shape (N,F) with N={n}, got {node_attr.shape}")
-            x = node_attr.astype(np.float32)
-
-        elif "node_emb" in d:
-            node_emb = _get_matrix(d, "node_emb", n)
-            x = node_emb.astype(np.float32)
-
-        else:
-            # fallback legacy: residue onehot + (plddt if present)
-            if "aa_index" not in d:
-                raise KeyError(
-                    "Auto x requires 'node_attr' or 'node_emb'. "
-                    "Legacy fallback requires 'aa_index' (residue-level). "
-                    "This artifact has none."
-                )
-            aa_index = np.asarray(d["aa_index"]).reshape(-1).astype(np.int64)
-            if aa_index.shape[0] != n:
-                raise ValueError(f"'aa_index' must have shape (N,), N={n}, got {aa_index.shape}")
-
-            x_parts: list[np.ndarray] = [_onehot_from_aa_index(aa_index, num_classes=21)]
-            if "plddt" in d:
-                plddt = _get_vector(d, "plddt", n, fill_value=np.nan).reshape(-1, 1)
-                x_parts.append(plddt)
-            x = np.concatenate(x_parts, axis=1).astype(np.float32)
-
+    if has_edge_index:
+        kind = "graph"
+    elif has_grid_signals:
+        kind = "grid"
+    elif has_matrix_signals:
+        kind = "matrix"
+    elif has_pos:
+        kind = "cloud"
     else:
-        # legacy explicit modes: build x from aa_index (+ optional plddt/bfactor/emb)
-        if "aa_index" not in d:
-            raise KeyError(
-                f"x_mode='{x_mode}' requires residue-level 'aa_index', but artifact has no 'aa_index'. "
-                "Use x_mode='auto' for node_attr/node_emb based artifacts (e.g., atom graphs)."
-            )
-        aa_index = np.asarray(d["aa_index"]).reshape(-1).astype(np.int64)
-        if aa_index.shape[0] != n:
-            raise ValueError(f"'aa_index' must have shape (N,), N={n}, got {aa_index.shape}")
+        raise KeyError("Can't convert to PyG: missing signals of graph/grid/matrix/cloud.")
 
-        x_parts: list[np.ndarray] = []
+    pyg = Data()
 
-        if str(x_mode).startswith("onehot"):
-            x_parts.append(_onehot_from_aa_index(aa_index, num_classes=21))
-        else:
-            x_parts.append(aa_index.astype(np.float32).reshape(-1, 1))
+    # ---------
+    # 2) Populate Data depending on kind
+    # ---------
+    if kind == "graph":
+        pyg.edge_index = out["edge_index"]
+        if "x" in out:
+            pyg.x = out["x"]
+        if "pos" in out:
+            pyg.pos = out["pos"]
+        if "edge_attr" in out:
+            pyg.edge_attr = out["edge_attr"]
+        if "edge_dist" in out:
+            pyg.edge_dist = out["edge_dist"]
+        if "graph_attr" in out:
+            pyg.graph_attr = out["graph_attr"]
+        if "graph_attr_keys" in out:
+            pyg.graph_attr_keys = out["graph_attr_keys"]
 
-        if "+plddt" in str(x_mode):
-            plddt = _get_vector(d, "plddt", n, fill_value=np.nan).reshape(-1, 1)
-            x_parts.append(plddt)
+        if "centroid" in out:
+            pyg.centroid = out["centroid"]
 
-        if "+bfactor" in str(x_mode):
-            bfac = _get_vector(d, "bfactor_ca", n, fill_value=np.nan).reshape(-1, 1)
-            x_parts.append(bfac)
+    elif kind == "cloud":
+        # Cloud: PyG can store pos and optional x
+        pyg.pos = out["pos"]
+        if "x" in out:
+            pyg.x = out["x"]
+        if "centroid" in out:
+            pyg.centroid = out["centroid"]
 
-        if str(x_mode).endswith("+emb"):
-            node_emb = _get_matrix(d, "node_emb", n)
-            x_parts.append(node_emb)
+    elif kind == "grid":
+        # Grid has no natural PyG "x" meaning; store as pyg.grid instead
+        # (out["x"] in grid mode is the grid tensor)
+        if "x" in out:
+            pyg.grid = out["x"]
+        if "channels" in out:
+            pyg.channels = out["channels"]
+        if "grid_size" in out:
+            pyg.grid_size = out["grid_size"]
+        if "voxel_size" in out:
+            pyg.voxel_size = out["voxel_size"]
+        if "origin" in out:
+            pyg.origin = out["origin"]
+        if "centroid" in out:
+            pyg.centroid = out["centroid"]
 
-        x = np.concatenate(x_parts, axis=1).astype(np.float32)
+    elif kind == "matrix":
+        # Matrix has no natural PyG "x" meaning; store as pyg.matrix instead
+        # (out["x"] in matrix mode is the matrix tensor)
+        if "x" in out:
+            pyg.matrix = out["x"]
+        if "matrix_key" in out:
+            pyg.matrix_key = out["matrix_key"]
+        if "n" in out:
+            pyg.n = out["n"]
+        if "bin_edges" in out:
+            pyg.bin_edges = out["bin_edges"]
+        if "pos" in out:
+            pyg.pos = out["pos"]
+        if "centroid" in out:
+            pyg.centroid = out["centroid"]
 
-    # --- Edge attributes
-    edge_attr = None
+    # ---------
+    # 3) Attach metadata (python objects) safely
+    # ---------
+    if "extra" in out:
+        pyg.extra = out["extra"]
 
-    if "edge_attr" in d:
-        ea = np.asarray(d["edge_attr"], dtype=np.float32)
-        if ea.ndim != 2 or ea.shape[0] != e:
-            raise ValueError(f"'edge_attr' must have shape (E,F) with E={e}, got {ea.shape}")
-        edge_attr = torch.from_numpy(ea).float()
+    # Optionally attach any remaining tensor fields that were not consumed above.
+    # This is useful for debugging, but keep it conservative to avoid collisions.
+    consumed = set()
+    if kind == "graph":
+        consumed |= {"edge_index", "x", "pos", "edge_attr", "edge_dist", "graph_attr", "graph_attr_keys", "centroid", "extra"}
+    elif kind == "cloud":
+        consumed |= {"pos", "x", "centroid", "extra"}
+    elif kind == "grid":
+        consumed |= {"x", "channels", "grid_size", "voxel_size", "origin", "centroid", "extra"}
+    elif kind == "matrix":
+        consumed |= {"x", "matrix_key", "n", "bin_edges", "pos", "centroid", "extra"}
 
-    elif "edge_dist" in d:
-        edge_dist = np.asarray(d["edge_dist"], dtype=np.float32).reshape(-1)
-        if edge_dist.shape[0] != e:
-            raise ValueError(f"'edge_dist' must have length E={e}, got {edge_dist.shape}")
-        ea = _rbf(edge_dist, num_kernels=int(rbf_k), dmax=float(rbf_dmax))
-        edge_attr = torch.from_numpy(ea).float()
+    for k, v in out.items():
+        if k in consumed:
+            continue
+        if isinstance(v, torch.Tensor):
+            # attach as attribute; avoid overwriting core PyG names
+            setattr(pyg, k, v)
 
-    data = Data(
-        x=torch.from_numpy(x).float(),
-        pos=torch.from_numpy(pos).float(),
-        edge_index=torch.from_numpy(edge_index).long(),
-        edge_attr=edge_attr,
+    # ---------
+    # 4) Move to device
+    # ---------
+    if device is not None:
+        pyg = pyg.to(device)
+
+    return pyg
+
+
+def to_pyg(
+    artifact_dir: str | Path,
+    *,
+    prefer: str = "grid_or_graph",
+    device: Optional[str] = None,
+    matrix_as_channel: bool = True,
+):
+    out = to_torch(
+        artifact_dir,
+        prefer=prefer,
+        device=device,
+        matrix_as_channel=matrix_as_channel,
     )
+    return torch_dict_to_pyg(out, device=device)
 
-    # --- Optional ids/labels (python attrs)
-    if "residue_ids" in d:
-        data.residue_ids = np.asarray(d["residue_ids"]).astype(str).tolist()
-    if "resname" in d:
-        data.resname = np.asarray(d["resname"]).astype(str).tolist()
-    if "atom_name" in d:
-        data.atom_name = np.asarray(d["atom_name"]).astype(str).tolist()
-
-    # --- Optional graph-level attrs
-    if "graph_attr" in d:
-        ga = np.asarray(d["graph_attr"], dtype=np.float32).reshape(-1)
-        data.graph_attr = torch.from_numpy(ga).float()
-
-    if "graph_attr_keys" in d:
-        data.graph_attr_keys = np.asarray(d["graph_attr_keys"]).astype(str).tolist()
-
-    return data
 
 def load_pyg(
     artifact_dir: str | Path,
-    x_mode: XMode = "auto",
-    rbf_k: int = 16,
-    rbf_dmax: float = 20.0,
+    *,
+    prefer: str = "grid_or_graph",
+    device: Optional[str] = None,
+    matrix_as_channel: bool = True,
 ):
     artifact = StructureArtifact.load(Path(artifact_dir))
-    return to_pyg(artifact, x_mode=x_mode, rbf_k=rbf_k, rbf_dmax=rbf_dmax)
+    return to_pyg(artifact, prefer=prefer, device=device, matrix_as_channel=matrix_as_channel)
+
+
+def save_artifact_to_pyg(
+    artifact_dir: Path,
+    *,
+    out_path: Path,
+    prefer: str = "grid_or_graph",
+    device: Optional[str] = None,
+    matrix_as_channel: bool = True,
+):
+    import torch
+
+    artifact = StructureArtifact.load(artifact_dir)
+
+    pyg = to_pyg(
+        artifact,
+        prefer=prefer,
+        device=device,
+        matrix_as_channel=matrix_as_channel,
+    )
+
+    torch.save(pyg, out_path)
+

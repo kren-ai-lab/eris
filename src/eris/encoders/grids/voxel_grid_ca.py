@@ -292,15 +292,7 @@ class VoxelGridCA(BaseResidueEncoder):
             "aa_index": np.asarray(strc["aa_index"], dtype=np.int16),
             "plddt": np.asarray(strc["plddt"], dtype=np.float32),
             "bfactor_ca": np.asarray(strc["bfactor_ca"], dtype=np.float32),
-        }
-
-        # Expand channel names for aa_onehot to avoid ambiguity downstream
-        expanded_channels = []
-        for c in ch_list:
-            if c == "aa_onehot":
-                expanded_channels.extend([f"aa_onehot_{i}" for i in range(21)])
-            else:
-                expanded_channels.append(c)
+        }            
 
         return data
 
@@ -311,7 +303,7 @@ class VoxelGridCA(BaseResidueEncoder):
         meta["params"].update({
                 "grid_size": int(self.grid_size),
                 "dtype": str(self.dtype),
-                "channels": list(self.channels), #corregir luego a la lista
+                "channels": list(self.channels), 
                 "center": bool(self.center),
                 "fit": bool(self.fit),
                 "margin": float(self.margin),

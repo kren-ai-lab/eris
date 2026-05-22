@@ -1,12 +1,13 @@
 from typing import Any, Dict, ClassVar
 
 from eris.core.representations.base_rep import BaseRepresentation
+from eris.core.contracts.voxel_grid_contract import VoxelGridContract
 
 class VoxelGridRepresentation(BaseRepresentation):
     representation_type: ClassVar[str] = "grid"
 
     def contracts(self):
-        return []
+        return [VoxelGridContract()]
     
 
     def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:

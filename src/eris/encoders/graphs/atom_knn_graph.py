@@ -68,8 +68,8 @@ class AtomKNNGraph(BaseAtomEncoder):
     k: int = 16
     cutoff: float | None = 12.0 # max search radius for candidates (must be >= typical neighbor distances) None = Global mode
     symmetric: bool = True
-    include_self_loops: bool = False
 
+    # include_self_loops: bool = False
     # include_hetero: bool = False
     # include_h: bool = False
     # altloc: str = "first"
@@ -160,7 +160,7 @@ class AtomKNNGraph(BaseAtomEncoder):
     def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         meta["params"].update({
                 "k": int(self.k),
-                "include_self_loops": bool(self.include_self_loops),
+                #"include_self_loops": bool(self.include_self_loops),
                 # "include_hetero": bool(self.include_hetero),
                 # "include_h": bool(self.include_h),
                 # "altloc": str(self.altloc),

@@ -1,0 +1,230 @@
+import numpy as np
+
+from typing import Any, Dict
+
+
+def validate_pos(data: Dict[str, Any]):
+    if "pos" not in data:
+        raise ValueError("Position validation: Missing 'pos'")
+    
+    if not isinstance(data["pos"], np.ndarray):
+        raise TypeError("Position validation: 'pos' must be np.ndarray")
+    
+    if data["pos"].ndim != 2 or data["pos"].shape[1] != 3:
+        raise ValueError("Position validation: 'pos' must have shape (N, 3)")
+    
+    if data["pos"].dtype != np.float32:
+        raise TypeError("Position validation: 'pos' items must be np.float32")
+    
+    if not np.isfinite(data["pos"]).all():
+        raise TypeError("Position validation: 'pos' items must be finite")  
+
+
+def validate_node_feature(data: Dict[str, Any], key: str):
+    if key not in data:
+        return
+
+    arr = data[key]
+    pos = data["pos"]
+
+    if arr.shape[0] != pos.shape[0]:
+        raise ValueError(
+            f"Node feature validation: '{key}' must have same length as number of nodes"
+        )
+    
+
+def validate_edge_index(data: Dict[str, Any]):
+    if "edge_index" not in data:
+        raise ValueError("Edge validation: missing 'edge_index'")
+
+    edge_index = data["edge_index"]
+
+    # Shape (2, E)
+    if not isinstance(edge_index, np.ndarray):
+        raise TypeError("Edge validation: 'edge_index' must be np.ndarray")
+
+    if edge_index.ndim != 2 or edge_index.shape[0] != 2:
+        raise ValueError(
+            "Edge validation: 'edge_index' must have shape (2, E)"
+        )
+
+    # Dtype
+    if edge_index.dtype != np.int64:
+        raise TypeError(
+            "Edge validation: 'edge_index' must be int64"
+        )
+    
+    num_nodes = data["pos"].shape[0]
+
+    if edge_index.size > 0:
+        if edge_index.min() < 0 or edge_index.max() >= num_nodes:
+            raise ValueError(
+                "GraphContract: edge_index contiene índices fuera de rango"
+            )
+    
+
+def validate_edge_features(data: Dict[str, Any], key: str = "edge_attr"):
+    if key not in data:
+        return
+
+    edge_attr = data[key]
+    edge_index = data["edge_index"]
+
+    if not isinstance(edge_attr, np.ndarray):
+        raise TypeError(f"Edge feature validation: {key} must be np.ndarray")
+
+    if edge_attr.ndim != 2:
+        raise ValueError(f"Edge feature validation: {key} must be 2D (E, D)")
+
+    if edge_attr.shape[0] != edge_index.shape[1]:
+        raise ValueError(f"Edge feature validation: {key} must have length E")
+
+    if not np.isfinite(edge_attr).all():
+        raise ValueError(f"Edge feature validation: {key} must contain finite values")
+    
+
+def validate_centroid(data: Dict[str, Any]):
+    if "centroid" not in data:
+        raise ValueError("Centroid validation: Missing 'centroid'")
+    
+    if not isinstance(data["centroid"], np.ndarray):
+        raise TypeError("Centroid validation: 'centroid' must be np.ndarray")
+    
+    if data["centroid"].shape != (1, 3):
+        raise ValueError("Centroid validation: 'centroid' must have shape (1, 3)")
+    
+    if data["centroid"].dtype != np.float32:
+        raise TypeError("Centroid validation: 'centroid' items must be np.float32")
+
+    if not np.isfinite(data["centroid"]).all():
+        raise ValueError("Centroid validation: centroid contains non-finite values")
+
+
+def validate_residue_data(data: Dict[str, Any]):
+    required = ["residue_ids", "resname"]
+
+    n = len(data["residue_ids"])
+    if len(data["resname"]) != n:
+        raise ValueError("Residue data validation: residue_ids and resname must have same length")
+
+    for r in required:
+        if r not in data:
+            raise ValueError(f"Residue data validation: missing {r}")
+        
+        if data[r].ndim != 1:
+            raise ValueError(f"Residue data validation: {r} must be 1D array")
+
+        if len(data[r]) == 0:
+            raise ValueError(f"Residue data validation: {r} cannot be empty")
+        
+        if not np.issubdtype(data[r].dtype, np.str_):
+            raise TypeError(f"Residue data validation: {r} items must be np.str_")
+
+
+def validate_grid(data: Dict[str, Any]):
+    """
+    Validate GRID representation contract.
+    """
+
+    # -------------------------
+    # REQUIRED FIELDS
+    # -------------------------
+    required = ["grid", "channels"]
+
+    for key in required:
+        if key not in data:
+            raise ValueError(f"Grid validation: missing required field '{key}'")
+
+    grid = data["grid"]
+    channels = data["channels"]
+
+    # -------------------------
+    # GRID (core tensor)
+    # -------------------------
+    if not isinstance(grid, np.ndarray):
+        raise TypeError("Grid validation: 'grid' must be np.ndarray")
+
+    if grid.ndim != 4:
+        raise ValueError(
+            "Grid validation: 'grid' must have shape (C, D, H, W)"
+        )
+
+    if not np.issubdtype(grid.dtype, np.floating):
+        raise TypeError("Grid validation: 'grid' must be float dtype")
+
+    if not np.isfinite(grid).all():
+        raise ValueError("Grid validation: 'grid' contains non-finite values")
+
+    C = grid.shape[0]
+
+    # -------------------------
+    # CHANNELS
+    # -------------------------
+    if not isinstance(channels, np.ndarray):
+        raise TypeError("Grid validation: 'channels' must be np.ndarray")
+
+    if channels.ndim != 1:
+        raise ValueError("Grid validation: 'channels' must be 1D")
+
+    if len(channels) != C:
+        raise ValueError(
+            "Grid validation: number of channels must match grid.shape[0]"
+        )
+
+    if not np.issubdtype(channels.dtype, np.str_):
+        raise TypeError("Grid validation: 'channels' must be string dtype")
+
+    # -------------------------
+    # GRID SIZE
+    # -------------------------
+    if "grid_size" in data:
+        gs = data["grid_size"]
+
+        if not isinstance(gs, np.ndarray):
+            raise TypeError("grid_size must be np.ndarray")
+
+        if gs.shape != (1,) and gs.shape != (3,):
+            raise ValueError("grid_size must have shape (1,) or (3,)")
+
+        if not np.issubdtype(gs.dtype, np.integer):
+            raise TypeError("grid_size must be integer dtype")
+
+    # -------------------------
+    # VOXEL SIZE
+    # -------------------------
+    if "voxel_size" in data:
+        vs = data["voxel_size"]
+
+        if not isinstance(vs, np.ndarray):
+            raise TypeError("voxel_size must be np.ndarray")
+
+        if vs.shape not in [(1,), (3,)]:
+            raise ValueError("voxel_size must have shape (1,) or (3,)")
+
+        if not np.issubdtype(vs.dtype, np.floating):
+            raise TypeError("voxel_size must be float dtype")
+
+        if not np.isfinite(vs).all():
+            raise ValueError("voxel_size contains non-finite values")
+
+    # -------------------------
+    # ORIGIN
+    # -------------------------
+    if "origin" in data:
+        origin = data["origin"]
+
+        if not isinstance(origin, np.ndarray):
+            raise TypeError("origin must be np.ndarray")
+
+        if origin.shape != (3,):
+            raise ValueError("origin must have shape (3,)")
+
+        if not np.issubdtype(origin.dtype, np.floating):
+            raise TypeError("origin must be float dtype")
+
+        if not np.isfinite(origin).all():
+            raise ValueError("origin contains non-finite values")
+        
+
+    return True
+
