@@ -126,17 +126,96 @@ def _select_atom_altloc(atoms: Iterable[gemmi.Atom], altloc: str) -> Optional[ge
 
 
 # -----------------------
-# Residue-level (CA) bundle
+# Residue-level bundle
 # -----------------------
-def extract_ca_bundle(
+
+_ATOMIC_MASS = {
+    "H": 1.008,
+    "C": 12.011,
+    "N": 14.007,
+    "O": 15.999,
+    "S": 32.06,
+    "P": 30.974,
+}
+
+
+def _atomic_mass(atom: gemmi.Atom) -> float:
+    sym = atom.element.name.upper() if atom.element is not None else ""
+    return float(_ATOMIC_MASS.get(sym, 12.0))  # fallback
+
+
+def _selected_atoms_from_residue(res: gemmi.Residue, altloc: str) -> List[gemmi.Atom]:
+    """
+    Select one atom per atom-name according to altloc policy.
+    """
+    selected: List[gemmi.Atom] = []
+
+    atom_names = sorted({a.name for a in res})
+    for atom_name in atom_names:
+        if atom_name not in res:
+            continue
+        atom = _select_atom_altloc(res[atom_name], altloc)
+        if atom is not None:
+            selected.append(atom)
+
+    return selected
+
+
+def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
+    """
+    Returns:
+        np.ndarray shape (3,) or None if center cannot be computed
+        bfactor_ca: float
+        plddt_ca: float
+    """
+    # CA-based signals stay anchored to CA for backward compatibility
+    ca_atom = _select_atom_altloc(res["CA"], altloc) if "CA" in res else None
+
+    if ca_atom is not None:
+        b = float(ca_atom.b_iso)
+        bfactor_ca = b
+        plddt_ca = b if 0.0 <= b <= 100.0 else float("nan")
+    else:
+        bfactor_ca = float("nan")
+        plddt_ca = float("nan")
+
+    if mode == "ca":
+        if ca_atom is None:
+            return None, bfactor_ca, plddt_ca
+        p = ca_atom.pos
+        return np.asarray([float(p.x), float(p.y), float(p.z)], dtype=np.float32), bfactor_ca, plddt_ca
+
+    atoms = _selected_atoms_from_residue(res, altloc)
+    if not atoms:
+        return None, bfactor_ca, plddt_ca
+
+    coords = np.asarray([[float(a.pos.x), float(a.pos.y), float(a.pos.z)] for a in atoms], dtype=np.float32)
+
+    if mode == "mean":
+        center = coords.mean(axis=0).astype(np.float32)
+        return center, bfactor_ca, plddt_ca
+
+    if mode == "com":
+        masses = np.asarray([_atomic_mass(a) for a in atoms], dtype=np.float32)
+        msum = float(masses.sum())
+        if msum <= 0.0:
+            return None, bfactor_ca, plddt_ca
+        center = (coords * masses[:, None]).sum(axis=0) / msum
+        return center.astype(np.float32), bfactor_ca, plddt_ca
+
+    raise ValueError(f"Invalid residue_center: {mode!r}. Use 'ca', 'mean' or 'com'.")
+
+
+def extract_residue_bundle(
     chain: gemmi.Chain,
     amino_acids_only: bool = True,
     *,
     altloc: str = "first",
-    missing_ca: str = "skip",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    missing_residue: str = "skip",
+    mode: str = "ca",
+) -> Dict[str, np.ndarray]:
     """
-    Extract per-residue CA coordinates and basic residue-level signals.
+    Extract per-residue coordinates and basic residue-level signals.
 
     Parameters
     ----------
@@ -145,28 +224,35 @@ def extract_ca_bundle(
     amino_acids_only
         If True, keep only standard amino acids (3-letter in AA3_TO_AA1).
     altloc
-        Altloc policy for CA selection:
-          - "first" (default): first encountered (legacy-compatible)
-          - "max_occupancy": choose CA altloc with highest occupancy
-          - "<LETTER>": choose that altloc if present, else blank, else first
-    missing_ca
-        How to handle residues missing CA:
-          - "skip" (default): skip such residues
-          - "error": raise with a compact report
-          - "nan": keep residue with pos = [nan, nan, nan] (and bfactor/plddt as nan)
+        Altloc policy for atom selection.
+    missing_residue
+        acts as generic missing-center policy:
+          - "skip": skip residue if center cannot be computed
+          - "error": collect and raise
+          - "nan": keep residue with pos=[nan,nan,nan]
+    mode
+        Residue center definition:
+          - "ca": alpha carbon
+          - "mean": mean of selected residue atom coordinates
+          - "com": center of mass of selected residue atoms
 
-    Returns dict with:
+    Returns
     -------
-    pos : (N,3) float32
-    residue_ids : (N,) str
-    resname : (N,) str (3-letter)
-    aa_index : (N,) int16 in [0..20], 20 = unknown
-    plddt : (N,) float32 (NaN if not a [0,100] signal)
-    bfactor_ca : (N,) float32 (raw CA B-factor; NaN if missing_ca="nan")
+    dict with:
+        pos : (N,3) float32
+        residue_ids : (N,) str
+        resname : (N,) str
+        aa_index : (N,) int16
+        plddt : (N,) float32
+        bfactor_ca : (N,) float32
     """
-    missing_ca_policy = (missing_ca or "skip").strip().lower()
-    if missing_ca_policy not in {"skip", "error", "nan"}:
-        raise ValueError(f"Invalid missing_ca policy: {missing_ca!r}. Use 'skip', 'error', or 'nan'.")
+    missing_policy = (missing_residue or "skip").strip().lower()
+    if missing_policy not in {"skip", "error", "nan"}:
+        raise ValueError(f"Invalid missing_ca policy: {missing_residue!r}. Use 'skip', 'error', or 'nan'.")
+
+    mode = (mode or "ca").strip().lower()
+    if mode not in {"ca", "mean", "com"}:
+        raise ValueError(f"Invalid residue_center: {mode!r}. Use 'ca', 'mean' or 'com'.")
 
     coords: List[List[float]] = []
     ids: List[str] = []
@@ -174,7 +260,6 @@ def extract_ca_bundle(
     aa_idx: List[int] = []
     plddt_list: List[float] = []
     bfac_list: List[float] = []
-
     missing_ids: List[str] = []
 
     for res in chain:
@@ -184,72 +269,43 @@ def extract_ca_bundle(
             continue
 
         rid = _residue_id(chain, res)
+        aa1 = AA3_TO_AA1.get(r3, "X")
+        aa_index = AA1_TO_INDEX.get(aa1, UNKNOWN_INDEX)
 
-        if "CA" not in res:
-            if missing_ca_policy == "skip":
+        center, bfactor_ca, plddt_ca = _compute_residue_center(res, mode=mode, altloc=altloc)
+
+        if center is None:
+            if missing_policy == "skip":
                 continue
-            if missing_ca_policy == "error":
+            if missing_policy == "error":
                 missing_ids.append(rid)
                 continue
+
             # "nan"
             coords.append([float("nan"), float("nan"), float("nan")])
             ids.append(rid)
             resnames.append(r3)
-            aa1 = AA3_TO_AA1.get(r3, "X")
-            aa_idx.append(AA1_TO_INDEX.get(aa1, UNKNOWN_INDEX))
+            aa_idx.append(aa_index)
             plddt_list.append(float("nan"))
             bfac_list.append(float("nan"))
             continue
 
-        atom = _select_atom_altloc(res["CA"], altloc)
-        if atom is None:
-            # Extremely rare, but keep policy consistent
-            if missing_ca_policy == "skip":
-                continue
-            if missing_ca_policy == "error":
-                missing_ids.append(rid)
-                continue
-            coords.append([float("nan"), float("nan"), float("nan")])
-            ids.append(rid)
-            resnames.append(r3)
-            aa1 = AA3_TO_AA1.get(r3, "X")
-            aa_idx.append(AA1_TO_INDEX.get(aa1, UNKNOWN_INDEX))
-            plddt_list.append(float("nan"))
-            bfac_list.append(float("nan"))
-            continue
-
-        p = atom.pos
-        coords.append([float(p.x), float(p.y), float(p.z)])
+        coords.append(center.tolist())
         ids.append(rid)
         resnames.append(r3)
+        aa_idx.append(aa_index)
+        plddt_list.append(plddt_ca)
+        bfac_list.append(bfactor_ca)
 
-        aa1 = AA3_TO_AA1.get(r3, "X")
-        aa_idx.append(AA1_TO_INDEX.get(aa1, UNKNOWN_INDEX))
-
-        b = float(atom.b_iso)
-        bfac_list.append(b)
-
-        # pLDDT proxy heuristic: AF2/ESMFold typically uses 0..100 in B-factor field
-        plddt_list.append(b if 0.0 <= b <= 100.0 else float("nan"))
-
-    if missing_ca_policy == "error" and missing_ids:
+    if missing_policy == "error" and missing_ids:
         preview = ", ".join(missing_ids[:10])
         more = "" if len(missing_ids) <= 10 else f" (+{len(missing_ids) - 10} more)"
-        raise StructureLoadError(f"Missing CA in residues: {preview}{more}")
+        raise StructureLoadError(f"Missing residue center in residues: {preview}{more}")
 
     if not coords:
-        raise StructureLoadError("No CA residues found in selected chain (after filters/policies).")
+        raise StructureLoadError("No residue positions found in selected chain (after filters/policies).")
 
-    # pos = np.asarray(coords, dtype=np.float32)
-    # residue_ids = np.asarray(ids, dtype=np.str_)
-    # resname = np.asarray(resnames, dtype=np.str_)
-    # aa_index = np.asarray(aa_idx, dtype=np.int16)
-    # plddt = np.asarray(plddt_list, dtype=np.float32)
-    # bfactor_ca = np.asarray(bfac_list, dtype=np.float32)
-
-    # return pos, residue_ids, resname, aa_index, plddt, bfactor_ca
-
-    return  {
+    return {
         "pos": np.asarray(coords, dtype=np.float32),
         "residue_ids": np.asarray(ids, dtype=np.str_),
         "resname": np.asarray(resnames, dtype=np.str_),
@@ -257,8 +313,8 @@ def extract_ca_bundle(
         "plddt": np.asarray(plddt_list, dtype=np.float32),
         "bfactor_ca": np.asarray(bfac_list, dtype=np.float32),
     }
-    
 
+    
 
 def load_select_and_extract(inp, extractor: Callable[[object], T]) -> T:
     try:
@@ -277,19 +333,21 @@ def load_select_and_extract(inp, extractor: Callable[[object], T]) -> T:
         raise
 
 
-def load_and_extract(
+def load_and_extract_residue(
     inp: StructureInput,
     amino_acids_only: bool = True,
     *,
+    mode:str = "ca",
     altloc: str = "first",
     missing_ca: str = "skip",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     def _extract(ch):
-        return extract_ca_bundle(
+        return extract_residue_bundle(
             ch,
             amino_acids_only=amino_acids_only,
             altloc=altloc,
-            missing_ca=missing_ca,
+            missing_residue=missing_ca,
+            mode = mode,
         )
     return load_select_and_extract(inp, _extract)
 

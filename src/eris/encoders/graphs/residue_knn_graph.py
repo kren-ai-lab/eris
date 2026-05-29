@@ -31,11 +31,11 @@ class ResidueKNNGraph(BaseResidueEncoder):
     cutoff: float | None = 12.0  # max search radius for candidates (must be >= typical neighbor distances)
     symmetric: bool = True
     include_self_loops: bool = False
-    edge_attr_mode = "dist+rbf+seq+local"
-    node_attr_mode = "onehot+physchem+plddt_ca+bfactor_ca"
-    rbf_k = 16
-    rbf_dmax = 20.0
-    local_cutoff = 4
+    edge_attr_mode:str = "dist+rbf+seq+local"
+    node_attr_mode:str = "onehot+physchem+plddt_ca+bfactor_ca"
+    rbf_k:int = 16
+    rbf_dmax:float = 20.0
+    local_cutoff:float = 4
 
 
     #Overrides post_init to normalize cutoff before fingerprint calculation

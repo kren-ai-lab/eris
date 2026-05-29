@@ -38,10 +38,6 @@ class AtomPointCloud(BaseAtomEncoder):
     name: ClassVar[str] = "atom_point_cloud"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
     
-    # include_hetero: bool = False
-    # include_h: bool = False
-    # altloc: str = "first"  # "first" or "A"
-    # amino_acids_only: bool = False
     node_attr_mode: str = "elem+role+bfactor+occ"
     
 
@@ -81,10 +77,6 @@ class AtomPointCloud(BaseAtomEncoder):
     def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
 
         meta["params"].update({
-            # "include_hetero": bool(self.include_hetero),
-            # "include_h": bool(self.include_h),
-            # "altloc": str(self.altloc),
-            # "amino_acids_only": bool(self.amino_acids_only),
             "mode": str(self.node_attr_mode),}
         )
 

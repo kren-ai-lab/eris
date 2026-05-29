@@ -27,11 +27,11 @@ class ResidueContactGraph(BaseResidueEncoder):
     #Instance
     include_self_loops: bool = False    
     cutoff: float = 8.0
-    node_attr_mode = "onehot+physchem+plddt_ca+bfactor_ca"
-    edge_attr_mode = "dist+rbf+seq+local"
-    rbf_k = 16
-    rbf_dmax = 20.0
-    local_cutoff = 4
+    node_attr_mode:str = "onehot+physchem+plddt_ca+bfactor_ca"
+    edge_attr_mode:str = "dist+rbf+seq+local"
+    rbf_k:int = 16
+    rbf_dmax:float = 20.0
+    local_cutoff:float = 4
     
 
     def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:

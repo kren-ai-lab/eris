@@ -17,37 +17,6 @@ if TYPE_CHECKING:
     from eris.core.representations.base_rep import BaseRepresentation
 
 
-# def _knn_edge_index(pos: np.ndarray, k: int) -> np.ndarray:
-#     """
-#     Naive O(N^2) kNN (directed).
-#     edge_index shape (2,E)
-#     """
-#     pos = np.asarray(pos, dtype=np.float32)
-#     n = int(pos.shape[0])
-#     if n <= 1:
-#         return np.zeros((2, 0), dtype=np.int64)
-
-#     k_eff = int(max(1, min(k, n - 1)))
-
-#     diff = pos[:, None, :] - pos[None, :, :]
-#     dist = np.sqrt((diff ** 2).sum(axis=-1)).astype(np.float32)
-#     np.fill_diagonal(dist, np.inf)
-
-#     nn = np.argpartition(dist, kth=k_eff - 1, axis=1)[:, :k_eff]  # (N,k)
-#     src = np.repeat(np.arange(n, dtype=np.int64), k_eff)
-#     dst = nn.reshape(-1).astype(np.int64)
-#     return np.stack([src, dst], axis=0)
-
-
-# def _edge_dist(pos: np.ndarray, edge_index: np.ndarray) -> np.ndarray:
-#     if edge_index.shape[1] == 0:
-#         return np.zeros((0,), dtype=np.float32)
-#     src = edge_index[0]
-#     dst = edge_index[1]
-#     d = pos[src] - pos[dst]
-#     return np.sqrt((d * d).sum(axis=1)).astype(np.float32)
-
-
 @dataclass
 class AtomKNNGraph(BaseAtomEncoder):
     """
@@ -69,12 +38,6 @@ class AtomKNNGraph(BaseAtomEncoder):
     cutoff: float | None = 12.0 # max search radius for candidates (must be >= typical neighbor distances) None = Global mode
     symmetric: bool = True
 
-    # include_self_loops: bool = False
-    # include_hetero: bool = False
-    # include_h: bool = False
-    # altloc: str = "first"
-    # amino_acids_only: bool = False
-
     node_attr_mode: str = "elem+role+bfactor+occ"
     
     # edge feature params
@@ -90,16 +53,6 @@ class AtomKNNGraph(BaseAtomEncoder):
 
         pos = pos_out.astype(np.float32)
         n = int(pos.shape[0])
-
-        # edge_index = _knn_edge_index(pos, k=int(self.k))
-
-        # if (not self.include_self_loops) and edge_index.shape[1] > 0:
-        #     src = edge_index[0]
-        #     dst = edge_index[1]
-        #     keep = src != dst
-        #     edge_index = edge_index[:, keep]
-
-        # edge_dist = _edge_dist(pos, edge_index)
 
         edge_index, edge_dist = knn_edges(
             pos=pos_out,
@@ -160,11 +113,6 @@ class AtomKNNGraph(BaseAtomEncoder):
     def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         meta["params"].update({
                 "k": int(self.k),
-                #"include_self_loops": bool(self.include_self_loops),
-                # "include_hetero": bool(self.include_hetero),
-                # "include_h": bool(self.include_h),
-                # "altloc": str(self.altloc),
-                # "amino_acids_only": bool(self.amino_acids_only),
                 "rbf_k": int(self.rbf_k),
                 "rbf_dmax": float(self.rbf_dmax),
                 "local_cutoff": int(self.local_cutoff),

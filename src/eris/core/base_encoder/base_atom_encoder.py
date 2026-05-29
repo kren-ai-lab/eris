@@ -17,3 +17,6 @@ class BaseAtomEncoder(BaseEncoder):
     def _load_structure(self, ctx: EncodingContext):
         strc = load_and_extract_atoms(ctx.inp)
         return strc
+    
+    def _update_granularity_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+        return meta

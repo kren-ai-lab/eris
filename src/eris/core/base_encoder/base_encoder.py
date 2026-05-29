@@ -182,6 +182,7 @@ class BaseEncoder(ABC):
 
         data = self._create_data(ctx=ctx)
         meta = self._base_metadata(ctx=ctx)
+        meta = self._update_granularity_metadata(meta=meta, ctx=ctx)
         meta = self._update_params_metadata(meta=meta, ctx=ctx)
         meta = self._finalize_metadata(meta=meta)
 
@@ -227,9 +228,16 @@ class BaseEncoder(ABC):
 
 
     @abstractmethod
-    def _update_params_metadata(self, ctx: EncodingContext) -> Dict[str, Any]:
+    def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         """
         Must be implemented in encoder class.
+        """
+        raise NotImplementedError
+    
+
+    def _update_granularity_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+        """
+        Must be implemented in base granularity (atom/residue) class.
         """
         raise NotImplementedError
 
