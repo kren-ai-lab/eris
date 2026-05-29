@@ -32,7 +32,7 @@ class ResidueKNNGraph(BaseResidueEncoder):
     symmetric: bool = True
     include_self_loops: bool = False
     edge_attr_mode = "dist+rbf+seq+local"
-    node_attr_mode = "onehot+physchem+plddt+bfactor"
+    node_attr_mode = "onehot+physchem+plddt_ca+bfactor_ca"
     rbf_k = 16
     rbf_dmax = 20.0
     local_cutoff = 4
@@ -75,11 +75,12 @@ class ResidueKNNGraph(BaseResidueEncoder):
         stats = compute_graph_stats(edge_index=edge_index, edge_dist=edge_dist, n_nodes=n)
         graph_attr, graph_attr_keys = pack_graph_stats(stats)
 
-        node_attr = build_node_attr(
+        node_attr, node_attr_keys = build_node_attr(
             strc["aa_index"],
             plddt=strc["plddt"],
             bfactor_ca=strc["bfactor_ca"],
             mode=self.node_attr_mode,
+            return_keys=True
         )
 
         if self.include_self_loops:
@@ -90,7 +91,7 @@ class ResidueKNNGraph(BaseResidueEncoder):
             edge_index = np.concatenate([edge_index, loop_edges], axis=1)
             edge_dist = np.concatenate([edge_dist, loop_dist], axis=0)
 
-        edge_attr = build_edge_attr(
+        edge_attr, edge_attr_keys = build_edge_attr(
             edge_index=edge_index,
             edge_dist=edge_dist,
             mode=self.edge_attr_mode,
@@ -98,7 +99,11 @@ class ResidueKNNGraph(BaseResidueEncoder):
             rbf_dmax=self.rbf_dmax,
             seq_pos=seq_pos,
             local_cutoff=self.local_cutoff,
+            return_keys=True
         )
+
+        ctx.runtime["node_attr_keys"] = node_attr_keys
+        ctx.runtime["edge_attr_keys"] = edge_attr_keys
 
         data: Dict[str, Any] = {
             "pos": pos_out.astype(np.float32),

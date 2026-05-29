@@ -1,5 +1,6 @@
 from typing import Any, Dict, ClassVar
 
+from eris.core.base_encoder import EncodingContext
 from eris.core.representations.base_rep import BaseRepresentation
 from eris.core.contracts.distogram_contract import DistogramContract
 
@@ -11,7 +12,7 @@ class DistogramRepresentation(BaseRepresentation):
         return [DistogramContract()]
     
 
-    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:
+    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         keys = {}
 
         keys["matrix_key"] = "dist"
@@ -27,7 +28,7 @@ class DistogramBinsRepresentation(BaseRepresentation):
         return [DistogramContract()]
     
 
-    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:
+    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         keys = {}
 
         keys["matrix_key"] = "dist_bins"

@@ -20,19 +20,22 @@ class ResiduePointCloudCA(BaseResidueEncoder):
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
 
     #Instance
-    node_attr_mode: str = "onehot+physchem+plddt+bfactor"
+    node_attr_mode: str = "onehot+physchem+plddt_ca+bfactor_ca"
 
     def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
         strc = ctx.raw_structure
         centroid = ctx.centroid
         pos_out = ctx.pos
 
-        node_attr = build_node_attr(
+        node_attr, node_attr_keys = build_node_attr(
             strc["aa_index"],
             plddt=strc["plddt"],
             bfactor_ca=strc["bfactor_ca"],
             mode=self.node_attr_mode,
+            return_keys=True
         )
+
+        ctx.runtime["node_attr_keys"] = node_attr_keys
 
         data: Dict[str, Any] = {
             "pos": pos_out.astype(np.float32),

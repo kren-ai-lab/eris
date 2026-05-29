@@ -167,8 +167,8 @@ class BaseEncoder(ABC):
         return centroid, pos_out
 
 
-    def _build_feature_keys(self, data, meta):
-        return self.representation.feature_keys(data, meta)
+    def _build_feature_keys(self, data, meta, ctx):
+        return self.representation.feature_keys(data, meta, ctx)
 
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
@@ -185,7 +185,7 @@ class BaseEncoder(ABC):
         meta = self._update_params_metadata(meta=meta, ctx=ctx)
         meta = self._finalize_metadata(meta=meta)
 
-        artifact: StructureArtifact = self._assemble_output(data=data, meta=meta)
+        artifact: StructureArtifact = self._assemble_output(data=data, meta=meta, ctx=ctx)
         
         if self.use_cache:
             cache.set(key, data=artifact.data, meta=artifact.meta)
@@ -215,7 +215,7 @@ class BaseEncoder(ABC):
         """
         Implemented in base atom and base residue classes.
         """
-        pass
+        raise NotImplementedError
 
 
     @abstractmethod
@@ -223,7 +223,7 @@ class BaseEncoder(ABC):
         """
         Must be implemented in encoder class.
         """
-        pass
+        raise NotImplementedError
 
 
     @abstractmethod
@@ -231,7 +231,7 @@ class BaseEncoder(ABC):
         """
         Must be implemented in encoder class.
         """
-        pass
+        raise NotImplementedError
 
     
     def _base_metadata(self, ctx: EncodingContext) -> Dict[str, Any]:
@@ -267,12 +267,12 @@ class BaseEncoder(ABC):
         self,
         data: Dict[str, Any],
         meta: Dict[str, Any],
-        #ctx: EncodingContext,
+        ctx: EncodingContext,
     ) -> StructureArtifact:
         for contract in self.contracts():
             contract.validate(data)
 
-        meta["feature_keys"] = self._build_feature_keys(data, meta)
+        meta["feature_keys"] = self._build_feature_keys(data, meta, ctx)
 
         meta["encoder_fingerprint"] = self.fingerprint()
 

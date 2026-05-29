@@ -1,8 +1,8 @@
 from typing import Any, Dict, ClassVar
 
+from eris.core.base_encoder import EncodingContext
 from eris.core.representations.base_rep import BaseRepresentation
 from eris.core.contracts.point_cloud_contract import PointCloudContract
-from eris.core.encoder_metadata import build_attr_keys, NODE_ATTR_KEY_MAP
 
 
 class PointCloudRepresentation(BaseRepresentation):
@@ -11,7 +11,7 @@ class PointCloudRepresentation(BaseRepresentation):
     def contracts(self):
         return [PointCloudContract()]
     
-    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:
+    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         keys = {}
         params = meta.get("params", {})
 
@@ -19,8 +19,6 @@ class PointCloudRepresentation(BaseRepresentation):
         if "node_attr" in data:
             mode = params.get("node_attr_mode")
             if mode is not None:
-                keys["node_attr_keys"] = build_attr_keys(
-                    mode, NODE_ATTR_KEY_MAP
-                )
+                keys["node_attr_keys"] = ctx.runtime["node_attr_keys"]
 
         return keys

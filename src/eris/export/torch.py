@@ -52,6 +52,9 @@ def _graph_to_torch(data: Dict[str, Any]):
     """
     """
     out: Dict[str, Any] = {}
+    
+    if "node_attr" not in data:
+        raise KeyError("Graph must have node_attr to export.")
 
     out["x"] = _to_tensor(data["node_attr"], dtype="float32")
     out["edge_index"] = _to_tensor(data["edge_index"], dtype="int64")

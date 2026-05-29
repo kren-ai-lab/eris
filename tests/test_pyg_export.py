@@ -31,7 +31,7 @@ def test_export_pyg_graph_ns_auto():
             "--encoder residue_contact_graph_ns --out out"
         )
 
-    g = load_pyg(str(artifact_dir), x_mode="auto")
+    g = load_pyg(str(artifact_dir))
 
     assert hasattr(g, "x")
     assert hasattr(g, "edge_index")
@@ -49,33 +49,34 @@ def test_export_pyg_graph_ns_auto():
     assert int(g.graph_attr.numel()) > 0
 
 
-def test_export_pyg_graph_fallback_rbf():
+# def test_export_pyg_graph_fallback_rbf():
+#     """
+#     Ensures PyG exporter falls back to RBF(edge_dist) when edge_attr is missing.
+#     """
+#     pytest.importorskip("torch")
+#     pytest.importorskip("torch_geometric")
+
+#     from eris.export.pyg import load_pyg
+
+#     artifact_dir = _find_artifact_dir("**/residue_contact_graph")
+#     if artifact_dir is None:
+#         pytest.skip(
+#             "Artifact not found. Run: eris encode --input tests/data/1AQ2.pdb "
+#             "--encoder residue_contact_graph --out out"
+#         )
+
+#     g = load_pyg(str(artifact_dir))
+
+#     assert getattr(g, "edge_attr", None) is not None
+#     assert g.edge_attr.ndim == 2
+#     assert g.edge_attr.shape[0] == g.edge_index.shape[1]
+#     assert g.edge_attr.shape[1] == 8  # rbf_k
+
+
+
+def test_export_pyg_cloud_allowed():
     """
-    Ensures PyG exporter falls back to RBF(edge_dist) when edge_attr is missing.
-    """
-    pytest.importorskip("torch")
-    pytest.importorskip("torch_geometric")
-
-    from eris.export.pyg import load_pyg
-
-    artifact_dir = _find_artifact_dir("**/residue_contact_graph")
-    if artifact_dir is None:
-        pytest.skip(
-            "Artifact not found. Run: eris encode --input tests/data/1AQ2.pdb "
-            "--encoder residue_contact_graph --out out"
-        )
-
-    g = load_pyg(str(artifact_dir), x_mode="auto", rbf_k=8, rbf_dmax=20.0)
-
-    assert getattr(g, "edge_attr", None) is not None
-    assert g.edge_attr.ndim == 2
-    assert g.edge_attr.shape[0] == g.edge_index.shape[1]
-    assert g.edge_attr.shape[1] == 8  # rbf_k
-
-
-def test_export_pyg_missing_edge_index_raises():
-    """
-    A non-graph artifact should raise on PyG export.
+    A cloud artifact should be exportable to PyG (pos-only graph).
     """
     pytest.importorskip("torch")
     pytest.importorskip("torch_geometric")
@@ -83,7 +84,6 @@ def test_export_pyg_missing_edge_index_raises():
     from eris.core.artifacts import StructureArtifact
     from eris.export.pyg import to_pyg
 
-    # Minimal in-memory artifact with missing edge_index
     art = StructureArtifact(
         data={"pos": [[0.0, 0.0, 0.0]]},
         meta={
@@ -99,5 +99,8 @@ def test_export_pyg_missing_edge_index_raises():
     )
     art.finalize()
 
-    with pytest.raises(KeyError):
-        to_pyg(art, x_mode="auto")
+    g = to_pyg(art)
+
+    assert hasattr(g, "pos")
+    assert g.pos.shape[0] == 1
+

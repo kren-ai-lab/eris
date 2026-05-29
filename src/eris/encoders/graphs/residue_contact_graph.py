@@ -27,7 +27,7 @@ class ResidueContactGraph(BaseResidueEncoder):
     #Instance
     include_self_loops: bool = False    
     cutoff: float = 8.0
-    node_attr_mode = "onehot+physchem+plddt+bfactor"
+    node_attr_mode = "onehot+physchem+plddt_ca+bfactor_ca"
     edge_attr_mode = "dist+rbf+seq+local"
     rbf_k = 16
     rbf_dmax = 20.0
@@ -49,11 +49,12 @@ class ResidueContactGraph(BaseResidueEncoder):
         seq_pos = np.arange(n, dtype=np.int64)
 
         
-        node_attr = build_node_attr(
+        node_attr, node_attr_keys = build_node_attr(
             strc["aa_index"],
             plddt=strc["plddt"],
             bfactor_ca=strc["bfactor_ca"],
             mode=self.node_attr_mode,
+            return_keys=True
         )
 
 
@@ -69,7 +70,7 @@ class ResidueContactGraph(BaseResidueEncoder):
             # you may want to recompute edge_attr OR append loop edge_attr rows.
             # Here we leave it as-is to match your original logic.
 
-        edge_attr = build_edge_attr(
+        edge_attr, edge_attr_keys = build_edge_attr(
             edge_index=edge_index,
             edge_dist=edge_dist,
             mode=self.edge_attr_mode,
@@ -77,8 +78,12 @@ class ResidueContactGraph(BaseResidueEncoder):
             rbf_dmax=self.rbf_dmax,
             seq_pos=seq_pos,
             local_cutoff=self.local_cutoff,
+            return_keys=True
         )
-
+ 
+        ctx.runtime["node_attr_keys"] = node_attr_keys
+        ctx.runtime["edge_attr_keys"] = edge_attr_keys
+        
         data: Dict[str, Any] = {
             "pos": pos_out.astype(np.float32),
             "centroid": centroid.astype(np.float32),

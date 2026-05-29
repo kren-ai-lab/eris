@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 from typing import Dict, List
+import numpy as np
+
+# Not importing from roxy "pKa values and residue classes"
+from roxy.core.constants import KD, EISENBERG, HYDROPHILICITY,\
+    SIDECHAIN_MASS, VOLUME, AA_MOLECULAR_WEIGHT, BOMAN, POLARITY,\
+    FLEXIBILITY, CF_HELIX, CF_SHEET, CF_TURN, TOP_IDP, DONORS, ACCEPTORS
+
 
 # Canonical AA vocab for Eris (matches typical AA_index conventions)
 # 20 standard + X for unknown
@@ -8,6 +15,79 @@ AA_VOCAB: List[str] = list("ACDEFGHIKLMNPQRSTVWY") + ["X"]
 AA_TO_INDEX: Dict[str, int] = {aa: i for i, aa in enumerate(AA_VOCAB)}
 UNKNOWN_AA = "X"
 UNKNOWN_INDEX = AA_TO_INDEX[UNKNOWN_AA]
+
+
+# Auxiliary func. Looks in roxy dict by index.
+def _build_lookup_from_roxy(roxy_dict: Dict[str, float]) -> np.ndarray:
+    lookup = np.zeros(len(AA_VOCAB), dtype=np.float32)
+
+    for aa in AA_VOCAB:
+        if aa in roxy_dict:
+            lookup[AA_TO_INDEX[aa]] = roxy_dict[aa]
+        else:
+            lookup[AA_TO_INDEX[aa]] = 0.0   # Default for X or other AA
+
+    return lookup
+
+
+# -------------------------
+# Roxy Residue Features
+# -------------------------
+
+_KD_LOOKUP = _build_lookup_from_roxy(KD)
+_EISENBERG_LOOKUP = _build_lookup_from_roxy(EISENBERG)
+_HYDROPHILICITY_LOOKUP = _build_lookup_from_roxy(HYDROPHILICITY)
+_SIDECHAIN_MASS_LOOKUP = _build_lookup_from_roxy(SIDECHAIN_MASS)
+_VOLUME_LOOKUP = _build_lookup_from_roxy(VOLUME)
+_AA_MOLECULAR_WEIGHT_LOOKUP = _build_lookup_from_roxy(AA_MOLECULAR_WEIGHT)
+_BOMAN_LOOKUP = _build_lookup_from_roxy(BOMAN)
+_POLARITY_LOOKUP = _build_lookup_from_roxy(POLARITY)
+_FLEXIBILITY_LOOKUP = _build_lookup_from_roxy(FLEXIBILITY)
+_CF_HELIX_LOOKUP = _build_lookup_from_roxy(CF_HELIX)
+_CF_SHEET_LOOKUP = _build_lookup_from_roxy(CF_SHEET)
+_CF_TURN_LOOKUP = _build_lookup_from_roxy(CF_TURN)
+_TOP_IDP_LOOKUP = _build_lookup_from_roxy(TOP_IDP)
+_DONORS_LOOKUP = _build_lookup_from_roxy(DONORS)
+_ACCEPTORS_LOOKUP = _build_lookup_from_roxy(ACCEPTORS)
+
+# DO NOT change ordering/keys once released.
+PHYSCHEM_LOOKUPS = [
+    ("hydrophobicity_kd", _KD_LOOKUP),
+    ("hydrophobicity_eisenberg", _EISENBERG_LOOKUP),
+    ("hydrophilicity", _HYDROPHILICITY_LOOKUP),
+    ("sidechain_mass", _SIDECHAIN_MASS_LOOKUP),
+    ("volume", _VOLUME_LOOKUP),
+    ("molecular_weight", _AA_MOLECULAR_WEIGHT_LOOKUP),
+    ("boman", _BOMAN_LOOKUP),
+    ("polarity", _POLARITY_LOOKUP),
+    ("flexibility", _FLEXIBILITY_LOOKUP),
+    ("cf_helix", _CF_HELIX_LOOKUP),
+    ("cf_sheet", _CF_SHEET_LOOKUP),
+    ("cf_turn", _CF_TURN_LOOKUP),
+    ("top_idp", _TOP_IDP_LOOKUP),
+    ("hbond_donor", _DONORS_LOOKUP),
+    ("hbond_acceptor", _ACCEPTORS_LOOKUP),
+]
+
+PHYSchem_KEYS = [f"physchem.{name}" for name, _ in PHYSCHEM_LOOKUPS]
+
+
+
+AAINDEX_BASIC_SUBIDX = [
+    0,   # hydrophobicity_kd
+    4,   # volume
+    7,   # polarity
+    8,   # flexibility
+    6,   # boman
+    2,   # hydrophilicity
+]
+
+AAINDEX_BASIC_KEYS = [PHYSchem_KEYS[i] for i in AAINDEX_BASIC_SUBIDX]
+
+
+# -------------------------
+# Old Features
+# -------------------------
 
 # --- Deterministic physchem set (fixed + documented)
 # Values are simple, stable proxies (not meant to be "best", meant to be consistent).
@@ -19,7 +99,7 @@ UNKNOWN_INDEX = AA_TO_INDEX[UNKNOWN_AA]
 # aromatic/aliphatic/hbond_* are binary proxies
 #
 # You can refine later, but DO NOT change ordering/keys once released.
-PHYSchem_KEYS = [
+PHYSchem_old_KEYS = [
     "hydrophobicity_kd",
     "volume",
     "polarity",
@@ -30,7 +110,7 @@ PHYSchem_KEYS = [
     "hbond_acceptor",
 ]
 
-PHYSchem: Dict[str, List[float]] = {
+PHYSchem_old: Dict[str, List[float]] = {
     # KD hydrophobicity, volume (A^3 proxy), polarity (proxy), charge, aromatic, aliphatic, donor, acceptor
     "A": [ 1.8,  88.6,  8.1,  0.0, 0.0, 1.0, 0.0, 0.0],
     "C": [ 2.5, 108.5,  5.5,  0.0, 0.0, 0.0, 0.0, 0.0],
@@ -57,7 +137,7 @@ PHYSchem: Dict[str, List[float]] = {
 
 # --- AAindex basic subset (fixed)
 # Here we choose a small subset of the above proxies (6 dims) to keep it stable.
-AAINDEX_BASIC_KEYS = [
+AAINDEX_BASIC_KEYS_old = [
     "aaindex.hydrophobicity_kd",
     "aaindex.volume",
     "aaindex.polarity",
@@ -65,3 +145,13 @@ AAINDEX_BASIC_KEYS = [
     "aaindex.aromatic",
     "aaindex.aliphatic",
 ]
+
+AAINDEX_BASIC_SUBIDX_OLD = [0,1,2,3,4,5]
+
+
+# -------------------------
+# Atom Features
+# -------------------------
+
+
+
