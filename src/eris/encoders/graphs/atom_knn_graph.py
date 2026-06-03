@@ -11,7 +11,7 @@ from eris.core.representations import GraphRepresentation
 from eris.features.node.atom import build_node_attr
 from eris.features.edge.edge import build_edge_attr
 from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
-from eris.features.spatial.knn import knn_edges
+from eris.spatial.knn import knn_edges
 
 if TYPE_CHECKING:
     from eris.core.representations.base_rep import BaseRepresentation
@@ -25,7 +25,7 @@ class AtomKNNGraph(BaseAtomEncoder):
     Outputs:
       - pos, edge_index, edge_dist
       - node_attr (fixed dim)
-      - edge_attr (dist+rbf+seq+local)
+      - edge_attr_mode (dist+rbf+seq+local)
       - graph_attr (+ keys)
       - plus raw per-atom fields: elem_index, atom_role, bfactor, occ, residue_ids, atom_name, etc.
     """
@@ -41,7 +41,7 @@ class AtomKNNGraph(BaseAtomEncoder):
     node_attr_mode: str = "elem+role+bfactor+occ"
     
     # edge feature params
-    edge_mode = "dist+rbf+seq+local"
+    edge_attr_mode = "dist+rbf+seq+local"
     rbf_k: int = 16
     rbf_dmax: float = 20.0
     local_cutoff: int = 4
@@ -63,27 +63,33 @@ class AtomKNNGraph(BaseAtomEncoder):
 
 
         # deterministic baseline attributes
-        node_attr = build_node_attr(
+        node_attr, node_attr_keys = build_node_attr(
             elem_index=strc["elem_index"],
             atom_role=strc["atom_role"],
             bfactor=strc["bfactor"],
             occ=strc["occ"],
             bfactor_norm=True,
-            mode=self.node_attr_mode
+            mode=self.node_attr_mode,
+            return_keys=True,
         )
 
-        edge_attr = build_edge_attr(
+        edge_attr, edge_attr_keys = build_edge_attr(
             edge_dist=edge_dist,
             edge_index=edge_index,
-            mode = self.edge_mode,
+            mode = self.edge_attr_mode,
             seq_pos=strc["seq_pos_residue"],
             rbf_k=int(self.rbf_k),
             rbf_dmax=float(self.rbf_dmax),
             local_cutoff=int(self.local_cutoff),
+            return_keys=True,
         )
 
         stats = compute_graph_stats(edge_index, edge_dist, n_nodes=n)
         graph_attr, graph_attr_keys = pack_graph_stats(stats)
+
+        ctx.runtime["node_attr_keys"] = node_attr_keys
+        ctx.runtime["edge_attr_keys"] = edge_attr_keys
+        ctx.runtime["graph_attr_keys"] = graph_attr_keys
 
         data: Dict[str, Any] = {
             "pos": pos.astype(np.float32),
@@ -93,7 +99,6 @@ class AtomKNNGraph(BaseAtomEncoder):
             "node_attr": node_attr.astype(np.float32),
             "edge_attr": edge_attr.astype(np.float32),
             "graph_attr": graph_attr.astype(np.float32),
-            "graph_attr_keys": np.asarray(graph_attr_keys, dtype=np.str_),
 
             # raw atom fields (useful + deterministic)
             "elem_index": strc["elem_index"].astype(np.int16),
@@ -113,6 +118,8 @@ class AtomKNNGraph(BaseAtomEncoder):
     def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         meta["params"].update({
                 "k": int(self.k),
+                "node_attr_mode": self.node_attr_mode,
+                "edge_attr_mode": self.edge_attr_mode,
                 "rbf_k": int(self.rbf_k),
                 "rbf_dmax": float(self.rbf_dmax),
                 "local_cutoff": int(self.local_cutoff),

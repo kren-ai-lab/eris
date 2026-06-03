@@ -17,8 +17,6 @@ class PointCloudRepresentation(BaseRepresentation):
 
         # Node feature keys
         if "node_attr" in data:
-            mode = params.get("node_attr_mode")
-            if mode is not None:
-                keys["node_attr_keys"] = ctx.runtime["node_attr_keys"]
+            keys["node_attr_keys"] = ctx.runtime["node_attr_keys"]
 
         return keys

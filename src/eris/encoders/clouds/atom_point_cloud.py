@@ -77,7 +77,7 @@ class AtomPointCloud(BaseAtomEncoder):
     def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
 
         meta["params"].update({
-            "mode": str(self.node_attr_mode),}
+            "node_attr_mode": str(self.node_attr_mode),}
         )
 
         return meta

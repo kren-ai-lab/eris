@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Tuple, ClassVar
 
 import numpy as np
 
-from eris.features.spatial.spatial_index import cell_index, build_cell_dict, _NEIGHBOR_OFFSETS
+from eris.spatial.spatial_index import cell_index, build_cell_dict, _NEIGHBOR_OFFSETS
 
 
 def _collect_local_neighbor_candidates(pos: np.ndarray, cutoff: float) -> List[List[Tuple[int, float]]]:

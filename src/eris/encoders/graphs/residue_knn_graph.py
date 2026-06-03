@@ -13,7 +13,7 @@ from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
 from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.features.node.residue import build_node_attr
 from eris.core.representations import GraphRepresentation
-from eris.features.spatial.knn import knn_edges
+from eris.spatial.knn import knn_edges
 
 if TYPE_CHECKING:
     from eris.core.representations.base_rep import BaseRepresentation
@@ -104,6 +104,7 @@ class ResidueKNNGraph(BaseResidueEncoder):
 
         ctx.runtime["node_attr_keys"] = node_attr_keys
         ctx.runtime["edge_attr_keys"] = edge_attr_keys
+        ctx.runtime["graph_attr_keys"] = graph_attr_keys
 
         data: Dict[str, Any] = {
             "pos": pos_out.astype(np.float32),
@@ -116,7 +117,6 @@ class ResidueKNNGraph(BaseResidueEncoder):
             "node_attr": node_attr.astype(np.float32),
             "edge_attr": edge_attr.astype(np.float32),
             "graph_attr": np.asarray(graph_attr, dtype=np.float32),
-            "graph_attr_keys": np.asarray(graph_attr_keys, dtype=np.str_),
         }
 
         if strc["plddt"] is not None:

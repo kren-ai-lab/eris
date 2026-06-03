@@ -11,7 +11,7 @@ from eris.core.representations import GraphRepresentation
 from eris.features.node.residue import build_node_attr
 from eris.features.edge.edge import build_edge_attr
 from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
-from eris.features.spatial.contact_graph import neighbor_search_edges
+from eris.spatial.contact_graph import neighbor_search_edges
 
 
 if TYPE_CHECKING:
@@ -83,6 +83,7 @@ class ResidueContactGraph(BaseResidueEncoder):
  
         ctx.runtime["node_attr_keys"] = node_attr_keys
         ctx.runtime["edge_attr_keys"] = edge_attr_keys
+        ctx.runtime["graph_attr_keys"] = graph_attr_keys
         
         data: Dict[str, Any] = {
             "pos": pos_out.astype(np.float32),
@@ -95,7 +96,6 @@ class ResidueContactGraph(BaseResidueEncoder):
             "node_attr": node_attr.astype(np.float32),
             "edge_attr": edge_attr.astype(np.float32),
             "graph_attr": np.asarray(graph_attr, dtype=np.float32),
-            "graph_attr_keys": np.asarray(graph_attr_keys, dtype=np.str_),
         }
 
         if strc["plddt"] is not None:

@@ -29,18 +29,26 @@ def register_atom_node_feature(spec: FeatureSpec):
     return spec
 
 
+GRAPH_EDGE_REGISTRY: Dict[str, FeatureSpec] = {}
+def register_graph_edge_feature(spec: FeatureSpec):
+    if spec.token in GRAPH_EDGE_REGISTRY:
+        raise ValueError(f"Duplicate feature token: {spec.token}")
+    GRAPH_EDGE_REGISTRY[spec.token] = spec
+    return spec
+
+
 # Can be used for any feature.
-# TODO: Implement EDGE_GRAPH/GRAPH_STATS/etc.
+# Implement GRAPH_STATS/etc if necessary.
 #   Remember to change the corresponding encoder and core/represesentation
 #   to pass keys to ctx (in encoder) and then use ctx to
 #   build the feature keys (in corresponding representation)
 #
 # Example:
-# EDGE_GRAPH_REGISTRY: Dict[str, FeatureSpec] = {}
+# GRAPH_STATS: Dict[str, FeatureSpec] = {}
 # def register_edge_graph_feature(spec: FeatureSpec):
-#     if spec.token in EDGE_GRAPH_REGISTRY:
+#     if spec.token in GRAPH_STATS:
 #         raise ValueError(f"Duplicate feature token: {spec.token}")
-#     EDGE_GRAPH_REGISTRY[spec.token] = spec
+#     GRAPH_STATS[spec.token] = spec
 #     return spec
 
 

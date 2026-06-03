@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 
 from eris.features.utils import parse_mode
-from eris.features.rbf import compute_rbf as rbf_encode
+from eris.features.feature_registry import build_from_registry, GRAPH_EDGE_REGISTRY
 
 
 def build_edge_attr(
@@ -23,7 +23,7 @@ def build_edge_attr(
     Tokens:
       - dist
       - rbf
-      - seq_sep
+      - seq
       - local   (is_local flag based on seq_sep <= local_cutoff)
     """
     ei = np.asarray(edge_index, dtype=np.int64)
@@ -37,24 +37,6 @@ def build_edge_attr(
 
     toks = parse_mode(mode)
 
-    feats: List[np.ndarray] = []
-    keys: List[str] = []
-
-    # dist
-    if "dist" in toks or "rbf" in toks or "seq_sep" in toks or "local" in toks:
-        feats.append(dist.reshape(-1, 1).astype(np.float32))
-        keys.append("dist")
-
-    # rbf
-    if "rbf" in toks:
-        if E == 0:
-            r = np.zeros((0, int(rbf_k)), dtype=np.float32)
-        else:
-            r = rbf_encode(dist, num_kernels=int(rbf_k), dmin=0.0, dmax=float(rbf_dmax))
-        feats.append(r.astype(np.float32))
-        keys.extend([f"rbf.{i}" for i in range(int(rbf_k))])
-
-    # seq_sep + local flag
     if ("seq_sep" in toks) or ("local" in toks):
         if seq_pos is None:
             seq_sep = np.zeros((E,), dtype=np.float32)
@@ -64,14 +46,23 @@ def build_edge_attr(
             dst = ei[1]
             seq_sep = np.abs(sp[src] - sp[dst]).astype(np.float32)
 
-        if "seq_sep" in toks:
-            feats.append(seq_sep.reshape(-1, 1).astype(np.float32))
-            keys.append("seq_sep")
+    data = {
+        "ei": ei,
+        "dist": dist,
+        "E": E
+    }
 
-        if "local" in toks:
-            is_local = (seq_sep <= float(local_cutoff)).astype(np.float32).reshape(-1, 1)
-            feats.append(is_local.astype(np.float32))
-            keys.append(f"flag.is_local_le_{int(local_cutoff)}")
+    ctx = {
+        "rbf_k": rbf_k,
+        "rbf_dmax": rbf_dmax,
+        "local_cutoff": local_cutoff,
+        "seq_pos": seq_pos,
+        "seq_sep": seq_sep,
+    }
 
-    x = np.concatenate(feats, axis=1).astype(np.float32) if feats else np.zeros((E, 0), dtype=np.float32)
-    return (x, keys) if return_keys else x
+    return build_from_registry(data=data,
+                               mode = mode,
+                               registry = GRAPH_EDGE_REGISTRY,
+                               ctx = ctx,
+                               return_keys = return_keys
+                               )

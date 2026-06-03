@@ -71,12 +71,8 @@ def _graph_to_torch(data: Dict[str, Any]):
     if "centroid" in data:
         out["centroid"] = _to_tensor(data["centroid"], dtype="float32")
 
-    # Graph-level attributes (must be available in prefer="graph")
     if "graph_attr" in data:
         out["graph_attr"] = _to_tensor(data["graph_attr"], dtype="float32").reshape(-1)
-
-    if "graph_attr_keys" in data:
-        out["graph_attr_keys"] = np.asarray(data["graph_attr_keys"]).astype(str).tolist()
 
     return out
 
@@ -149,7 +145,7 @@ def to_torch(
     Auto features:
       - Graph: prefer 'node_attr' as x, then 'node_emb', else aa_index->onehot (+ optional plddt)
       - Graph: expose 'edge_attr' if present (keeps 'edge_dist' too)
-      - Graph: expose 'graph_attr' and 'graph_attr_keys' if present
+      - Graph: expose 'graph_attr' if present
     """
     import torch
 

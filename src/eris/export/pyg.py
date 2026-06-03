@@ -61,9 +61,6 @@ def torch_dict_to_pyg(out: Dict[str, Any], *, device: Optional[str] = None):
             pyg.edge_dist = out["edge_dist"]
         if "graph_attr" in out:
             pyg.graph_attr = out["graph_attr"]
-        if "graph_attr_keys" in out:
-            pyg.graph_attr_keys = out["graph_attr_keys"]
-
         if "centroid" in out:
             pyg.centroid = out["centroid"]
 
@@ -117,7 +114,7 @@ def torch_dict_to_pyg(out: Dict[str, Any], *, device: Optional[str] = None):
     # This is useful for debugging, but keep it conservative to avoid collisions.
     consumed = set()
     if kind == "graph":
-        consumed |= {"edge_index", "x", "pos", "edge_attr", "edge_dist", "graph_attr", "graph_attr_keys", "centroid", "extra"}
+        consumed |= {"edge_index", "x", "pos", "edge_attr", "edge_dist", "graph_attr", "centroid", "extra"}
     elif kind == "cloud":
         consumed |= {"pos", "x", "centroid", "extra"}
     elif kind == "grid":

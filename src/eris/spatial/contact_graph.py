@@ -4,7 +4,7 @@ from typing import Any, Dict, ClassVar, Tuple
 
 import numpy as np
 
-from eris.features.spatial.spatial_index import cell_index, build_cell_dict, _NEIGHBOR_OFFSETS
+from eris.spatial.spatial_index import cell_index, build_cell_dict, _NEIGHBOR_OFFSETS
 
 
 def neighbor_search_edges(pos: np.ndarray, cutoff: float) -> Tuple[np.ndarray, np.ndarray]:
