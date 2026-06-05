@@ -46,14 +46,17 @@ class AtomPointCloud(BaseAtomEncoder):
         centroid = ctx.centroid
         pos_out = ctx.pos
 
-        node_attr = build_node_attr(
+        node_attr, node_attr_keys = build_node_attr(
             elem_index=strc["elem_index"],
             atom_role=strc["atom_role"],
             bfactor=strc["bfactor"],
             occ=strc["occ"],
             bfactor_norm=True,
-            mode=self.node_attr_mode
+            mode=self.node_attr_mode,
+            return_keys=True
         )
+
+        ctx.runtime["node_attr_keys"] = node_attr_keys
 
         # Base data always stored
         data: Dict[str, Any] = {

@@ -13,7 +13,6 @@ class GraphRepresentation(BaseRepresentation):
 
     def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         keys = {}
-        params = meta.get("params", {})
 
         # Node feature keys
         if "node_attr" in data:

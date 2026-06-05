@@ -17,7 +17,7 @@ def test_build_node_attr_keys_and_shapes_full():
         plddt_ca=plddt,
         bfactor_ca=bfac,
         has_ca=has_ca,
-        mode="flags+bfactor_ca+aa_onehot+aa_index+plddt_ca+physchem+aaindex_basic",
+        mode="flags+bfactor_ca+onehot+aa_index+plddt_ca+physchem+aaindex_basic",
         missing="zero",
         return_keys=True
     )

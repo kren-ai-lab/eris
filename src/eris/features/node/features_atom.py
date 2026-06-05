@@ -117,7 +117,7 @@ register_atom_node_feature(
     FeatureSpec(
         token="occ",
         order=40,
-        requires={"ooc"},
+        requires={"occ"},
         fn=occ_fn,
         keys_fn=occ_keys,
     ))

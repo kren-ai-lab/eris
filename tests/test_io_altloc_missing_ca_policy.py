@@ -7,7 +7,7 @@ import pytest
 
 import gemmi
 
-from eris.core.io import extract_ca_bundle
+from eris.core.io import extract_residue_bundle
 
 
 def _chain_from_pdb_string(pdb_text: str, chain_id: str = "A", model_index: int = 0) -> gemmi.Chain:
@@ -35,11 +35,11 @@ END
 def test_altloc_max_occupancy_selects_highest_occ_ca():
     chain = _chain_from_pdb_string(_PDB_ALTLOC_AND_MISSING_CA)
 
-    strc = extract_ca_bundle(
+    strc = extract_residue_bundle(
         chain,
         amino_acids_only=True,
         altloc="max_occupancy",
-        missing_ca="skip",
+        missing_residue="skip",
     )
 
     # Residue 2 lacks CA, so only residue 1 remains
@@ -51,11 +51,11 @@ def test_altloc_max_occupancy_selects_highest_occ_ca():
 def test_missing_ca_skip_drops_residues_without_ca():
     chain = _chain_from_pdb_string(_PDB_ALTLOC_AND_MISSING_CA)
 
-    strc = extract_ca_bundle(
+    strc = extract_residue_bundle(
         chain,
         amino_acids_only=True,
         altloc="max_occupancy",
-        missing_ca="skip",
+        missing_residue="skip",
     )
     assert strc["pos"].shape[0] == 1
     assert strc["residue_ids"].shape[0] == 1
@@ -65,22 +65,22 @@ def test_missing_ca_error_raises():
     chain = _chain_from_pdb_string(_PDB_ALTLOC_AND_MISSING_CA)
 
     with pytest.raises(Exception):
-        extract_ca_bundle(
+        extract_residue_bundle(
             chain,
             amino_acids_only=True,
             altloc="max_occupancy",
-            missing_ca="error",
+            missing_residue="error",
         )
 
 
 def test_missing_ca_nan_keeps_residue_with_nans():
     chain = _chain_from_pdb_string(_PDB_ALTLOC_AND_MISSING_CA)
 
-    strc = extract_ca_bundle(
+    strc = extract_residue_bundle(
         chain,
         amino_acids_only=True,
         altloc="max_occupancy",
-        missing_ca="nan",
+        missing_residue="nan",
     )
 
     # Residue 1 has CA; residue 2 is kept as NaNs
