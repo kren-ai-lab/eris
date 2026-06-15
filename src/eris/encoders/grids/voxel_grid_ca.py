@@ -12,6 +12,8 @@ import numpy as np
 from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.representations import VoxelGridRepresentation
 
+from eris.features import parse_mode
+
 if TYPE_CHECKING:
     from eris.core.representations.base_rep import BaseRepresentation
 
@@ -193,11 +195,11 @@ class VoxelGridCA(BaseResidueEncoder):
         plddt_v = np.asarray(strc["plddt"], dtype=np.float32).reshape(-1)[valid]
         bfac_v = np.asarray(strc["bfactor_ca"], dtype=np.float32).reshape(-1)[valid]
 
-        ch_list = _parse_channels(self.channels)
+        ch_list = parse_mode(self.channels)
 
         # count channels
         C = 0
-        for c in ch_list:
+        for c, params in ch_list:
             if c == "aa_onehot":
                 C += 21
             else:
@@ -246,7 +248,7 @@ class VoxelGridCA(BaseResidueEncoder):
 
         # fill channels in order
         cidx = 0
-        for c in ch_list:
+        for c, params in ch_list:
             if c == "occupancy":
                 cidx = add_occupancy(cidx)
             elif c == "density":
@@ -281,7 +283,7 @@ class VoxelGridCA(BaseResidueEncoder):
 
         data: Dict[str, Any] = {
             "grid": grid_out,
-            "channels": np.asarray(ch_list, dtype=np.str_),
+            "channels": np.asarray([ch[0] for ch in ch_list], dtype=np.str_),
             "grid_size": np.asarray([G], dtype=np.int32),
             "voxel_size": np.asarray([vs], dtype=np.float32),
             "origin": origin.astype(np.float32),

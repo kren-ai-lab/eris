@@ -68,13 +68,13 @@ def build_from_registry(
     toks = parse_mode(mode)
 
     # ---- detect unknown tokens
-    unknown = [t for t in toks if t not in registry]
+    unknown = [t[0] for t in toks if t[0] not in registry]
     if unknown:
         raise ValueError(f"Unknown feature tokens: {unknown}")
 
     # ---- select + sort
-    selected = [registry[t] for t in toks]
-    selected.sort(key=lambda s: s.order)
+    selected = [(registry[t[0]], t[1]) for t in toks]
+    selected.sort(key=lambda x: x[0].order)
 
     feats: List[np.ndarray] = []
     keys: List[str] = []
@@ -84,7 +84,7 @@ def build_from_registry(
     # -------------------------
     # Validate requirements
     # -------------------------
-    for spec in selected:
+    for spec, params in selected:
         missing = [k for k in spec.requires if k not in data and k not in ctx]
         if missing:
             raise KeyError(f"Feature '{spec.token}' requires missing fields: {missing}")
@@ -92,8 +92,8 @@ def build_from_registry(
     # -------------------------
     # Compute features
     # -------------------------
-    for spec in selected:
-        f = spec.fn(data, ctx)
+    for spec, params in selected:
+        f = spec.fn(data, ctx, params)
 
         # ---- validate output
         if not isinstance(f, np.ndarray):
@@ -112,7 +112,7 @@ def build_from_registry(
 
         feats.append(f.astype(np.float32))
 
-        k = spec.keys_fn(data, ctx)
+        k = spec.keys_fn(data, ctx, params)
         if len(k) != f.shape[1]:
             raise ValueError(
                 f"Feature '{spec.token}' keys mismatch: "

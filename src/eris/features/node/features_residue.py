@@ -30,7 +30,7 @@ def aa_index_to_letters(aa_index: np.ndarray) -> np.ndarray:
 # -------------------------
 # aa_onehot
 # -------------------------
-def aa_onehot_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def aa_onehot_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64).reshape(-1)
 
     oh = onehot(
@@ -41,7 +41,7 @@ def aa_onehot_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
     return oh.astype(np.float32)
 
 
-def aa_onehot_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def aa_onehot_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return _AA_ONEHOT_KEYS
 
 
@@ -57,12 +57,12 @@ register_residue_node_feature(
 # -------------------------
 # aa_index
 # -------------------------
-def aa_index_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def aa_index_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64).reshape(-1, 1)
 
     return aa_index.astype(np.float32)
 
-def aa_index_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def aa_index_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return _AA_INDEX_KEY
 
 register_residue_node_feature(
@@ -77,7 +77,7 @@ register_residue_node_feature(
 # -------------------------
 # physchem
 # -------------------------
-def physchem_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def physchem_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64)
 
     feats = [lookup[aa_index] for _, lookup in PHYSCHEM_LOOKUPS]
@@ -85,7 +85,7 @@ def physchem_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
     return np.stack(feats, axis=1).astype(np.float32)
 
 
-def physchem_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def physchem_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return PHYSchem_KEYS
 
 
@@ -102,7 +102,7 @@ register_residue_node_feature(
 # -------------------------
 # aaindex_basic
 # -------------------------
-def aaindex_basic_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def aaindex_basic_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64)
     feats = [lookup[aa_index] for _, lookup in PHYSCHEM_LOOKUPS]
 
@@ -113,7 +113,7 @@ def aaindex_basic_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
 
 
 
-def aaindex_basic_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def aaindex_basic_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return AAINDEX_BASIC_KEYS
 
 
@@ -130,7 +130,7 @@ register_residue_node_feature(
 # plddt_ca
 # -------------------------
 
-def plddt_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def plddt_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     n = data["n"]
     missing=ctx["missing"]
 
@@ -146,7 +146,7 @@ def plddt_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
     return v.astype(np.float32)
 
 
-def plddt_ca_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def plddt_ca_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return ["plddt_ca"]
 
 
@@ -164,7 +164,7 @@ register_residue_node_feature(
 # bfactor_ca
 # -------------------------
 
-def bfactor_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def bfactor_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     n = data["n"]
     missing=ctx["missing"]
 
@@ -180,7 +180,7 @@ def bfactor_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
     return v.astype(np.float32)
 
 
-def bfactor_ca_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def bfactor_ca_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return ["bfactor_ca"]
 
 
@@ -198,7 +198,7 @@ register_residue_node_feature(
 # flags
 # -------------------------
 
-def flags_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def flags_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64).reshape(-1)
     has_ca = data["has_ca"]
 
@@ -210,7 +210,7 @@ def flags_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
     return np.concatenate([is_gly, is_pro, is_unk, has_ca_f], axis=1).astype(np.float32)
 
 
-def flags_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def flags_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return ["flag.is_gly", "flag.is_pro", "flag.is_unk", "flag.has_ca"]
 
 

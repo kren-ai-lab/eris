@@ -36,8 +36,9 @@ def build_edge_attr(
         raise ValueError(f"edge_dist must be (E,), got {dist.shape} for E={E}")
 
     toks = parse_mode(mode)
-
-    if ("seq_sep" in toks) or ("local" in toks):
+    token_names = [tok[0] for tok in toks]
+    
+    if ("seq_sep" in token_names) or ("local" in token_names):
         if seq_pos is None:
             seq_sep = np.zeros((E,), dtype=np.float32)
         else:

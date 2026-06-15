@@ -21,14 +21,14 @@ def _onehot_fixed(idx: np.ndarray, dim: int) -> np.ndarray:
 # -------------------------
 # elem_index
 # -------------------------
-def elem_index_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def elem_index_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     elem_index = np.asarray(data["elem_index"], dtype=np.int64).reshape(-1)
     e = _onehot_fixed(elem_index, ELEM_DIM)  
 
     return e.astype(np.float32)
 
 
-def elem_index_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def elem_index_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return [f"elem.{i}" for i in range(ELEM_DIM)]
 
 
@@ -44,14 +44,14 @@ register_atom_node_feature(
 # -------------------------
 # role
 # -------------------------
-def role_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def role_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     atom_role = np.asarray(data["atom_role"], dtype=np.int64).reshape(-1)
     r = _onehot_fixed(atom_role, ROLE_DIM)
 
     return r.astype(np.float32)
 
 
-def role_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def role_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return [f"role.{i}" for i in range(ROLE_DIM)]
 
 
@@ -69,7 +69,7 @@ register_atom_node_feature(
 # bfactor
 # -------------------------
 
-def bfactor_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def bfactor_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     n = data["n"]
     missing = ctx["missing"]
     bfactor_norm = ctx["bfactor_norm"]
@@ -85,7 +85,7 @@ def bfactor_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
 
     return v.astype(np.float32)
 
-def bfactor_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def bfactor_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return ["bfactor"]
 
 
@@ -103,13 +103,13 @@ register_atom_node_feature(
 # occ
 # -------------------------
 
-def occ_fn(data: Dict[str, Any], ctx: Dict[str, Any]) -> np.ndarray:
+def occ_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
 
     oc = np.nan_to_num(np.asarray(data["occ"], dtype=np.float32), nan=0.0).reshape(-1, 1)
 
     return oc.astype(np.float32)
 
-def occ_keys(data: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
+def occ_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return ["occ"]
 
 

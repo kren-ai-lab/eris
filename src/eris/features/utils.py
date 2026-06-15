@@ -1,15 +1,49 @@
 from __future__ import annotations
 
-from typing import List, Set, Sequence
+from typing import List, Set, Sequence, Any, Tuple, Dict
 
 import numpy as np
 
 
-def parse_mode(mode: str) -> Set[str]:
-    m = (mode or "").strip()
-    if not m:
-        return set()
-    return {t.strip().lower() for t in m.split("+") if t.strip()}
+def parse_mode(mode: Any) -> List[Tuple[str, Dict[str, Any]]]:
+    if isinstance(mode, str):
+        return [(t.strip(), {}) for t in mode.split("+") if t.strip()]
+
+    if isinstance(mode, list):
+        result = []
+
+        for item in mode:
+            if isinstance(item, str):
+                t = item.strip()
+                if t:
+                    result.append((t, {}))
+
+            elif isinstance(item, dict):
+                if len(item) != 1:
+                    raise ValueError(f"Invalid feature config: {item}")
+
+                token, params = next(iter(item.items()))
+
+                if not isinstance(token, str):
+                    raise ValueError(f"Feature token must be string: {item}")
+
+                if params is None:
+                    params = {}
+
+                if not isinstance(params, dict):
+                    raise ValueError(f"Params for '{token}' must be dict")
+
+                result.append((token.strip(), params))
+
+            else:
+                raise ValueError(f"Invalid mode element: {item}")
+
+        return result
+
+    raise ValueError(
+        "Mode must be string ('a+b'), list of strings ['a','b'], "
+        "or list of dict [{'a': {...}}]"
+    )
 
 
 def safe_float(x: np.ndarray, *, missing: str = "zero") -> np.ndarray:
