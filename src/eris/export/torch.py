@@ -33,7 +33,6 @@ def _grid_to_torch(data: Dict[str, Any]):
     out: Dict[str, Any] = {}
 
     out["x"] = _to_tensor(data["grid"], dtype=None)
-    out["channels"] = data.get("channels", None)
     out["grid_size"] = _to_tensor(data.get("grid_size", [out["x"].shape[-1]]), dtype="int32")
     
     if "voxel_size" in data:

@@ -77,8 +77,6 @@ def torch_dict_to_pyg(out: Dict[str, Any], *, device: Optional[str] = None):
         # (out["x"] in grid mode is the grid tensor)
         if "x" in out:
             pyg.grid = out["x"]
-        if "channels" in out:
-            pyg.channels = out["channels"]
         if "grid_size" in out:
             pyg.grid_size = out["grid_size"]
         if "voxel_size" in out:

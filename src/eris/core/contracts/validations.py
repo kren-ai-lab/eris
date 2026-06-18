@@ -129,14 +129,13 @@ def validate_grid(data: Dict[str, Any]):
     # -------------------------
     # REQUIRED FIELDS
     # -------------------------
-    required = ["grid", "channels"]
+    required = ["grid"]
 
     for key in required:
         if key not in data:
             raise ValueError(f"Grid validation: missing required field '{key}'")
 
     grid = data["grid"]
-    channels = data["channels"]
 
     # -------------------------
     # GRID (core tensor)
@@ -155,24 +154,6 @@ def validate_grid(data: Dict[str, Any]):
     if not np.isfinite(grid).all():
         raise ValueError("Grid validation: 'grid' contains non-finite values")
 
-    C = grid.shape[0]
-
-    # -------------------------
-    # CHANNELS
-    # -------------------------
-    if not isinstance(channels, np.ndarray):
-        raise TypeError("Grid validation: 'channels' must be np.ndarray")
-
-    if channels.ndim != 1:
-        raise ValueError("Grid validation: 'channels' must be 1D")
-
-    if len(channels) != C:
-        raise ValueError(
-            "Grid validation: number of channels must match grid.shape[0]"
-        )
-
-    if not np.issubdtype(channels.dtype, np.str_):
-        raise TypeError("Grid validation: 'channels' must be string dtype")
 
     # -------------------------
     # GRID SIZE

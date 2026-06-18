@@ -4,7 +4,8 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 
 from eris.features.utils import parse_mode
-from eris.features.feature_registry import build_from_registry, GRAPH_EDGE_REGISTRY
+from eris.features.feature_builders import build_from_registry
+from eris.features.feature_registry import GRAPH_EDGE_REGISTRY
 
 
 def build_edge_attr(

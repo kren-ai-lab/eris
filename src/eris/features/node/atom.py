@@ -2,8 +2,8 @@ import numpy as np
 
 from typing import List, Optional, Tuple, Union
 
-from eris.features.utils import parse_mode, onehot, safe_float, ensure_1d
-from eris.features.feature_registry import build_from_registry, ATOM_NODE_REGISTRY
+from eris.features.feature_builders import build_from_registry
+from eris.features.feature_registry import ATOM_NODE_REGISTRY
 
 
 def build_node_attr(
@@ -35,7 +35,7 @@ def build_node_attr(
         "n": n
     }
 
-    ctx = {
+    feat_ctx = {
         "missing": missing,
         "bfactor_norm": bfactor_norm,
     }
@@ -43,6 +43,6 @@ def build_node_attr(
     return build_from_registry(data=data,
                                mode = mode,
                                registry = ATOM_NODE_REGISTRY,
-                               ctx = ctx,
+                               feat_ctx = feat_ctx,
                                return_keys = return_keys
                                )

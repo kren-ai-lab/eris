@@ -4,7 +4,8 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 
 from eris.features.utils import ensure_1d
-from eris.features.feature_registry import build_from_registry, RESIDUE_NODE_REGISTRY
+from eris.features.feature_builders import build_from_registry
+from eris.features.feature_registry import RESIDUE_NODE_REGISTRY
 
 
 def build_node_attr(
@@ -48,14 +49,14 @@ def build_node_attr(
         "n": n
     }
 
-    ctx = {
+    feat_ctx = {
         "missing": missing,
     }
 
     return build_from_registry(data=data,
                                mode = mode,
                                registry = RESIDUE_NODE_REGISTRY,
-                               ctx = ctx,
+                               feat_ctx = feat_ctx,
                                return_keys = return_keys
                                )
 

@@ -16,18 +16,8 @@ class VoxelGridRepresentation(BaseRepresentation):
 
         keys["grid_key"] = "grid"
         keys["grid_layout"] = "CXYZ"
-
-        # grid channels
-        if "channels" in data:
-            ch_list = data.get("channels")
-            expanded_channels = []
-            for c in ch_list:
-                if c == "aa_onehot":
-                    expanded_channels.extend([f"aa_onehot_{i}" for i in range(21)])
-                else:
-                    expanded_channels.append(c)
             
-            keys["grid_channels"] = expanded_channels
-
+        if "channels" in ctx.runtime:
+            keys["grid_channels"] = ctx.runtime["channels"]
         
         return keys
