@@ -15,7 +15,7 @@ Tracking conventions:
 
 ## M0 — Project freeze and release contract
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE`
 
 **Objective:** Freeze the architectural, naming, operating, tracking, and release direction for
 v0.1.
@@ -46,20 +46,28 @@ v0.1.
 - [x] **M0.11 — Document the M1–M9 roadmap.** This file records work units, gates,
   dependencies, and decision owners.
 
-### External open work
+### Completed distribution-name decision
 
-- [ ] **M0.X — Resolve PyPI `eris` distribution namespace**
-  - **Scope:** Preserve project name **Eris**, Python import `eris`, CLI `eris`, and desired
-    PyPI distribution `eris` while namespace availability and ownership are investigated.
-  - **Acceptance:** Availability/ownership is resolved and recorded. If `eris` cannot be used,
-    naming is reopened explicitly; no replacement distribution name is adopted automatically.
-  - **Depends on:** External PyPI namespace/ownership resolution.
-  - **Blocks:** Final packaging metadata and publication in M8/M9.
+- [x] **M0.X — Freeze distribution name as `eris`**
+  - **Frozen identity:** Project **Eris**; repository **Eris**; Python import `eris`; CLI command
+    `eris`; desired and frozen distribution name `eris`.
+  - **Acceptance:** The project owner has frozen `eris` as the distribution name for normal v0.1
+    development. No alternative distribution name is considered or adopted automatically.
+  - **Depends on:** Explicit project-owner decision; completed.
+
+### External PyPI release condition
+
+Ownership and availability of the PyPI `eris` namespace must be verified before publication.
+This external feasibility check does not keep M0 open and does not reopen the frozen naming
+decision by itself. If publication as `eris` proves impossible, release is blocked and M0 must
+be explicitly reopened before any different distribution name can be considered.
 
 ### M0 gate
 
-The internal architectural and operational contract is versioned and this M1–M9 tracker is
-authoritative. M0 remains open while M0.X is unresolved.
+**Satisfied.** Branch policy, v0.1 scope, public naming, conceptual Artifact Schema v2, Python
+policy, dependency boundary, configuration authority, target API/CLI, the M1–M9 tracker, and the
+distribution name `eris` are frozen and versioned. External PyPI publication feasibility remains
+a release condition, not an open M0 decision.
 
 ## M1 — Core correctness
 
@@ -486,9 +494,9 @@ clean.
   - **Depends on:** M7 gate, M1.1, and M5.2.
 - [ ] **M8.2 — Finalize packaging metadata and optional extras**
   - **Scope:** Correct metadata, classifiers, URLs, license/readme, Python range, content, extras;
-    do not select another PyPI name while M0.X is open.
-  - **Acceptance:** Wheel/sdist describes Eris and uses only the M0.X-authorized distribution name.
-  - **Depends on:** M8.1 and M0.X.
+    use the distribution name `eris` frozen by M0.X.
+  - **Acceptance:** Wheel/sdist describes Eris accurately and uses distribution name `eris`.
+  - **Depends on:** M8.1 and the completed M0.X naming contract.
 - [ ] **M8.3 — Remove tracked generated outputs and enforce repository hygiene**
   - **Scope:** Untrack generated `out/`, preserve fixtures, enforce ignores/clean worktree.
   - **Acceptance:** Tests/examples do not leave expected output tracked or dirty the repository.
@@ -533,11 +541,13 @@ clean wheel install passes; docs/examples execute; no generated execution output
 
 ### Work units
 
-- [ ] **M9.1 — Verify M0.X distribution-name resolution**
-  - **Scope:** Confirm the external namespace decision before final metadata/publication; M9 does
-    not make the decision.
-  - **Acceptance:** M0.X is closed and the authorized name is used consistently.
-  - **Depends on:** M0.X and M8 gate.
+- [ ] **M9.1 — Verify/secure the PyPI `eris` namespace before release**
+  - **Scope:** Verify that the already-frozen distribution name `eris` can be used for PyPI
+    publication and secure the required ownership/access before release.
+  - **Acceptance:** Publication as `eris` is demonstrably available and authorized. If it is not,
+    release remains blocked and M0 is explicitly reopened before any different name is considered;
+    M9.1 never selects a replacement name.
+  - **Depends on:** Completed M0.X naming contract and M8 gate.
 - [ ] **M9.2 — Freeze v0.1.0 version and CHANGELOG**
   - **Scope:** Set version through M1.2 and document delivered capabilities/limitations.
   - **Acceptance:** Version, changelog, and release contract agree without unimplemented promises.
@@ -580,8 +590,10 @@ M1
 → M9
 ```
 
-M0.X runs as an external M0 blocker and must be resolved before release metadata/publication can
-finalize. No milestone may depend on a later milestone.
+M0.X is complete: the distribution name is frozen as `eris`. External ownership/availability of
+that PyPI namespace is verified in M9.1 as a release condition. Failure blocks release and requires
+explicitly reopening M0; it never authorizes a silent rename. No milestone may depend on a later
+milestone.
 
 ## Stakeholder decisions
 
@@ -609,4 +621,4 @@ Escalate to David/project owner when required for:
 - schema policy;
 - optional dependency packaging;
 - final GearNet checkpoint/backend choice when licensing/release constraints matter;
-- PyPI namespace and release decisions.
+- PyPI namespace access/ownership verification and release authorization.
