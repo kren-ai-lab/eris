@@ -1,0 +1,278 @@
+# Eris v0.1 Architecture
+
+This document records the frozen conceptual architecture for Eris v0.1. It distinguishes the
+target public contract from the partially implemented historical codebase. Unless explicitly
+stated otherwise, target APIs, CLI commands, learned backends, and Artifact Schema v2 described
+here are not claims about current implementation status.
+
+## Purpose and framework boundaries
+
+Eris converts protein three-dimensional structures into reproducible numerical structural
+representations. It contains two first-class representation families:
+
+- `explicit`;
+- `learned`.
+
+The surrounding framework boundaries are:
+
+- **Sylphy:** learned sequence or molecular encoders and embeddings.
+- **Roxy:** deterministic engineered descriptors.
+- **Eris:** numerical representations derived specifically from 3D structure.
+- **Rudeus:** exploratory analysis and visualization.
+
+Eris must not become a duplicate of Sylphy, Roxy, or Rudeus.
+
+## v0.1 scope
+
+The explicit representations already present in the codebase must be stabilized before new
+explicit representation families are added.
+
+GearNet/GearNet-Edge is the mandatory learned backend for v0.1. Its implementation begins only
+after the core, configuration, and artifact contracts are stable. GearNet is not implemented in
+the current repository state.
+
+## Canonical public representation identifiers
+
+The v0.1 public identifiers are frozen as:
+
+- `atom_point_cloud`
+- `residue_point_cloud`
+- `atom_knn_graph`
+- `residue_knn_graph`
+- `residue_contact_graph`
+- `residue_distogram`
+- `residue_distogram_bins`
+- `residue_contact_map`
+- `residue_contact_map_bins`
+- `residue_voxel_grid`
+
+The canonical invariant is:
+
+```text
+Registry key == Encoder.name == artifact representation_name == CLI identifier == documentation identifier
+```
+
+Historical or pre-release identifiers such as `distogram_ca`, `distogram_residue`,
+`contact_map_ca`, `voxel_grid_ca`, and `_ns` variants do not define the public v0.1 API. No
+compatibility aliases are required unless a real consumer is later identified.
+
+## Structural terminology
+
+`granularity` describes the represented biological entity. Allowed v0.1 values are:
+
+- `atom`;
+- `residue`;
+- `structure`;
+- `mixed`.
+
+`ca` is not a granularity. `coordinate_source` describes how coordinates are defined. Examples
+include:
+
+- `atom`;
+- `ca`;
+- `residue_mean`;
+- `residue_com`;
+- `backbone`;
+- `all_atom`;
+- `model_specific`.
+
+A CA-based residue graph therefore has `granularity = residue` and
+`coordinate_source = ca`.
+
+## Canonical representation table
+
+| name | family | type | granularity | default coordinate source |
+| --- | --- | --- | --- | --- |
+| `atom_point_cloud` | explicit | cloud | atom | atom |
+| `residue_point_cloud` | explicit | cloud | residue | ca |
+| `atom_knn_graph` | explicit | graph | atom | atom |
+| `residue_knn_graph` | explicit | graph | residue | ca |
+| `residue_contact_graph` | explicit | graph | residue | ca |
+| `residue_distogram` | explicit | matrix | residue | ca |
+| `residue_distogram_bins` | explicit | matrix | residue | ca |
+| `residue_contact_map` | explicit | matrix | residue | ca |
+| `residue_contact_map_bins` | explicit | matrix | residue | ca |
+| `residue_voxel_grid` | explicit | grid | residue | ca |
+
+## Configuration authority
+
+The target architecture uses typed configuration, dataclasses, or an equivalent typed
+definition as the single source of truth. The same definition must drive:
+
+- runtime defaults;
+- Registry metadata;
+- CLI defaults and help;
+- artifact parameters;
+- fingerprints;
+- documentation.
+
+The existing manually duplicated Registry schemas are not the target authority. Consolidation
+is future implementation work.
+
+## Artifact Schema v2 conceptual contract
+
+Canonical disk persistence remains:
+
+- `data.npz`;
+- `meta.json`.
+
+Schema v2 is the first stable public artifact schema. Schema v1 is pre-release and is not a
+required public compatibility contract.
+
+The conceptual top-level fields are:
+
+- `schema_version`;
+- `representation_name`;
+- `representation_family`;
+- `representation_type`;
+- `granularity`;
+- `coordinate_source`;
+- `encoder` or `model`;
+- `input`;
+- `parameters`;
+- `provenance`;
+- `outputs`;
+- `feature_keys`;
+- `shapes`;
+- `dtypes`;
+- `counts`;
+- optional `extensions`.
+
+Explicit representations require `encoder` and normally do not use `model`. Learned
+representations require `model`.
+
+### Input metadata
+
+The minimum input metadata is:
+
+- `source`;
+- `source_sha256`;
+- `format`;
+- `model_index`;
+- `chain_id`.
+
+### Feature semantics
+
+`feature_keys` is authoritative. A representation creates its ordered semantic feature
+definitions, and artifact finalization validates them. Finalization must never silently replace
+or re-infer authoritative feature semantics.
+
+`feature_keys` is reserved for feature dimensions such as:
+
+- `node_attr_keys`;
+- `edge_attr_keys`;
+- `graph_attr_keys`;
+- `grid_channels`.
+
+Output names and layout semantics belong in `outputs`, not in `feature_keys`.
+
+### Learned canonical arrays
+
+The conceptual learned-representation keys are:
+
+- `node_embedding`;
+- `global_embedding`;
+- `node_ids`;
+- optional `valid_mask`.
+
+Every local embedding row must map unambiguously to a biological entity.
+
+### Provenance
+
+Explicit artifacts must contain enough Eris package and environment information to reproduce
+the representation. Learned artifacts additionally require model, backend, and checkpoint
+provenance, including the checkpoint SHA-256.
+
+Artifact Schema v2 is not implemented by this document.
+
+## Target Python API
+
+The high-level v0.1 target is:
+
+- `eris.encode(...)`
+- `eris.embed(...)`
+- `eris.list_representations()`
+- `eris.get_representation_info(...)`
+- `eris.list_embedders()`
+- `eris.get_embedder_info(...)`
+
+Low-level APIs may coexist. These high-level functions are target contracts and are not all
+implemented today.
+
+## Target CLI
+
+The conceptual v0.1 CLI is:
+
+- `eris --version`
+- `eris representations ...`
+- `eris embedders ...`
+- `eris encode ...`
+- `eris embed ...`
+- `eris pack ...`
+- `eris export ...`
+- `eris models ...`
+- `eris cache ...`
+- `eris info`
+
+This target differs from the currently implemented command tree and must not be interpreted as
+current CLI availability.
+
+## Batch and pack contract
+
+The minimum structure manifest fields are:
+
+- `id`;
+- `path`;
+- `chain`;
+- `model`.
+
+The minimum batch task result fields are:
+
+- `id`;
+- `representation_name`;
+- `representation_family`;
+- `artifact_dir`;
+- `status`;
+- `error_type`;
+- `error_message`.
+
+The minimum packed index fields are:
+
+- `id`;
+- `artifact_dir`;
+- `meta_path`;
+- `representation_name`;
+- `representation_family`;
+- `representation_type`;
+- `granularity`;
+- `n_nodes`;
+- `n_edges`;
+- `shape_summary`.
+
+Learned-specific fields may extend the index where applicable.
+
+## Output policy
+
+`out/` is generated execution output. It is not canonical test data, a golden reference, a
+supported artifact corpus, or the source of truth for v0.1 schemas. Removing or untracking it is
+separate future work.
+
+## Version authority
+
+Eris must ultimately have one package-version authority derived from distribution metadata and
+exposed through `eris.__version__`. Artifacts record the resulting Eris version in provenance.
+Model and checkpoint identity remains separate from the Eris package version.
+
+Version handling is not changed by this document.
+
+## PyPI naming
+
+The project identity is:
+
+- project/repository: Eris;
+- Python package/import: `eris`;
+- CLI command: `eris`.
+
+The desired PyPI distribution name is also `eris`, but external namespace availability and
+ownership remain unresolved. The project must not be renamed to `eris-structure`. Distribution
+metadata is not changed by this document.
