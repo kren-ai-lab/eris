@@ -127,8 +127,8 @@ def _knn_edges_from_candidates(
         if not neigh:
             continue
 
-        # sort by distance and take top-k
-        neigh_sorted = sorted(neigh, key=lambda t: t[1])[:k]
+        # Sort by distance with node index as an explicit deterministic tie-breaker.
+        neigh_sorted = sorted(neigh, key=lambda t: (t[1], t[0]))[:k]
 
         for j, dist in neigh_sorted:
             edges_i.append(i)
@@ -139,14 +139,28 @@ def _knn_edges_from_candidates(
         return np.zeros((2, 0), dtype=np.int64), np.zeros((0,), dtype=np.float32)
 
     if symmetric:
-        # add reverse edges (may create duplicates; acceptable for PyG, or you can unique later)
-        rev_i = edges_j
-        rev_j = edges_i
-        rev_d = dists
+        original_edges = list(zip(edges_i, edges_j, dists))
+        closure = original_edges + [
+            (j, i, dist) for i, j, dist in original_edges
+        ]
 
-        edges_i = edges_i + rev_i
-        edges_j = edges_j + rev_j
-        dists = dists + rev_d
+        seen: set[tuple[int, int]] = set()
+        unique_i: List[int] = []
+        unique_j: List[int] = []
+        unique_dists: List[float] = []
+
+        for i, j, dist in closure:
+            edge = (i, j)
+            if edge in seen:
+                continue
+            seen.add(edge)
+            unique_i.append(i)
+            unique_j.append(j)
+            unique_dists.append(dist)
+
+        edges_i = unique_i
+        edges_j = unique_j
+        dists = unique_dists
 
     edge_index = np.stack([np.asarray(edges_i, dtype=np.int64), np.asarray(edges_j, dtype=np.int64)], axis=0)
     edge_dist = np.asarray(dists, dtype=np.float32)
