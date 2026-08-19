@@ -97,6 +97,38 @@ def _validate_feature_keys(
                 f"meta.feature_keys.{field} must be a list[str]"
             )
 
+    grid_fields = {"grid_key", "grid_layout", "grid_channels"}
+    if grid_fields.intersection(feature_keys):
+        missing = sorted(grid_fields.difference(feature_keys))
+        if missing:
+            raise ArtifactValidationError(
+                f"meta.feature_keys grid metadata is missing required fields: {missing}"
+            )
+        if feature_keys["grid_key"] != "grid":
+            raise ArtifactValidationError(
+                "meta.feature_keys.grid_key must be 'grid' for Schema v1 voxel artifacts"
+            )
+        if feature_keys["grid_layout"] != "CXYZ":
+            raise ArtifactValidationError(
+                "meta.feature_keys.grid_layout must be 'CXYZ' for Schema v1 voxel artifacts"
+            )
+
+        grid = data.get("grid")
+        if not isinstance(grid, np.ndarray):
+            raise ArtifactValidationError(
+                "data.grid must exist as a numpy array when grid feature metadata is provided"
+            )
+        if grid.ndim != 4:
+            raise ArtifactValidationError(
+                f"data.grid must be 4D with CXYZ layout, got shape {grid.shape}"
+            )
+        if len(feature_keys["grid_channels"]) != grid.shape[0]:
+            raise ArtifactValidationError(
+                "meta.feature_keys.grid_channels has "
+                f"{len(feature_keys['grid_channels'])} keys for data.grid with "
+                f"{grid.shape[0]} channels"
+            )
+
     for keys_field, data_field in (
         ("node_attr_keys", "node_attr"),
         ("edge_attr_keys", "edge_attr"),

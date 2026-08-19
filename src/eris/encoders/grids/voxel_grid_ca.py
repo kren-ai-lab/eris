@@ -100,11 +100,15 @@ class VoxelGridCA(BaseResidueEncoder):
 
     def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         runtime = ctx.runtime
+        requested_channels = [
+            token if not params else {token: dict(params)}
+            for token, params in parse_mode(self.channels)
+        ]
         
         meta["params"].update({
                 "grid_size": int(self.grid_size),
                 "dtype": str(self.dtype),
-                "channels": list(self.channels), 
+                "channels": requested_channels,
                 "center": bool(self.center),
                 "fit": bool(self.fit),
                 "margin": float(self.margin),
