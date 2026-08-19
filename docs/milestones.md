@@ -71,13 +71,13 @@ a release condition, not an open M0 decision.
 
 ## M1 — Core correctness
 
-**Status:** `NOT STARTED`
+**Status:** `IN PROGRESS`
 
 **Objective:** Stabilize the existing explicit-representation core before Registry/config v2.
 
 ### Work units
 
-- [ ] **M1.1 — Declare core runtime dependencies**
+- [x] **M1.1 — Declare core runtime dependencies**
   - **Scope:** Declare `gemmi` and `platformdirs`, audit mandatory runtime imports, and apply
     `>=3.10,<3.13`.
   - **Acceptance:** Core runtime dependencies are complete and consistent; this unit alone does
