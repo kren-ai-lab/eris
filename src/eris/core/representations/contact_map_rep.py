@@ -14,8 +14,8 @@ class ContactMapRepresentation(BaseRepresentation):
     def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         keys = {}
 
-        keys["matrix_key"] = "contact_bins"
-        keys["matrix_attr_keys"] = ["contact_bins"]
+        keys["matrix_key"] = "contact"
+        keys["matrix_attr_keys"] = ["contact"]
 
         return keys
 
