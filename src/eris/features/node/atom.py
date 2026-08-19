@@ -2,7 +2,7 @@ import numpy as np
 
 from typing import List, Optional, Tuple, Union
 
-from eris.features.feature_builders import build_from_registry
+from eris.features.feature_builders import build_from_registry, validate_feature_mode
 from eris.features.feature_registry import ATOM_NODE_REGISTRY
 
 
@@ -24,6 +24,7 @@ def build_node_attr(
     atom_role = np.asarray(atom_role, dtype=np.int64).reshape(-1)
     n = int(elem_index.shape[0])
     if n == 0:
+        validate_feature_mode(mode, ATOM_NODE_REGISTRY)
         x = np.zeros((0, 0), dtype=np.float32)
         return (x, []) if return_keys else x
 

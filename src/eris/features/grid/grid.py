@@ -86,7 +86,7 @@ def build_grid_attr(
 
     }
 
-    grid, keys = build_from_registry_voxel(
+    result = build_from_registry_voxel(
         data=data,
         mode=channels,
         registry=GRID_VOXEL_REGISTRY,
@@ -95,5 +95,11 @@ def build_grid_attr(
         pool=pool,
         return_keys = return_keys,
     )
+
+    if return_keys:
+        grid, keys = result
+    else:
+        grid = result
+        keys = []
 
     return grid, keys, {"voxel_size": vs, "origin": origin}

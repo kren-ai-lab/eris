@@ -4,6 +4,7 @@ import ast
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from eris.features.node import constants as residue_constants
 from eris.features.node.constants import (
@@ -175,3 +176,32 @@ def test_build_node_attr_missing_nan_policy_keeps_nans():
     assert keys == ["plddt_ca"]
     assert np.isnan(x[0, 0])
     assert float(x[1, 0]) == 10.0
+
+
+def test_residue_node_builder_rejects_selected_array_row_mismatch():
+    aa_index = np.array([0, 1], dtype=np.int16)
+    plddt = np.array([50.0], dtype=np.float32)
+
+    with pytest.raises(ValueError, match="expected 2, got 1"):
+        build_node_attr(aa_index, plddt_ca=plddt, mode="plddt_ca")
+
+
+def test_residue_node_builder_valid_mode_with_no_residues_preserves_empty_contract():
+    aa_index = np.array([], dtype=np.int16)
+
+    node_attr, keys = build_node_attr(
+        aa_index,
+        mode="onehot",
+        return_keys=True,
+    )
+
+    assert node_attr.shape == (0, 0)
+    assert node_attr.dtype == np.float32
+    assert keys == []
+
+
+def test_residue_node_builder_rejects_unknown_mode_with_no_residues():
+    aa_index = np.array([], dtype=np.int16)
+
+    with pytest.raises(ValueError, match="Unknown feature tokens.*unknown"):
+        build_node_attr(aa_index, mode="unknown")

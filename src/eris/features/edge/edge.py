@@ -39,7 +39,8 @@ def build_edge_attr(
     toks = parse_mode(mode)
     token_names = [tok[0] for tok in toks]
     
-    if ("seq_sep" in token_names) or ("local" in token_names):
+    needs_seq_sep = ("seq" in token_names) or ("local" in token_names)
+    if needs_seq_sep:
         if seq_pos is None:
             seq_sep = np.zeros((E,), dtype=np.float32)
         else:
@@ -59,12 +60,13 @@ def build_edge_attr(
         "rbf_dmax": rbf_dmax,
         "local_cutoff": local_cutoff,
         "seq_pos": seq_pos,
-        "seq_sep": seq_sep,
     }
+    if needs_seq_sep:
+        ctx["seq_sep"] = seq_sep
 
     return build_from_registry(data=data,
                                mode = mode,
                                registry = GRAPH_EDGE_REGISTRY,
-                               ctx = ctx,
+                               feat_ctx = ctx,
                                return_keys = return_keys
                                )
