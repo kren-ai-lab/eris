@@ -73,12 +73,79 @@ def infer_counts(data: Mapping[str, np.ndarray]) -> Dict[str, int]:
     return counts
 
 
-def infer_feature_keys(meta: Dict[str, Any], data: Mapping[str, np.ndarray]) -> Dict[str, List[str]]:
+_FEATURE_KEY_LIST_FIELDS = (
+    "node_attr_keys",
+    "edge_attr_keys",
+    "graph_attr_keys",
+    "matrix_attr_keys",
+    "grid_attr_keys",
+    "mesh_attr_keys",
+    "grid_channels",
+)
+
+
+def _validate_feature_keys(
+    feature_keys: Dict[str, Any],
+    data: Mapping[str, np.ndarray],
+) -> None:
+    for field in _FEATURE_KEY_LIST_FIELDS:
+        if field not in feature_keys:
+            continue
+        keys = feature_keys[field]
+        if not isinstance(keys, list) or not all(isinstance(key, str) for key in keys):
+            raise ArtifactValidationError(
+                f"meta.feature_keys.{field} must be a list[str]"
+            )
+
+    for keys_field, data_field in (
+        ("node_attr_keys", "node_attr"),
+        ("edge_attr_keys", "edge_attr"),
+    ):
+        if keys_field not in feature_keys or data_field not in data:
+            continue
+        array = data[data_field]
+        if not isinstance(array, np.ndarray):
+            continue
+        if array.ndim != 2:
+            raise ArtifactValidationError(
+                f"data.{data_field} must be 2D when {keys_field} are provided, "
+                f"got shape {array.shape}"
+            )
+        if len(feature_keys[keys_field]) != array.shape[1]:
+            raise ArtifactValidationError(
+                f"meta.feature_keys.{keys_field} has {len(feature_keys[keys_field])} "
+                f"keys for data.{data_field} with {array.shape[1]} columns"
+            )
+
+    if "graph_attr_keys" in feature_keys and "graph_attr" in data:
+        graph_attr = data["graph_attr"]
+        if isinstance(graph_attr, np.ndarray):
+            if graph_attr.ndim != 1:
+                raise ArtifactValidationError(
+                    "data.graph_attr must be 1D when graph_attr_keys are provided, "
+                    f"got shape {graph_attr.shape}"
+                )
+            if len(feature_keys["graph_attr_keys"]) != graph_attr.shape[0]:
+                raise ArtifactValidationError(
+                    "meta.feature_keys.graph_attr_keys has "
+                    f"{len(feature_keys['graph_attr_keys'])} keys for data.graph_attr "
+                    f"with length {graph_attr.shape[0]}"
+                )
+
+
+def infer_feature_keys(meta: Dict[str, Any], data: Mapping[str, np.ndarray]) -> Dict[str, Any]:
     """
     Canonical place for feature key lists.
-    - Prefer explicit lists already present in meta.
-    - Otherwise infer only from standard *_keys arrays if present in data.
+    - Preserve an explicit, non-empty feature_keys dict as authoritative.
+    - Otherwise use the existing Schema v1 legacy fallback.
     """
+    if "feature_keys" in meta:
+        explicit = meta["feature_keys"]
+        if not isinstance(explicit, dict):
+            raise ArtifactValidationError("meta.feature_keys must be a dict")
+        if explicit:
+            return explicit
+
     out: Dict[str, List[str]] = {}
 
     for k in ("node_attr_keys", "edge_attr_keys", "graph_attr_keys", "matrix_attr_keys", "grid_attr_keys", "mesh_attr_keys"):
@@ -170,6 +237,7 @@ def validate_artifact(meta: Dict[str, Any], data: Mapping[str, np.ndarray], *, s
         raise ArtifactValidationError("meta.counts must be a dict")
     if not isinstance(meta["feature_keys"], dict):
         raise ArtifactValidationError("meta.feature_keys must be a dict")
+    _validate_feature_keys(meta["feature_keys"], data)
 
     # Ensure input is normalized dict
     if not isinstance(meta["input"], dict):
@@ -213,7 +281,9 @@ class StructureArtifact:
         self.meta["shapes"] = shapes
         self.meta["dtypes"] = dtypes
         self.meta["counts"] = infer_counts(self.data)
-        self.meta["feature_keys"] = infer_feature_keys(self.meta, self.data)
+        feature_keys = infer_feature_keys(self.meta, self.data)
+        _validate_feature_keys(feature_keys, self.data)
+        self.meta["feature_keys"] = feature_keys
 
 
     def validate(self, strict = False):
