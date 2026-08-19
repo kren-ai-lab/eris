@@ -69,9 +69,9 @@ policy, dependency boundary, configuration authority, target API/CLI, the M1–M
 distribution name `eris` are frozen and versioned. External PyPI publication feasibility remains
 a release condition, not an open M0 decision.
 
-## M1 — Core correctness
+## M1 — Core correctness and release baseline
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE`
 
 **Objective:** Stabilize the existing explicit-representation core before Registry/config v2.
 
@@ -83,68 +83,68 @@ a release condition, not an open M0 decision.
   - **Acceptance:** Core runtime dependencies are complete and consistent; this unit alone does
     not require Roxy removal.
   - **Depends on:** M0 internal contract.
-- [ ] **M1.2 — Establish a single package-version authority**
+- [x] **M1.2 — Establish a single package-version authority**
   - **Scope:** Define one source shared by distribution metadata and `eris.__version__`, ready
     for later provenance and CLI use.
   - **Acceptance:** Installed metadata and `eris.__version__` agree without a misleading
     fallback.
   - **Depends on:** M1.1.
-- [ ] **M1.3 — Internalize residue property constants and remove Roxy**
+- [x] **M1.3 — Internalize residue property constants and remove Roxy**
   - **Scope:** Preserve current values within Eris, document their provenance, and remove the
     runtime Roxy import.
   - **Acceptance:** Regression tests prove value equivalence and core imports without Roxy.
   - **Depends on:** M1.1.
-- [ ] **M1.4 — Fix B-factor propagation**
+- [x] **M1.4 — Fix B-factor propagation**
   - **Scope:** Correct residue/CA B-factor propagation and fallback in current feature building.
   - **Acceptance:** Present and missing B-factor cases produce the intended tested values.
   - **Depends on:** M1.3 where residue features use the internalized constants.
-- [ ] **M1.5 — Harden feature parsing and builder calls**
+- [x] **M1.5 — Harden feature parsing and builder calls**
   - **Scope:** Correct unsafe parsing calls and incompatible builder arguments found in the
     baseline while preserving valid current feature modes.
   - **Acceptance:** Supported modes build and invalid inputs fail with actionable errors.
   - **Depends on:** M1.3.
-- [ ] **M1.6 — Preserve authoritative `feature_keys`**
+- [x] **M1.6 — Preserve authoritative `feature_keys`**
   - **Scope:** Fix pre-v2 finalization so explicit feature metadata is preserved and inference is
     only a non-destructive fallback; do not implement Schema v2.
   - **Acceptance:** Encoder keys survive in exact order and align with feature dimensions.
   - **Depends on:** M1.5.
-- [ ] **M1.7 — Correct continuous contact-map metadata**
+- [x] **M1.7 — Correct continuous contact-map metadata**
   - **Scope:** Describe continuous contact values correctly and keep them distinct from the
     binned contact-map representation.
   - **Acceptance:** Keys, dtype, shape, and semantics agree for continuous and binned variants.
   - **Depends on:** M1.6.
-- [ ] **M1.8 — Deduplicate symmetric kNN topology**
+- [x] **M1.8 — Deduplicate symmetric kNN topology**
   - **Scope:** Enforce unique directed pairs, one reverse edge when symmetric, no self-loops when
     disabled, and deterministic ordering.
   - **Acceptance:** Focused tests prove these frozen invariants without a new scientific decision.
   - **Depends on:** M0 graph semantics.
-- [ ] **M1.9 — Keep edge features aligned after topology normalization**
+- [x] **M1.9 — Keep edge features aligned after topology normalization**
   - **Scope:** Reindex edge index, distances, and features together through deduplication,
     reversal, and ordering.
   - **Acceptance:** Every feature row maps to its edge and all edge-array lengths agree.
   - **Depends on:** M1.8.
-- [ ] **M1.10 — Correct graph statistics and self-loop accounting**
+- [x] **M1.10 — Correct graph statistics and self-loop accounting**
   - **Scope:** Calculate counts, degree, density, and self-loops against the final topology
     without double-counting symmetric directed edges.
   - **Acceptance:** Directed, symmetric, self-loop, and empty examples match manual expectations.
   - **Depends on:** M1.8 and M1.9.
-- [ ] **M1.11 — Separate granularity from coordinate source in current core paths**
+- [x] **M1.11 — Separate granularity from coordinate source in current core paths**
   - **Scope:** Correct current uses of `ca` as granularity; full consolidation remains in M2.
   - **Acceptance:** Current metadata can express `granularity = residue` and
     `coordinate_source = ca` independently.
   - **Depends on:** M1.5 and the M0 terminology contract.
-- [ ] **M1.12 — Propagate atom-selection filters**
+- [x] **M1.12 — Propagate atom-selection filters**
   - **Scope:** Pass current water, heteroatom, hydrogen, ion, altloc, and amino-acid options into
     structural loading, provisionally preserving current defaults until M2.
   - **Acceptance:** Explicit filter values affect loaded atoms and have focused tests.
   - **Depends on:** M1.5.
   - **Decision note:** Conflicting defaults go to M2.1 rather than being silently resolved.
-- [ ] **M1.13 — Handle empty and undersized graph inputs safely**
+- [x] **M1.13 — Handle empty and undersized graph inputs safely**
   - **Scope:** Cover `N=0`, `N=1`, `N<k`, and cutoff graphs without neighbors.
   - **Acceptance:** Each case yields a strict-valid result or documented validation error, with no
     out-of-range indices.
   - **Depends on:** M1.8, M1.10, and M1.12.
-- [ ] **M1.14 — Correct voxel channel metadata**
+- [x] **M1.14 — Correct voxel channel metadata**
   - **Scope:** Align voxel channel names/order with actual tensor axes and values.
   - **Acceptance:** Channel keys, shape, dtype, and order are deterministic and consistent.
   - **Depends on:** M1.6.
@@ -158,6 +158,20 @@ a release condition, not an open M0 decision.
 - Focused scientific/regression tests and graph invariants are green.
 - Every current explicit representation produces a strict-valid artifact under its corresponding
   pre-v2 contract.
+
+**Result:** `M1 GATE: PASS` — 2026-08-19.
+
+Gate evidence:
+
+- Python 3.12 completed the full gate: 172 tests passed, 8 optional Torch/PyG tests skipped,
+  and the focused M1 regression suite passed all 167 tests.
+- Python 3.10 and 3.11 passed clean install, import, version, and `pip check` smoke validation;
+  the full Python 3.10–3.12 CI matrix remains assigned to M8.6.
+- Core dependencies are declared, and base import loads none of Roxy, Sylphy, Torch, PyG, or
+  TorchDrug.
+- All ten current explicit representations executed and produced strict-valid pre-v2 artifacts.
+- Tracked `out/` cleanup and the Ruff baseline remain assigned to M8.3 and M8.5 respectively;
+  neither blocks the completed M1 gate.
 
 ## M2 — Registry/config consolidation
 
