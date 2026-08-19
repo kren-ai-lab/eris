@@ -13,7 +13,7 @@ from eris.exceptions import ErisError
 ARTIFACT_SCHEMA_VERSION = 1
 
 ALLOWED_TYPES = {"graph", "matrix", "cloud", "grid", "mesh"}
-ALLOWED_LEVELS = {"residue", "ca", "atom"}
+ALLOWED_LEVELS = {"atom", "residue", "structure", "mixed"}
 
 
 class ArtifactValidationError(ErisError):

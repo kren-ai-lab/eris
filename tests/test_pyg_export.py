@@ -91,7 +91,7 @@ def test_export_pyg_cloud_allowed():
             "encoder_version": "0.0.0",
             "encoder_fingerprint": "test",
             "type": "cloud",     # explicitly not a graph
-            "level": "ca",
+            "level": "atom",
             "params": {},
             "input": {"source": "memory", "chain_id": None, "model_index": 0, "format": None},
             "feature_keys": {},

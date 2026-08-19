@@ -24,7 +24,5 @@ class BaseResidueEncoder(BaseEncoder):
     
     
     def _update_granularity_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
-        meta.update({
-            "residue_center": str(self.residue_center),}
-        )
+        meta["params"]["residue_center"] = str(self.residue_center)
         return meta

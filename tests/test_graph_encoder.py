@@ -40,7 +40,7 @@ def _check_artifact_graph_basic(art):
         assert k in meta, f"missing meta key: {k}"
 
     assert meta["type"] == "graph"
-    assert meta["level"] in {"ca", "residue"}  # depends on your convention; you’re using "ca"
+    assert meta["level"] == "residue"
 
     assert isinstance(meta["params"], dict)
     assert isinstance(meta["input"], dict)
@@ -57,6 +57,7 @@ def test_contact_graph():
         pytest.skip(f"Missing test structure: {DATA}")
 
     enc = get_encoder("residue_contact_graph")
+    enc.use_cache = False
     art = enc.encode(StructureInput(source=str(DATA)))
     _check_artifact_graph_basic(art)
 
@@ -66,5 +67,6 @@ def test_knn_graph():
         pytest.skip(f"Missing test structure: {DATA}")
 
     enc = get_encoder("residue_knn_graph")
+    enc.use_cache = False
     art = enc.encode(StructureInput(source=str(DATA)))
     _check_artifact_graph_basic(art)

@@ -10,7 +10,7 @@ def mk_artifact(*, data: Dict[str, Any], meta: Dict[str, Any]) -> StructureArtif
         "encoder_version": meta.get("encoder_version", "0.0.0"),
         "encoder_fingerprint": meta.get("encoder_fingerprint", "test"),
         "type": meta.get("type", "graph"),
-        "level": meta.get("level", "ca"),
+        "level": meta.get("level", "residue"),
         "params": meta.get("params", {}),
         "input": meta.get("input", {"source": "memory", "chain_id": None, "model_index": 0, "format": None}),
         "feature_keys": meta.get("feature_keys", {}),
