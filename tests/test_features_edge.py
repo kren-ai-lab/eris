@@ -5,10 +5,12 @@ import pytest
 
 from eris.features.edge.edge import build_edge_attr
 
-
 EDGE_INDEX = np.array([[0, 0, 1], [1, 2, 2]], dtype=np.int64)
 EDGE_DIST = np.array([1.0, 2.0, 1.5], dtype=np.float32)
 SEQ_POS = np.array([0, 2, 5], dtype=np.int64)
+EMPTY_EDGE_INDEX = np.zeros((2, 0), dtype=np.int64)
+EMPTY_EDGE_DIST = np.zeros((0,), dtype=np.float32)
+EMPTY_SEQ_POS = np.zeros((0,), dtype=np.int64)
 
 
 def test_edge_builder_default_mode_uses_feature_context():
@@ -87,6 +89,44 @@ def test_edge_builder_empty_mode_uses_edge_count():
     assert edge_attr.shape == (3, 0)
     assert edge_attr.dtype == np.float32
     assert keys == []
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_keys"),
+    [
+        ("dist", ["dist"]),
+        ("rbf", ["rbf.0", "rbf.1", "rbf.2", "rbf.3"]),
+        ("seq", ["seq_sep"]),
+        ("local", ["flag.is_local_le_2"]),
+        (
+            "dist+rbf+seq+local",
+            [
+                "dist",
+                "rbf.0",
+                "rbf.1",
+                "rbf.2",
+                "rbf.3",
+                "seq_sep",
+                "flag.is_local_le_2",
+            ],
+        ),
+        ("", []),
+    ],
+)
+def test_edge_builder_modes_preserve_feature_width_with_no_edges(mode, expected_keys):
+    edge_attr, keys = build_edge_attr(
+        EMPTY_EDGE_INDEX,
+        EMPTY_EDGE_DIST,
+        mode=mode,
+        seq_pos=EMPTY_SEQ_POS,
+        rbf_k=4,
+        local_cutoff=2,
+        return_keys=True,
+    )
+
+    assert edge_attr.shape == (0, len(expected_keys))
+    assert edge_attr.dtype == np.float32
+    assert keys == expected_keys
 
 
 def test_edge_builder_rejects_unknown_mode():
