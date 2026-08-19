@@ -8,6 +8,7 @@ import pytest
 import gemmi
 
 from eris.core.io import extract_residue_bundle
+from eris.features.node.residue import build_node_attr
 
 
 def _chain_from_pdb_string(pdb_text: str, chain_id: str = "A", model_index: int = 0) -> gemmi.Chain:
@@ -94,3 +95,27 @@ def test_missing_ca_nan_keeps_residue_with_nans():
     assert np.isnan(strc["pos"][1]).all()
     assert np.isnan(strc["plddt"][1])
     assert np.isnan(strc["bfactor_ca"][1])
+
+
+def test_ca_bfactor_propagates_to_residue_node_feature():
+    chain = _chain_from_pdb_string(_PDB_ALTLOC_AND_MISSING_CA)
+
+    strc = extract_residue_bundle(
+        chain,
+        amino_acids_only=True,
+        altloc="max_occupancy",
+        missing_residue="nan",
+    )
+    node_attr, keys = build_node_attr(
+        strc["aa_index"],
+        bfactor_ca=strc["bfactor_ca"],
+        mode="bfactor_ca",
+        return_keys=True,
+    )
+
+    assert np.isclose(strc["bfactor_ca"][0], 20.0)
+    assert keys == ["bfactor_ca"]
+    assert node_attr.shape == (2, 1)
+    assert node_attr.dtype == np.float32
+    assert np.isclose(node_attr[0, 0], 0.2)
+    assert node_attr[1, 0] == 0.0

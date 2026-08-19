@@ -171,7 +171,7 @@ def bfactor_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, A
     if data["bfactor_ca"] is None:
         v = np.full((n, 1), np.nan if missing == "nan" else 0.0, dtype=np.float32)
     else:
-        v = safe_float(data["bfactor_ca"], missing).reshape(-1, 1)
+        v = safe_float(data["bfactor_ca"], missing=missing).reshape(-1, 1)
         # normalize heuristic (0..100 -> 0..1)
         if missing != "nan" and float(np.nanmax(v)) > 1.5:
             v = v / 100.0

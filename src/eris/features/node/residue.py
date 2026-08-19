@@ -44,7 +44,7 @@ def build_node_attr(
     data = {
         "aa_index": aa_index,
         "plddt_ca": plddt_ca,
-        "bfactor_ca": bfactor,
+        "bfactor_ca": bfactor_ca,
         "has_ca": has_ca,
         "n": n
     }

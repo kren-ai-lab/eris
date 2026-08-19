@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-# register built-in encoders
-from eris import encoders as _encoders  # noqa: F401
-from importlib.metadata import PackageNotFoundError, version
+from importlib.metadata import version as distribution_version
 
 __all__ = ["__version__"]
 
-try:
-    __version__ = version("eris")
-except PackageNotFoundError:  # pragma: no cover
-    # Happens when running from source tree without an installed package
-    __version__ = "0.0.0"
+__version__ = distribution_version("eris")
+
+# register built-in encoders
+from eris import encoders as _encoders  # noqa: F401
