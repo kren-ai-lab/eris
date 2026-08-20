@@ -175,14 +175,14 @@ Gate evidence:
 
 ## M2 — Registry/config consolidation
 
-**Status:** `NOT STARTED`
+**Status:** `IN PROGRESS`
 
 **Objective:** Make typed canonical configuration the single source of truth for explicit
 representations.
 
 ### Work units
 
-- [ ] **M2.1 — Freeze canonical explicit-representation defaults**
+- [x] **M2.1 — Freeze canonical explicit-representation defaults**
   - **Scope:** Resolve 32/36 bins; public `bool`/`uint8`; `k`; cutoffs;
     symmetrization/self-loops; voxel size, resolution, margin, channels, pooling and clamp;
     atom-selection/altloc defaults; and missing-residue policy where ambiguous.
