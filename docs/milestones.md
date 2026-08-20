@@ -191,12 +191,12 @@ representations.
   - **Depends on:** M1 gate.
   - **Decision note:** Structural/biological ambiguity goes to Nicole/Julián; software/API/release
     choices go to David/project owner.
-- [ ] **M2.2 — Define typed canonical configuration primitives**
+- [x] **M2.2 — Define typed canonical configuration primitives**
   - **Scope:** Implement typed validation, deterministic serialization, and independent
     granularity/coordinate-source concepts.
   - **Acceptance:** Invalid combinations fail early and equivalent configs serialize identically.
   - **Depends on:** M2.1.
-- [ ] **M2.3 — Consolidate canonical explicit Representation Registry**
+- [x] **M2.3 — Consolidate canonical explicit Representation Registry**
   - **Scope:** Register exactly `atom_point_cloud`, `residue_point_cloud`, `atom_knn_graph`,
     `residue_knn_graph`, `residue_contact_graph`, `residue_distogram`,
     `residue_distogram_bins`, `residue_contact_map`, `residue_contact_map_bins`, and
