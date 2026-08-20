@@ -1,0 +1,537 @@
+from __future__ import annotations
+
+from dataclasses import FrozenInstanceError, fields
+
+import pytest
+
+from eris.core.config import (
+    _CONFIG_TYPES_BY_REPRESENTATION,
+    AtomKNNGraphConfig,
+    AtomPointCloudConfig,
+    FeatureMode,
+    FeatureToken,
+    ResidueContactGraphConfig,
+    ResidueContactMapBinsConfig,
+    ResidueContactMapConfig,
+    ResidueDistogramBinsConfig,
+    ResidueDistogramConfig,
+    ResidueKNNGraphConfig,
+    ResiduePointCloudConfig,
+    ResidueVoxelGridConfig,
+)
+from eris.encoders.clouds.atom_point_cloud import AtomPointCloud
+from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
+from eris.encoders.geometry.contact_map_bins_ca import ContactMapBinsCA
+from eris.encoders.geometry.contact_map_ca import ContactMapCA
+from eris.encoders.geometry.distogram_bins_ca import DistogramBinsCA
+from eris.encoders.geometry.distogram_ca import DistogramCA
+from eris.encoders.graphs.atom_knn_graph import AtomKNNGraph
+from eris.encoders.graphs.residue_contact_graph import ResidueContactGraph
+from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
+from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
+
+ATOM_SELECTION = {
+    "include_hetero": False,
+    "include_h": False,
+    "drop_water": True,
+    "keep_ions": True,
+    "altloc": "first",
+    "amino_acids_only": False,
+}
+RESIDUE_SELECTION = {
+    "residue_center": "ca",
+    "amino_acids_only": True,
+    "altloc": "first",
+    "missing_residue_center": "skip",
+}
+GEOMETRY = {"center": True, "scale": None}
+ATOM_NODE_MODE = ["elem", "role", "bfactor", "occ"]
+RESIDUE_NODE_MODE = ["onehot", "physchem", "plddt_ca", "bfactor_ca"]
+EDGE_MODE = ["dist", "rbf", "seq", "local"]
+
+
+EXPECTED_DEFAULTS = {
+    "atom_point_cloud": {
+        **GEOMETRY,
+        **ATOM_SELECTION,
+        "node_attr_mode": ATOM_NODE_MODE,
+    },
+    "residue_point_cloud": {
+        **GEOMETRY,
+        **RESIDUE_SELECTION,
+        "node_attr_mode": RESIDUE_NODE_MODE,
+    },
+    "atom_knn_graph": {
+        **GEOMETRY,
+        **ATOM_SELECTION,
+        "node_attr_mode": ATOM_NODE_MODE,
+        "edge_attr_mode": EDGE_MODE,
+        "rbf_k": 16,
+        "rbf_dmax": 20.0,
+        "local_cutoff": 4,
+        "k": 16,
+        "cutoff": 12.0,
+        "symmetric": True,
+    },
+    "residue_knn_graph": {
+        **GEOMETRY,
+        **RESIDUE_SELECTION,
+        "node_attr_mode": RESIDUE_NODE_MODE,
+        "edge_attr_mode": EDGE_MODE,
+        "rbf_k": 16,
+        "rbf_dmax": 20.0,
+        "local_cutoff": 4,
+        "knn_mode": "local",
+        "k": 16,
+        "cutoff": 12.0,
+        "symmetric": True,
+        "include_self_loops": False,
+    },
+    "residue_contact_graph": {
+        **GEOMETRY,
+        **RESIDUE_SELECTION,
+        "node_attr_mode": RESIDUE_NODE_MODE,
+        "edge_attr_mode": EDGE_MODE,
+        "rbf_k": 16,
+        "rbf_dmax": 20.0,
+        "local_cutoff": 4,
+        "cutoff": 8.0,
+        "include_self_loops": False,
+    },
+    "residue_distogram": {
+        **GEOMETRY,
+        **RESIDUE_SELECTION,
+        "include_self": True,
+    },
+    "residue_distogram_bins": {
+        **GEOMETRY,
+        **RESIDUE_SELECTION,
+        "edges": None,
+        "dmin": 2.0,
+        "dmax": 20.0,
+        "num_bins": 36,
+        "add_no_contact_class": True,
+        "include_self": True,
+        "dtype": "uint8",
+    },
+    "residue_contact_map": {
+        **GEOMETRY,
+        **RESIDUE_SELECTION,
+        "cutoff": 8.0,
+        "include_self": False,
+        "dtype": "uint8",
+    },
+    "residue_contact_map_bins": {
+        **GEOMETRY,
+        **RESIDUE_SELECTION,
+        "edges": None,
+        "dmin": 2.0,
+        "dmax": 20.0,
+        "num_bins": 36,
+        "add_no_contact_class": True,
+        "include_self": False,
+        "dtype": "uint8",
+    },
+    "residue_voxel_grid": {
+        **GEOMETRY,
+        **RESIDUE_SELECTION,
+        "grid_size": 64,
+        "voxel_size": None,
+        "fit": True,
+        "margin": 4.0,
+        "channels": ["occupancy", "density", "aa_onehot", "plddt", "bfactor"],
+        "sigma": 1.0,
+        "pool": "max",
+        "clamp": True,
+        "dtype": "float32",
+    },
+}
+
+
+def test_all_ten_defaults_match_the_m2_1_contract():
+    assert len(_CONFIG_TYPES_BY_REPRESENTATION) == 10
+    actual = {
+        name: config_type().to_dict()
+        for name, config_type in _CONFIG_TYPES_BY_REPRESENTATION.items()
+    }
+    assert actual == EXPECTED_DEFAULTS
+
+
+def test_identity_is_unique_and_not_a_parameter_field():
+    names = tuple(_CONFIG_TYPES_BY_REPRESENTATION)
+    assert names == tuple(EXPECTED_DEFAULTS)
+    assert len(set(names)) == 10
+
+    for name, config_type in _CONFIG_TYPES_BY_REPRESENTATION.items():
+        config = config_type()
+        field_names = {config_field.name for config_field in fields(config)}
+        assert config.representation_name == name
+        assert "representation_name" not in field_names
+        assert "granularity" not in field_names
+        assert "representation_name" not in config.to_dict()
+        assert "granularity" not in config.to_dict()
+        assert not hasattr(config, "representation_family")
+
+
+def test_granularity_and_coordinate_source_are_independent():
+    assert AtomPointCloudConfig().granularity == "atom"
+    assert AtomPointCloudConfig().coordinate_source == "atom"
+
+    expected_sources = {
+        "ca": "ca",
+        "mean": "residue_mean",
+        "com": "residue_com",
+    }
+    for residue_center, coordinate_source in expected_sources.items():
+        config = ResiduePointCloudConfig(residue_center=residue_center)
+        assert config.granularity == "residue"
+        assert config.coordinate_source == coordinate_source
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        lambda: AtomKNNGraphConfig(k=True),
+        lambda: AtomKNNGraphConfig(k=0),
+        lambda: AtomKNNGraphConfig(cutoff=0),
+        lambda: AtomKNNGraphConfig(cutoff=float("nan")),
+        lambda: AtomPointCloudConfig(scale=True),
+        lambda: AtomPointCloudConfig(scale=0),
+        lambda: AtomKNNGraphConfig(rbf_k=0),
+        lambda: AtomKNNGraphConfig(rbf_dmax=0),
+        lambda: AtomKNNGraphConfig(local_cutoff=-1),
+        lambda: ResidueKNNGraphConfig(knn_mode="invalid"),
+        lambda: ResiduePointCloudConfig(residue_center="invalid"),
+        lambda: ResidueVoxelGridConfig(pool="invalid"),
+        lambda: ResidueVoxelGridConfig(dtype="uint8"),
+        lambda: ResidueContactMapConfig(dtype="float32"),
+        lambda: ResidueDistogramBinsConfig(dtype="float32"),
+        lambda: ResidueVoxelGridConfig(grid_size=0),
+        lambda: ResidueVoxelGridConfig(grid_size=True),
+        lambda: ResidueVoxelGridConfig(voxel_size=0),
+        lambda: ResidueVoxelGridConfig(sigma=0),
+        lambda: ResidueVoxelGridConfig(margin=-1),
+        lambda: ResidueDistogramBinsConfig(num_bins=0),
+        lambda: ResidueDistogramBinsConfig(dmin=2, dmax=2),
+        lambda: ResidueDistogramBinsConfig(edges=[2]),
+        lambda: ResidueDistogramBinsConfig(edges=[2, 2]),
+        lambda: ResidueDistogramBinsConfig(edges=[2, float("inf")]),
+        lambda: ResidueDistogramBinsConfig(edges="2,4"),
+    ],
+)
+def test_invalid_values_fail_during_construction(factory):
+    with pytest.raises((TypeError, ValueError)):
+        factory()
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        lambda: ResiduePointCloudConfig(amino_acids_only=False),
+        lambda: ResiduePointCloudConfig(altloc="max_occupancy"),
+        lambda: ResiduePointCloudConfig(missing_residue_center="error"),
+    ],
+)
+def test_residue_loader_policies_remain_frozen_in_m2_2(factory):
+    with pytest.raises((TypeError, ValueError)):
+        factory()
+
+
+def test_valid_non_default_edge_cases_remain_representable():
+    atom = AtomPointCloudConfig(include_hetero=False, keep_ions=True, altloc=" a ")
+    assert atom.include_hetero is False
+    assert atom.keep_ions is True
+    assert atom.altloc == "A"
+
+    local = ResidueKNNGraphConfig(knn_mode="local", cutoff=None)
+    global_with_cutoff = ResidueKNNGraphConfig(knn_mode=" GLOBAL ", cutoff=99)
+    assert local.cutoff is None
+    assert global_with_cutoff.knn_mode == "global"
+    assert global_with_cutoff.cutoff is None
+
+    voxel = ResidueVoxelGridConfig(
+        grid_size=1,
+        fit=False,
+        voxel_size=None,
+        dtype="float16",
+    )
+    assert voxel.grid_size == 1
+    assert voxel.voxel_size is None
+    assert voxel.dtype == "float16"
+
+    assert ResiduePointCloudConfig(residue_center="mean").coordinate_source == "residue_mean"
+    assert ResiduePointCloudConfig(residue_center="com").coordinate_source == "residue_com"
+    assert ResidueContactMapConfig(dtype="bool").dtype == "bool"
+    assert ResidueDistogramBinsConfig(edges=[2, 4, 8]).edges == (2.0, 4.0, 8.0)
+
+
+def test_feature_mode_string_list_and_tuple_forms_are_equivalent():
+    string_mode = FeatureMode.from_value("density+occupancy", kind="grid")
+    list_mode = FeatureMode.from_value(["density", "occupancy"], kind="grid")
+    tuple_mode = FeatureMode.from_value(("density", "occupancy"), kind="grid")
+
+    assert string_mode == list_mode == tuple_mode
+    assert string_mode.to_list() == ["density", "occupancy"]
+
+
+def test_feature_mode_preserves_requested_order_and_grid_parameters():
+    channels = [
+        {
+            "density": {
+                "sigma": 1.5,
+                "nested": {"z": [3, 2], "a": True},
+            }
+        },
+        "occupancy",
+    ]
+    config = ResidueVoxelGridConfig(channels=channels)
+
+    assert config.to_dict()["channels"] == channels
+    assert [token.name for token in config.channels.tokens] == ["density", "occupancy"]
+
+
+def test_nested_feature_parameter_order_is_canonical():
+    first = ResidueVoxelGridConfig(
+        channels=[{"density": {"z": 1, "a": {"y": 2, "x": 3}}}],
+    )
+    second = ResidueVoxelGridConfig(
+        channels=[{"density": {"a": {"x": 3, "y": 2}, "z": 1}}],
+    )
+
+    assert first == second
+    assert first.to_dict() == second.to_dict()
+    assert first.to_json() == second.to_json()
+
+
+@pytest.mark.parametrize(
+    ("value", "kind"),
+    [
+        ("occupancy+occupancy", "grid"),
+        ("unknown", "grid"),
+        ([{"elem": {"invalid": True}}], "atom_node"),
+        ([{"dist": {"invalid": True}}], "edge"),
+    ],
+)
+def test_feature_mode_rejects_duplicates_unknowns_and_unsupported_params(value, kind):
+    with pytest.raises(ValueError):
+        FeatureMode.from_value(value, kind=kind)
+
+
+def test_explicit_edges_override_generation_fields_canonically():
+    with_ignored_generation = ResidueDistogramBinsConfig(
+        edges=[2, 4, 8],
+        dmin=-100,
+        dmax=-99,
+        num_bins=99,
+    )
+    canonical = ResidueDistogramBinsConfig(edges=(2.0, 4.0, 8.0))
+
+    assert with_ignored_generation == canonical
+    assert with_ignored_generation.to_dict() == canonical.to_dict()
+    assert with_ignored_generation.to_json() == canonical.to_json()
+    assert canonical.to_dict()["edges"] == [2.0, 4.0, 8.0]
+    assert canonical.dmin is canonical.dmax is canonical.num_bins is None
+
+
+def test_configs_and_nested_state_are_immutable():
+    config = ResidueDistogramBinsConfig(edges=[2, 4, 8])
+    mode = ResidueVoxelGridConfig(
+        channels=[{"density": {"nested": [1, 2]}}],
+    ).channels
+
+    with pytest.raises(FrozenInstanceError):
+        config.edges = (1.0, 2.0)
+    with pytest.raises(TypeError):
+        config.edges[0] = 1.0
+    with pytest.raises(FrozenInstanceError):
+        mode.tokens = ()
+    with pytest.raises(FrozenInstanceError):
+        mode.tokens[0].params.items = ()
+
+
+def test_direct_feature_construction_cannot_retain_mutable_containers():
+    raw_params = {"nested": [1, 2]}
+    token = FeatureToken(name=" density ", params=raw_params)
+    mode = FeatureMode(tokens=[token])
+    raw_params["nested"].append(3)
+
+    assert token.name == "density"
+    assert mode.tokens == (token,)
+    assert token.to_value() == {"density": {"nested": [1, 2]}}
+
+
+def test_catalog_is_immutable():
+    with pytest.raises(TypeError):
+        _CONFIG_TYPES_BY_REPRESENTATION["extra"] = AtomPointCloudConfig
+
+
+def test_serialization_preserves_none_and_excludes_non_parameter_state():
+    config = ResidueVoxelGridConfig()
+    payload = config.to_dict()
+
+    assert payload["scale"] is None
+    assert payload["voxel_size"] is None
+    assert config.to_json() == config.to_json()
+    for excluded in (
+        "use_cache",
+        "cache",
+        "name",
+        "representation",
+        "granularity_contract",
+        "representation_name",
+        "granularity",
+        "coordinate_source",
+        "voxel_size_effective",
+    ):
+        assert excluded not in payload
+
+
+def _plain_value(value):
+    if isinstance(value, FeatureMode):
+        return "+".join(token.name for token in value.tokens)
+    return value
+
+
+@pytest.mark.parametrize(
+    ("config", "encoder", "connected_fields"),
+    [
+        (
+            AtomPointCloudConfig(),
+            AtomPointCloud(),
+            (*GEOMETRY, *ATOM_SELECTION, "node_attr_mode"),
+        ),
+        (
+            ResiduePointCloudConfig(),
+            ResiduePointCloudCA(),
+            (*GEOMETRY, "residue_center", "node_attr_mode"),
+        ),
+        (
+            AtomKNNGraphConfig(),
+            AtomKNNGraph(),
+            (
+                *GEOMETRY,
+                *ATOM_SELECTION,
+                "node_attr_mode",
+                "edge_attr_mode",
+                "rbf_k",
+                "rbf_dmax",
+                "local_cutoff",
+                "k",
+                "cutoff",
+                "symmetric",
+            ),
+        ),
+        (
+            ResidueKNNGraphConfig(),
+            ResidueKNNGraph(),
+            (
+                *GEOMETRY,
+                "residue_center",
+                "node_attr_mode",
+                "edge_attr_mode",
+                "rbf_k",
+                "rbf_dmax",
+                "local_cutoff",
+                "knn_mode",
+                "k",
+                "cutoff",
+                "symmetric",
+                "include_self_loops",
+            ),
+        ),
+        (
+            ResidueContactGraphConfig(),
+            ResidueContactGraph(),
+            (
+                *GEOMETRY,
+                "residue_center",
+                "node_attr_mode",
+                "edge_attr_mode",
+                "rbf_k",
+                "rbf_dmax",
+                "local_cutoff",
+                "cutoff",
+                "include_self_loops",
+            ),
+        ),
+        (
+            ResidueDistogramConfig(),
+            DistogramCA(),
+            (*GEOMETRY, "residue_center", "include_self"),
+        ),
+        (
+            ResidueDistogramBinsConfig(),
+            DistogramBinsCA(),
+            (
+                *GEOMETRY,
+                "residue_center",
+                "edges",
+                "dmin",
+                "dmax",
+                "num_bins",
+                "add_no_contact_class",
+                "include_self",
+                "dtype",
+            ),
+        ),
+        (
+            ResidueContactMapConfig(),
+            ContactMapCA(),
+            (*GEOMETRY, "residue_center", "cutoff", "include_self", "dtype"),
+        ),
+        (
+            ResidueContactMapBinsConfig(),
+            ContactMapBinsCA(),
+            (
+                *GEOMETRY,
+                "residue_center",
+                "edges",
+                "dmin",
+                "dmax",
+                "num_bins",
+                "add_no_contact_class",
+                "include_self",
+                "dtype",
+            ),
+        ),
+        (
+            ResidueVoxelGridConfig(),
+            VoxelGridCA(),
+            (
+                *GEOMETRY,
+                "residue_center",
+                "grid_size",
+                "voxel_size",
+                "fit",
+                "margin",
+                "channels",
+                "sigma",
+                "pool",
+                "clamp",
+                "dtype",
+            ),
+        ),
+    ],
+)
+def test_config_defaults_match_current_connected_encoder_fields(
+    config,
+    encoder,
+    connected_fields,
+):
+    for field_name in connected_fields:
+        assert _plain_value(getattr(config, field_name)) == getattr(encoder, field_name)
+
+
+def test_config_does_not_copy_current_identity_field_leaks():
+    assert "name" not in {item.name for item in fields(ResidueKNNGraphConfig)}
+    assert "name" not in {item.name for item in fields(ResidueVoxelGridConfig)}
+    assert "representation" not in {item.name for item in fields(ResidueContactGraphConfig)}
+
+
+def test_atom_knn_edge_mode_is_canonical_config_despite_runtime_class_attribute():
+    config = AtomKNNGraphConfig()
+    encoder = AtomKNNGraph()
+
+    assert config.edge_attr_mode.to_list() == ["dist", "rbf", "seq", "local"]
+    assert "edge_attr_mode" not in encoder.__dict__
+    assert encoder.edge_attr_mode == "dist+rbf+seq+local"
