@@ -19,7 +19,7 @@ app = typer.Typer(add_completion=False, help="Encode structures into Eris artifa
 @app.command("single")
 def run(
     input_path: Path = typer.Option(..., "--input", exists=True, readable=True),
-    encoder: str = typer.Option("distogram_ca", "--encoder"),
+    encoder: str = typer.Option("residue_distogram", "--encoder"),
     chain: Optional[str] = typer.Option(None, "--chain"),
     model_index: int = typer.Option(0, "--model"),
     out: Path = typer.Option(Path("out"), "--out"),

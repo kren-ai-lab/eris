@@ -78,11 +78,11 @@ def test_residue_coordinate_source_changes_fingerprint_not_level():
         ("residue_point_cloud", "residue"),
         ("residue_knn_graph", "residue"),
         ("residue_contact_graph", "residue"),
-        ("distogram_residue", "residue"),
-        ("distogram_bins_residue", "residue"),
-        ("contact_map_residue", "residue"),
-        ("contact_map_bins_residue", "residue"),
-        ("voxel_grid_ca", "residue"),
+        ("residue_distogram", "residue"),
+        ("residue_distogram_bins", "residue"),
+        ("residue_contact_map", "residue"),
+        ("residue_contact_map_bins", "residue"),
+        ("residue_voxel_grid", "residue"),
     ],
 )
 def test_explicit_encoder_level_follows_represented_entity(registry_name, expected_level):
@@ -91,29 +91,9 @@ def test_explicit_encoder_level_follows_represented_entity(registry_name, expect
 
     artifact = encoder.encode(StructureInput(source=str(DATA)))
 
+    assert artifact.meta["encoder_name"] == registry_name
     assert artifact.meta["level"] == expected_level
     if expected_level == "residue":
         assert artifact.meta["params"]["residue_center"] == "ca"
     else:
         assert "residue_center" not in artifact.meta["params"]
-
-
-@pytest.mark.parametrize(
-    "registry_name",
-    [
-        "distogram_residue",
-        "distogram_bins_residue",
-        "contact_map_residue",
-        "contact_map_bins_residue",
-        "voxel_grid_ca",
-    ],
-)
-def test_historical_ca_encoder_names_still_have_residue_level(registry_name):
-    encoder = get_encoder(registry_name)
-    encoder.use_cache = False
-
-    artifact = encoder.encode(StructureInput(source=str(DATA)))
-
-    assert "ca" in artifact.meta["encoder_name"]
-    assert artifact.meta["level"] == "residue"
-    assert artifact.meta["params"]["residue_center"] == "ca"

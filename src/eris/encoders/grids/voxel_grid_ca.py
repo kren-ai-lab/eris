@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class VoxelGridCA(BaseResidueEncoder):
-    name: str = "voxel_grid_ca"
+    name: str = "residue_voxel_grid"
     representation: ClassVar[BaseRepresentation] = VoxelGridRepresentation()
 
     grid_size: int = 64

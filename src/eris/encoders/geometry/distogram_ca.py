@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 @dataclass
 class DistogramCA(BaseResidueEncoder):
     #Identity
-    name: ClassVar[str] = "distogram_ca"
+    name: ClassVar[str] = "residue_distogram"
     representation: ClassVar[BaseRepresentation] = DistogramRepresentation()
 
     #Instance  

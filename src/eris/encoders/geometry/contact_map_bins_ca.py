@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 @dataclass
 class ContactMapBinsCA(BaseResidueEncoder):
     #Identity
-    name: ClassVar[str] = "contact_map_bins_ca"
+    name: ClassVar[str] = "residue_contact_map_bins"
     representation: ClassVar[BaseRepresentation] = ContactMapBinsRepresentation()
 
     #Instance

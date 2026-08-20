@@ -20,7 +20,7 @@ def _encode(registry_name: str) -> StructureArtifact:
 
 
 def test_continuous_contact_map_metadata_matches_payload_and_survives_finalize():
-    artifact = _encode("contact_map_residue")
+    artifact = _encode("residue_contact_map")
     expected = {
         "matrix_key": "contact",
         "matrix_attr_keys": ["contact"],
@@ -41,7 +41,7 @@ def test_continuous_contact_map_metadata_matches_payload_and_survives_finalize()
 
 
 def test_binned_contact_map_metadata_remains_distinct_and_consistent():
-    artifact = _encode("contact_map_bins_residue")
+    artifact = _encode("residue_contact_map_bins")
     expected = {
         "matrix_key": "contact_bins",
         "matrix_attr_keys": ["contact_bins", "bin_edges"],
@@ -70,12 +70,12 @@ def test_binned_contact_map_metadata_remains_distinct_and_consistent():
     ("registry_name", "primary_key", "expected"),
     [
         (
-            "contact_map_residue",
+            "residue_contact_map",
             "contact",
             {"matrix_key": "contact", "matrix_attr_keys": ["contact"]},
         ),
         (
-            "contact_map_bins_residue",
+            "residue_contact_map_bins",
             "contact_bins",
             {
                 "matrix_key": "contact_bins",
