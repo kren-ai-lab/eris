@@ -4,7 +4,7 @@ import hashlib
 import json
 import math
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, TypedDict, Union
@@ -388,8 +388,8 @@ def _validate_outputs(outputs: Any) -> list[dict[str, Any]]:
             _fail(f"{path}.granularity must be one of {sorted(_GRANULARITIES)}")
         if "layout" in value:
             _require_non_empty_string(value["layout"], f"{path}.layout")
-        if "description" in value and not isinstance(value["description"], str):
-            _fail(f"{path}.description must be a string")
+        if "description" in value:
+            _require_non_empty_string(value["description"], f"{path}.description")
         names.append(name)
     if len(names) != len(set(names)):
         _fail("meta.outputs names must be unique")
@@ -458,6 +458,88 @@ def _validate_data(data: Any) -> dict[str, np.ndarray]:
     return validated
 
 
+def build_outputs(
+    *,
+    data: Mapping[str, np.ndarray],
+    declarations: Sequence[Mapping[str, Any]],
+) -> list[OutputMetadata]:
+    """Copy explicit ordered output declarations and verify complete payload coverage."""
+    arrays = _validate_data(data)
+    if not isinstance(declarations, Sequence) or isinstance(declarations, (str, bytes)):
+        _fail("output declarations must be a non-empty sequence of mappings")
+
+    outputs: list[dict[str, Any]] = []
+    for index, declaration in enumerate(declarations):
+        if not isinstance(declaration, Mapping):
+            _fail(f"output declarations[{index}] must be a mapping")
+        copied = normalize_metadata(dict(declaration), _path=f"output declarations[{index}]")
+        if not isinstance(copied, dict):  # pragma: no cover - guaranteed by the mapping check
+            _fail(f"output declarations[{index}] must normalize to a mapping")
+        outputs.append(copied)
+
+    _validate_outputs(outputs)
+    output_names = {output["name"] for output in outputs}
+    data_names = set(arrays)
+    if output_names != data_names:
+        missing = sorted(data_names - output_names)
+        extra = sorted(output_names - data_names)
+        _fail(
+            "output declaration names must exactly match data keys "
+            f"(missing declarations: {missing}; nonexistent arrays: {extra})"
+        )
+    return outputs  # type: ignore[return-value]
+
+
+def build_shapes(data: Mapping[str, np.ndarray]) -> dict[str, list[int]]:
+    """Derive JSON-safe shapes for every validated payload array."""
+    arrays = _validate_data(data)
+    return {name: [int(dimension) for dimension in array.shape] for name, array in arrays.items()}
+
+
+def build_dtypes(data: Mapping[str, np.ndarray]) -> dict[str, str]:
+    """Derive exact NumPy dtype strings for every validated payload array."""
+    arrays = _validate_data(data)
+    return {name: str(array.dtype) for name, array in arrays.items()}
+
+
+def build_feature_keys(
+    *,
+    node_attr_keys: Sequence[str] | None = None,
+    edge_attr_keys: Sequence[str] | None = None,
+    graph_attr_keys: Sequence[str] | None = None,
+    grid_channels: Sequence[str] | None = None,
+) -> dict[str, list[str]]:
+    """Copy producer-owned ordered feature semantics without inference or sorting."""
+    feature_keys: dict[str, list[str]] = {}
+    supplied = {
+        "node_attr_keys": node_attr_keys,
+        "edge_attr_keys": edge_attr_keys,
+        "graph_attr_keys": graph_attr_keys,
+        "grid_channels": grid_channels,
+    }
+    for field, keys in supplied.items():
+        if keys is None:
+            continue
+        if not isinstance(keys, Sequence) or isinstance(keys, (str, bytes)):
+            _fail(f"feature_keys.{field} must be an ordered sequence[str]")
+        copied = list(keys)
+        if any(not isinstance(key, str) or not key for key in copied):
+            _fail(f"feature_keys.{field} entries must be non-empty strings")
+        feature_keys[field] = copied
+
+    _validate_feature_keys(feature_keys)
+    return feature_keys
+
+
+def build_counts(counts: Mapping[str, int]) -> dict[str, int]:
+    """Copy producer-declared semantic counts without deriving values from arrays."""
+    if not isinstance(counts, Mapping):
+        _fail("counts must be a mapping")
+    copied = dict(counts)
+    _validate_counts(copied)
+    return copied
+
+
 def _outputs_by_role(outputs: list[dict[str, Any]]) -> dict[str, list[str]]:
     result: dict[str, list[str]] = {}
     for output in outputs:
@@ -495,6 +577,7 @@ def _validate_strict_roles(
     arrays = {
         role: _single_role_array(role, roles, data)
         for role in (
+            "coordinates",
             "edge_index",
             "edge_distance",
             "node_features",
@@ -508,6 +591,10 @@ def _validate_strict_roles(
             "valid_mask",
         )
     }
+
+    coordinates = arrays["coordinates"]
+    if coordinates is not None and coordinates.ndim == 0:
+        _fail("role='coordinates' requires at least one dimension")
 
     edge_index = arrays["edge_index"]
     if edge_index is not None:
@@ -614,7 +701,7 @@ def _validate_strict_roles(
             _fail("meta.counts.n_self_loops does not match edge_index")
     node_count_candidates = [
         array.shape[0]
-        for array in (node_features, node_embedding, node_ids, valid_mask)
+        for array in (coordinates, node_features, node_embedding, node_ids, valid_mask, matrix)
         if array is not None
     ]
     if node_count_candidates and len(set(node_count_candidates)) != 1:
@@ -718,8 +805,13 @@ __all__ = [
     "ARTIFACT_SCHEMA_V2_VERSION",
     "ArtifactSchemaV2Metadata",
     "ArtifactSchemaV2ValidationError",
+    "build_counts",
+    "build_dtypes",
+    "build_feature_keys",
     "build_input_metadata",
+    "build_outputs",
     "build_provenance",
+    "build_shapes",
     "canonical_json",
     "compute_config_fingerprint",
     "normalize_metadata",
