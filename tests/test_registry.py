@@ -182,13 +182,13 @@ def test_get_encoder_preserves_direct_operational_and_encoder_kwargs():
         use_cache=False,
         cache=cache,
         cutoff=9.5,
-        local_cutoff=4.5,
+        local_cutoff=5,
     )
 
     assert encoder.use_cache is False
     assert encoder.cache is cache
     assert encoder.cutoff == 9.5
-    assert encoder.local_cutoff == 4.5
+    assert encoder.local_cutoff == 5
 
 
 def test_registration_rejects_duplicate_canonical_name():

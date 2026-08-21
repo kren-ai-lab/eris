@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
 from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
+from eris.core.config import ResidueKNNGraphConfig
+from eris.core.io import load_and_extract_residue
 from eris.core.representations import GraphRepresentation
 from eris.features.edge.edge import build_edge_attr
 from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
@@ -13,34 +15,118 @@ from eris.features.node.residue import build_node_attr
 from eris.spatial.knn import knn_edges
 
 if TYPE_CHECKING:
+    from eris.core.cache import DiskCache
     from eris.core.representations.base_rep import BaseRepresentation
 
 
-@dataclass
+@dataclass(init=False)
 class ResidueKNNGraph(BaseResidueEncoder):
     #Identity
-    name: str = "residue_knn_graph"
+    name: ClassVar[str] = "residue_knn_graph"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
 
-    #Instance
-    knn_mode: str = "local" #or global
-    k: int = 16
-    # Maximum candidate-search radius; None selects global mode.
-    cutoff: float | None = 12.0
-    symmetric: bool = True
-    include_self_loops: bool = False
-    edge_attr_mode:str = "dist+rbf+seq+local"
-    node_attr_mode:str = "onehot+physchem+plddt_ca+bfactor_ca"
-    rbf_k:int = 16
-    rbf_dmax:float = 20.0
-    local_cutoff:float = 4
+    config: ResidueKNNGraphConfig = field(init=False)
 
+    def __init__(
+        self,
+        *,
+        config: ResidueKNNGraphConfig | None = None,
+        use_cache: bool = True,
+        cache: DiskCache | None = None,
+        **representation_kwargs: Any,
+    ) -> None:
+        if config is not None:
+            if not isinstance(config, ResidueKNNGraphConfig):
+                raise TypeError("config must be a ResidueKNNGraphConfig")
+            if representation_kwargs:
+                names = ", ".join(sorted(representation_kwargs))
+                raise TypeError(
+                    f"config cannot be combined with representation kwargs: {names}"
+                )
+            resolved_config = config
+        else:
+            resolved_config = ResidueKNNGraphConfig(**representation_kwargs)
 
-    #Overrides post_init to normalize cutoff before fingerprint calculation
-    def __post_init__(self):
+        self.config = resolved_config
+        self.use_cache = use_cache
+        self.cache = cache
         super().__post_init__()
-        if self.knn_mode == "global":
-            self.cutoff = None
+
+    @property
+    def center(self) -> bool:
+        return self.config.center
+
+    @property
+    def scale(self) -> float | None:
+        return self.config.scale
+
+    @property
+    def residue_center(self) -> str:
+        return self.config.residue_center
+
+    @property
+    def amino_acids_only(self) -> bool:
+        return self.config.amino_acids_only
+
+    @property
+    def altloc(self) -> str:
+        return self.config.altloc
+
+    @property
+    def missing_residue_center(self) -> str:
+        return self.config.missing_residue_center
+
+    @property
+    def knn_mode(self) -> str:
+        return self.config.knn_mode
+
+    @property
+    def k(self) -> int:
+        return self.config.k
+
+    @property
+    def cutoff(self) -> float | None:
+        return self.config.cutoff
+
+    @property
+    def symmetric(self) -> bool:
+        return self.config.symmetric
+
+    @property
+    def include_self_loops(self) -> bool:
+        return self.config.include_self_loops
+
+    @property
+    def node_attr_mode(self) -> str:
+        return "+".join(token.name for token in self.config.node_attr_mode.tokens)
+
+    @property
+    def edge_attr_mode(self) -> str:
+        return "+".join(token.name for token in self.config.edge_attr_mode.tokens)
+
+    @property
+    def rbf_k(self) -> int:
+        return self.config.rbf_k
+
+    @property
+    def rbf_dmax(self) -> float:
+        return self.config.rbf_dmax
+
+    @property
+    def local_cutoff(self) -> int:
+        return self.config.local_cutoff
+
+    def get_params(self) -> dict[str, Any]:
+        return self.config.to_dict()
+
+    def _load_structure(self, ctx: EncodingContext) -> dict[str, Any]:
+        return load_and_extract_residue(
+            ctx.inp,
+            amino_acids_only=self.config.amino_acids_only,
+            mode=self.config.residue_center,
+            altloc=self.config.altloc,
+            missing_ca=self.config.missing_residue_center,
+        )
 
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
@@ -63,9 +149,9 @@ class ResidueKNNGraph(BaseResidueEncoder):
         # Graph building    
         edge_index, edge_dist = knn_edges(
             pos=pos_out,
-            k=int(self.k),
-            cutoff= self.cutoff,
-            symmetric=bool(self.symmetric)
+            k=self.config.k,
+            cutoff=self.config.cutoff,
+            symmetric=self.config.symmetric,
         )
 
         seq_pos = np.arange(n, dtype=np.int64)
@@ -74,11 +160,11 @@ class ResidueKNNGraph(BaseResidueEncoder):
             strc["aa_index"],
             plddt=strc["plddt"],
             bfactor_ca=strc["bfactor_ca"],
-            mode=self.node_attr_mode,
-            return_keys=True
+            mode=self.config.node_attr_mode.to_list(),
+            return_keys=True,
         )
 
-        if self.include_self_loops:
+        if self.config.include_self_loops:
             loops = np.arange(n, dtype=np.int64)
             loop_edges = np.stack([loops, loops], axis=0)
             loop_dist = np.zeros((n,), dtype=np.float32)
@@ -86,19 +172,19 @@ class ResidueKNNGraph(BaseResidueEncoder):
             edge_index = np.concatenate([edge_index, loop_edges], axis=1)
             edge_dist = np.concatenate([edge_dist, loop_dist], axis=0)
 
-        stats = compute_graph_stats(edge_index=edge_index, edge_dist=edge_dist, n_nodes=n)
-        graph_attr, graph_attr_keys = pack_graph_stats(stats)
-
         edge_attr, edge_attr_keys = build_edge_attr(
             edge_index=edge_index,
             edge_dist=edge_dist,
-            mode=self.edge_attr_mode,
-            rbf_k=self.rbf_k,
-            rbf_dmax=self.rbf_dmax,
+            mode=self.config.edge_attr_mode.to_list(),
+            rbf_k=self.config.rbf_k,
+            rbf_dmax=self.config.rbf_dmax,
             seq_pos=seq_pos,
-            local_cutoff=self.local_cutoff,
-            return_keys=True
+            local_cutoff=self.config.local_cutoff,
+            return_keys=True,
         )
+
+        stats = compute_graph_stats(edge_index=edge_index, edge_dist=edge_dist, n_nodes=n)
+        graph_attr, graph_attr_keys = pack_graph_stats(stats)
 
         ctx.runtime["node_attr_keys"] = node_attr_keys
         ctx.runtime["edge_attr_keys"] = edge_attr_keys
@@ -130,17 +216,10 @@ class ResidueKNNGraph(BaseResidueEncoder):
         meta: dict[str, Any],
         ctx: EncodingContext,
     ) -> dict[str, Any]:
-        meta["params"].update({
-                "k": int(self.k),
-                "knn_mode": self.knn_mode,
-                **({"cutoff": self.cutoff} if self.knn_mode == "local" else {}),
-                "symmetric": bool(self.symmetric),
-                "include_self_loops": bool(self.include_self_loops),
-                "node_attr_mode": self.node_attr_mode,
-                "edge_attr_mode": self.edge_attr_mode,
-                "rbf_k": int(self.rbf_k),
-                "rbf_dmax": float(self.rbf_dmax),
-                "local_cutoff": int(self.local_cutoff),
-        })
-        
+        meta["params"] = self.config.to_dict()
+        return meta
+
+    def _finalize_metadata(self, meta: dict[str, Any]) -> dict[str, Any]:
+        meta = super()._finalize_metadata(meta)
+        meta["params"] = self.config.to_dict()
         return meta

@@ -1,23 +1,24 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple, ClassVar
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
 from eris.core.base_encoder import BaseAtomEncoder, EncodingContext
+from eris.core.config import AtomKNNGraphConfig
 from eris.core.representations import GraphRepresentation
-from eris.features.node.atom import build_node_attr
 from eris.features.edge.edge import build_edge_attr
 from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
+from eris.features.node.atom import build_node_attr
 from eris.spatial.knn import knn_edges
 
 if TYPE_CHECKING:
+    from eris.core.cache import DiskCache
     from eris.core.representations.base_rep import BaseRepresentation
 
 
-@dataclass
+@dataclass(init=False)
 class AtomKNNGraph(BaseAtomEncoder):
     """
     Atom-level kNN graph (CA-independent) with deterministic node/edge features baseline.
@@ -33,20 +34,101 @@ class AtomKNNGraph(BaseAtomEncoder):
     name: ClassVar[str] = "atom_knn_graph"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
 
-    # Instance 
-    k: int = 16
-    cutoff: float | None = 12.0 # max search radius for candidates (must be >= typical neighbor distances) None = Global mode
-    symmetric: bool = True
+    config: AtomKNNGraphConfig = field(init=False)
 
-    node_attr_mode: str = "elem+role+bfactor+occ"
-    
-    # edge feature params
-    edge_attr_mode = "dist+rbf+seq+local"
-    rbf_k: int = 16
-    rbf_dmax: float = 20.0
-    local_cutoff: int = 4
+    def __init__(
+        self,
+        *,
+        config: AtomKNNGraphConfig | None = None,
+        use_cache: bool = True,
+        cache: DiskCache | None = None,
+        **representation_kwargs: Any,
+    ) -> None:
+        if config is not None:
+            if not isinstance(config, AtomKNNGraphConfig):
+                raise TypeError("config must be an AtomKNNGraphConfig")
+            if representation_kwargs:
+                names = ", ".join(sorted(representation_kwargs))
+                raise TypeError(
+                    f"config cannot be combined with representation kwargs: {names}"
+                )
+            resolved_config = config
+        else:
+            resolved_config = AtomKNNGraphConfig(**representation_kwargs)
 
-    def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
+        self.config = resolved_config
+        self.use_cache = use_cache
+        self.cache = cache
+        super().__post_init__()
+
+    @property
+    def center(self) -> bool:
+        return self.config.center
+
+    @property
+    def scale(self) -> float | None:
+        return self.config.scale
+
+    @property
+    def include_hetero(self) -> bool:
+        return self.config.include_hetero
+
+    @property
+    def include_h(self) -> bool:
+        return self.config.include_h
+
+    @property
+    def drop_water(self) -> bool:
+        return self.config.drop_water
+
+    @property
+    def keep_ions(self) -> bool:
+        return self.config.keep_ions
+
+    @property
+    def altloc(self) -> str:
+        return self.config.altloc
+
+    @property
+    def amino_acids_only(self) -> bool:
+        return self.config.amino_acids_only
+
+    @property
+    def k(self) -> int:
+        return self.config.k
+
+    @property
+    def cutoff(self) -> float | None:
+        return self.config.cutoff
+
+    @property
+    def symmetric(self) -> bool:
+        return self.config.symmetric
+
+    @property
+    def node_attr_mode(self) -> str:
+        return "+".join(token.name for token in self.config.node_attr_mode.tokens)
+
+    @property
+    def edge_attr_mode(self) -> str:
+        return "+".join(token.name for token in self.config.edge_attr_mode.tokens)
+
+    @property
+    def rbf_k(self) -> int:
+        return self.config.rbf_k
+
+    @property
+    def rbf_dmax(self) -> float:
+        return self.config.rbf_dmax
+
+    @property
+    def local_cutoff(self) -> int:
+        return self.config.local_cutoff
+
+    def get_params(self) -> dict[str, Any]:
+        return self.config.to_dict()
+
+    def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
         strc = ctx.raw_structure
         centroid = ctx.centroid
         pos_out = ctx.pos
@@ -56,9 +138,9 @@ class AtomKNNGraph(BaseAtomEncoder):
 
         edge_index, edge_dist = knn_edges(
             pos=pos_out,
-            k=int(self.k),
-            cutoff= self.cutoff,
-            symmetric=bool(self.symmetric)
+            k=self.config.k,
+            cutoff=self.config.cutoff,
+            symmetric=self.config.symmetric,
         )
 
 
@@ -69,18 +151,18 @@ class AtomKNNGraph(BaseAtomEncoder):
             bfactor=strc["bfactor"],
             occ=strc["occ"],
             bfactor_norm=True,
-            mode=self.node_attr_mode,
+            mode=self.config.node_attr_mode.to_list(),
             return_keys=True,
         )
 
         edge_attr, edge_attr_keys = build_edge_attr(
             edge_dist=edge_dist,
             edge_index=edge_index,
-            mode = self.edge_attr_mode,
+            mode=self.config.edge_attr_mode.to_list(),
             seq_pos=strc["seq_pos_residue"],
-            rbf_k=int(self.rbf_k),
-            rbf_dmax=float(self.rbf_dmax),
-            local_cutoff=int(self.local_cutoff),
+            rbf_k=self.config.rbf_k,
+            rbf_dmax=self.config.rbf_dmax,
+            local_cutoff=self.config.local_cutoff,
             return_keys=True,
         )
 
@@ -91,7 +173,7 @@ class AtomKNNGraph(BaseAtomEncoder):
         ctx.runtime["edge_attr_keys"] = edge_attr_keys
         ctx.runtime["graph_attr_keys"] = graph_attr_keys
 
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             "pos": pos.astype(np.float32),
             "centroid": centroid.astype(np.float32),
             "edge_index": edge_index.astype(np.int64),
@@ -115,15 +197,15 @@ class AtomKNNGraph(BaseAtomEncoder):
         return data
 
 
-    def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
-        meta["params"].update({
-                "k": int(self.k),
-                "node_attr_mode": self.node_attr_mode,
-                "edge_attr_mode": self.edge_attr_mode,
-                "rbf_k": int(self.rbf_k),
-                "rbf_dmax": float(self.rbf_dmax),
-                "local_cutoff": int(self.local_cutoff),
-                "bfactor_norm": True,
-        })
+    def _update_params_metadata(
+        self,
+        meta: dict[str, Any],
+        ctx: EncodingContext,
+    ) -> dict[str, Any]:
+        meta["params"] = self.config.to_dict()
+        return meta
 
+    def _finalize_metadata(self, meta: dict[str, Any]) -> dict[str, Any]:
+        meta = super()._finalize_metadata(meta)
+        meta["params"] = self.config.to_dict()
         return meta
