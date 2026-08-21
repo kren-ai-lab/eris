@@ -271,6 +271,28 @@ def _validate_input(input_meta: Any) -> None:
             _fail(f"meta.input.{key} must be a string")
 
 
+def build_input_metadata(
+    *,
+    source: str | Path,
+    source_sha256: str,
+    input_format: str,
+    model_index: int,
+    chain_id: str | None,
+) -> InputMetadata:
+    """Build the canonical five-field Schema v2 input block."""
+    if not isinstance(source, (str, Path)):
+        _fail("source must be a string or pathlib.Path")
+    input_meta: InputMetadata = {
+        "source": str(source),
+        "source_sha256": source_sha256,
+        "format": input_format,
+        "model_index": model_index,
+        "chain_id": chain_id,
+    }
+    _validate_input(input_meta)
+    return input_meta
+
+
 def _validate_created_at(value: Any) -> None:
     _require_non_empty_string(value, "meta.provenance.created_at")
     if not value.endswith("Z"):
@@ -299,6 +321,25 @@ def _validate_provenance(provenance: Any) -> None:
         invocation = value["invocation"]
         if not isinstance(invocation, (dict, str)):
             _fail("meta.provenance.invocation must be a mapping or string")
+
+
+def build_provenance(
+    *,
+    representation_name: str,
+    parameters: Mapping[str, Any],
+) -> ProvenanceMetadata:
+    """Build deterministic required provenance without optional environment state."""
+    from eris import __version__
+
+    provenance: ProvenanceMetadata = {
+        "eris_version": __version__,
+        "config_fingerprint": compute_config_fingerprint(
+            representation_name,
+            parameters,
+        ),
+    }
+    _validate_provenance(provenance)
+    return provenance
 
 
 def _validate_model(family: str, model: Any, *, present: bool) -> None:
@@ -677,6 +718,8 @@ __all__ = [
     "ARTIFACT_SCHEMA_V2_VERSION",
     "ArtifactSchemaV2Metadata",
     "ArtifactSchemaV2ValidationError",
+    "build_input_metadata",
+    "build_provenance",
     "canonical_json",
     "compute_config_fingerprint",
     "normalize_metadata",

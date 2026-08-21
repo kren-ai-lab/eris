@@ -56,6 +56,7 @@ def _structure_validation(ctx: EncodingContext):
 @dataclass
 class EncodingContext:
     inp: StructureInput
+    source_sha256: str | None = None
     raw_structure: dict | None = None
     centroid: np.ndarray | None = None
     pos: np.ndarray | None = None
@@ -128,12 +129,9 @@ class BaseEncoder(ABC):
         return sha256_text(text)
     
 
-    def _check_cache(self, inp: StructureInput):
-        from eris.core.hashing import sha256_file
-
+    def _check_cache(self, inp: StructureInput, source_sha256: str):
         cache = self.cache or DiskCache()
-        file_hash = sha256_file(Path(inp.source))
-        key = make_cache_key(self.name, self.fingerprint(), file_hash, inp.to_string())
+        key = make_cache_key(self.name, self.fingerprint(), source_sha256, inp.to_string())
 
         if self.use_cache:
             hit = cache.get(key)
@@ -172,11 +170,14 @@ class BaseEncoder(ABC):
 
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
-        key, cache, artifact = self._check_cache(inp)
+        from eris.core.hashing import sha256_file
+
+        source_sha256 = sha256_file(Path(inp.source))
+        key, cache, artifact = self._check_cache(inp, source_sha256)
         if artifact is not None:
             return artifact
         
-        ctx = EncodingContext(inp=inp)
+        ctx = EncodingContext(inp=inp, source_sha256=source_sha256)
         self._prepare_data(ctx=ctx)
         _structure_validation(ctx=ctx)
 
