@@ -1,13 +1,64 @@
 from __future__ import annotations
 
-from dataclasses import Field, dataclass, fields
-from typing import Any
+import types
+from dataclasses import MISSING, Field, dataclass, fields
+from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from eris.core.base_encoder.base_encoder import BaseEncoder
 from eris.core.config import (
     _CONFIG_TYPES_BY_REPRESENTATION,
     CanonicalRepresentationConfig,
 )
+
+
+def _render_literal(value: Any) -> str:
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    return repr(value)
+
+
+def _render_type(annotation: Any) -> str:
+    """Render supported config annotations as stable, human-readable strings."""
+    if annotation is Any:
+        return "any"
+    if annotation is type(None):
+        return "null"
+    if annotation in {bool, int, float, str}:
+        return annotation.__name__
+
+    origin = get_origin(annotation)
+    arguments = get_args(annotation)
+    if origin is Literal:
+        return " | ".join(_render_literal(value) for value in arguments)
+    if origin in {types.UnionType, Union}:
+        return " | ".join(_render_type(argument) for argument in arguments)
+    if origin is list:
+        item_type = _render_type(arguments[0]) if arguments else "any"
+        return f"list[{item_type}]"
+    if origin is tuple:
+        if len(arguments) == 2 and arguments[1] is Ellipsis:
+            return f"list[{_render_type(arguments[0])}]"
+        return f"list[{', '.join(_render_type(argument) for argument in arguments)}]"
+    if isinstance(annotation, type):
+        return annotation.__name__
+    return str(annotation).removeprefix("typing.")
+
+
+def _is_nullable(annotation: Any) -> bool:
+    if annotation is type(None):
+        return True
+    origin = get_origin(annotation)
+    return origin in {types.UnionType, Union} and type(None) in get_args(annotation)
+
+
+def _literal_choices(annotation: Any) -> list[Any] | None:
+    if get_origin(annotation) is Literal:
+        return list(get_args(annotation))
+    return None
 
 
 @dataclass(frozen=True)
@@ -44,6 +95,46 @@ class RepresentationInfo:
 
     def config_fields(self) -> tuple[Field, ...]:
         return fields(self.config_type)
+
+    def params_schema(self) -> list[dict[str, Any]]:
+        """Describe config fields for help/introspection, not config validation.
+
+        Typed configs remain the sole authority for constraints and relationships that
+        are not represented directly by annotations or dataclass field metadata.
+        """
+        defaults = self.default_config().to_dict()
+        type_hints = get_type_hints(self.config_type)
+        schema: list[dict[str, Any]] = []
+
+        for config_field in self.config_fields():
+            annotation = type_hints[config_field.name]
+            entry: dict[str, Any] = {
+                "name": config_field.name,
+                "type": _render_type(annotation),
+                "default": defaults[config_field.name],
+                "required": (
+                    config_field.default is MISSING and config_field.default_factory is MISSING
+                ),
+                "nullable": _is_nullable(annotation),
+                "description": config_field.metadata.get("description"),
+            }
+
+            if "unit" in config_field.metadata:
+                entry["unit"] = config_field.metadata["unit"]
+
+            choices = _literal_choices(annotation)
+            metadata_choices = config_field.metadata.get("choices")
+            if choices is not None and metadata_choices is not None:
+                if choices != list(metadata_choices):
+                    raise ValueError(f"Incompatible choices for {self.name}.{config_field.name}")
+            elif choices is None and metadata_choices is not None:
+                choices = list(metadata_choices)
+            if choices is not None:
+                entry["choices"] = choices
+
+            schema.append(entry)
+
+        return schema
 
 
 _REGISTRY: dict[str, RepresentationInfo] = {}

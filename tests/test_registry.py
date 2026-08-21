@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import fields
+import json
+from dataclasses import MISSING, fields
 from pathlib import Path
 
 import pytest
@@ -156,7 +157,83 @@ def test_registry_associations_and_derived_metadata(name, expected):
     assert info.default_config() == config_type()
     assert info.defaults() == config_type().to_dict()
     assert info.config_fields() == fields(config_type)
-    assert not hasattr(info, "params_schema")
+    assert info.params_schema()
+
+
+@pytest.mark.parametrize("name", CANONICAL_NAMES)
+def test_parameter_schema_is_config_derived_deterministic_and_json_compatible(name):
+    info = get_encoder_info(name)
+    config_fields = info.config_fields()
+    schema = info.params_schema()
+
+    assert schema == info.params_schema()
+    assert json.loads(json.dumps(schema)) == schema
+    assert [entry["name"] for entry in schema] == [
+        config_field.name for config_field in config_fields
+    ]
+    assert {entry["name"]: entry["default"] for entry in schema} == info.defaults()
+    assert [entry["required"] for entry in schema] == [
+        config_field.default is MISSING and config_field.default_factory is MISSING
+        for config_field in config_fields
+    ]
+
+    excluded = {
+        "name",
+        "representation_name",
+        "family",
+        "representation_type",
+        "granularity",
+        "coordinate_source",
+        "use_cache",
+        "cache",
+        "bin_edges",
+        "voxel_size_effective",
+        "feature_keys",
+        "statistics",
+    }
+    assert excluded.isdisjoint(entry["name"] for entry in schema)
+
+
+def test_parameter_schema_exposes_only_structural_type_and_field_metadata():
+    residue_schema = {
+        entry["name"]: entry for entry in get_encoder_info("residue_contact_graph").params_schema()
+    }
+    voxel_schema = {
+        entry["name"]: entry for entry in get_encoder_info("residue_voxel_grid").params_schema()
+    }
+    atom_schema = {
+        entry["name"]: entry for entry in get_encoder_info("atom_point_cloud").params_schema()
+    }
+    binned_schema = {
+        entry["name"]: entry for entry in get_encoder_info("residue_distogram_bins").params_schema()
+    }
+
+    assert residue_schema["residue_center"]["type"] == "'ca' | 'mean' | 'com'"
+    assert residue_schema["residue_center"]["choices"] == ["ca", "mean", "com"]
+    assert residue_schema["altloc"]["choices"] == ["first"]
+    assert residue_schema["scale"]["type"] == "float | null"
+    assert residue_schema["scale"]["nullable"] is True
+    assert residue_schema["center"]["nullable"] is False
+    assert residue_schema["scale"]["unit"] == "angstrom"
+    assert residue_schema["scale"]["description"] == "Optional coordinate divisor."
+    assert voxel_schema["pool"]["choices"] == ["max", "sum", "mean"]
+    assert voxel_schema["sigma"]["unit"] == "voxel"
+    assert "choices" not in atom_schema["altloc"]
+    assert "choices" not in atom_schema["node_attr_mode"]
+    assert binned_schema["edges"]["type"] == "list[float] | null"
+
+    allowed_keys = {
+        "name",
+        "type",
+        "default",
+        "required",
+        "nullable",
+        "description",
+        "unit",
+        "choices",
+    }
+    for info in list_encoder_info():
+        assert all(set(entry) <= allowed_keys for entry in info.params_schema())
 
 
 @pytest.mark.parametrize("name", CANONICAL_NAMES)

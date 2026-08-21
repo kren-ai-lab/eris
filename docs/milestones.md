@@ -175,7 +175,7 @@ Gate evidence:
 
 ## M2 — Registry/config consolidation
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE`
 
 **Objective:** Make typed canonical configuration the single source of truth for explicit
 representations.
@@ -204,24 +204,24 @@ representations.
   - **Acceptance:** Registry key, encoder name, family, type, granularity, and coordinate source
     satisfy the frozen invariant; no extra public names appear.
   - **Depends on:** M2.2.
-- [ ] **M2.4 — Migrate point-cloud encoders**
+- [x] **M2.4 — Migrate point-cloud encoders**
   - **Scope:** Move atom/residue point clouds to canonical typed configuration.
   - **Acceptance:** Direct and Registry construction share defaults and validation.
   - **Depends on:** M2.3.
-- [ ] **M2.5 — Migrate graph encoders**
+- [x] **M2.5 — Migrate graph encoders**
   - **Scope:** Move atom kNN, residue kNN, and residue contact graphs while preserving M1
     invariants.
   - **Acceptance:** Config, Registry metadata, encoder behavior, and defaults agree.
   - **Depends on:** M2.3 and the M1 graph units.
-- [ ] **M2.6 — Migrate matrix encoders**
+- [x] **M2.6 — Migrate matrix encoders**
   - **Scope:** Move continuous/binned residue distograms and contact maps.
   - **Acceptance:** Each variant preserves canonical identity, dtype, semantics, and defaults.
   - **Depends on:** M2.3 and M1.7.
-- [ ] **M2.7 — Migrate residue voxel grid**
+- [x] **M2.7 — Migrate residue voxel grid**
   - **Scope:** Move voxel geometry/channels to canonical configuration.
   - **Acceptance:** Validation/defaults come from config and metadata preserves M1.14 alignment.
   - **Depends on:** M2.3 and M1.14.
-- [ ] **M2.8 — Derive parameter schemas, help metadata and fingerprints from canonical config**
+- [x] **M2.8 — Derive parameter schemas, help metadata and fingerprints from canonical config**
   - **Scope:** Generate Registry schemas, help, artifact parameters, and fingerprints from config.
   - **Acceptance:** Effective defaults do not drift and fingerprints change only for effective
     config changes.
@@ -232,6 +232,19 @@ representations.
 Canonical public names are identical everywhere; typed config is the single authority;
 Registry/config/encoder defaults agree; granularity and coordinate source are correct; and
 fingerprints are deterministic.
+
+**Result:** `M2 GATE: PASS` — 2026-08-20.
+
+Gate evidence:
+
+- Registry exposes exactly the ten canonical explicit representations with aligned config and
+  encoder identities, deterministic ordering, and no runtime aliases.
+- Typed config drives defaults, runtime parameters, artifact metadata, fingerprints, and derived
+  Registry parameter introspection without duplicating validation rules.
+- All ten default representations produced strict-valid pre-v2 artifacts; the focused M2 gate
+  passed 414 tests and the full Python 3.12 suite passed 546 tests with 8 optional tests skipped.
+- Historical CLI parameter mutation remains deferred to M6.5; the clean Python 3.10–3.12 CI
+  matrix remains assigned to M8.6.
 
 ## M3 — Artifact Schema v2
 
