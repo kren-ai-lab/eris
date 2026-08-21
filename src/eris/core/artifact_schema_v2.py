@@ -540,6 +540,52 @@ def build_counts(counts: Mapping[str, int]) -> dict[str, int]:
     return copied
 
 
+def build_artifact_metadata(
+    *,
+    data: Mapping[str, np.ndarray],
+    representation_name: str,
+    representation_family: str,
+    representation_type: str,
+    granularity: str,
+    coordinate_source: str,
+    encoder: Mapping[str, Any],
+    input_metadata: Mapping[str, Any],
+    parameters: Mapping[str, Any],
+    provenance: Mapping[str, Any],
+    output_declarations: Sequence[Mapping[str, Any]],
+    feature_keys: Mapping[str, Sequence[str]],
+    counts: Mapping[str, int],
+    model: Mapping[str, Any] | None = None,
+    extensions: Mapping[str, Mapping[str, Any]] | None = None,
+) -> ArtifactSchemaV2Metadata:
+    """Build and strictly validate complete Schema v2 metadata for any producer family."""
+    metadata: dict[str, Any] = {
+        "schema_version": ARTIFACT_SCHEMA_V2_VERSION,
+        "representation_name": representation_name,
+        "representation_family": representation_family,
+        "representation_type": representation_type,
+        "granularity": granularity,
+        "coordinate_source": coordinate_source,
+        "encoder": dict(encoder),
+        "input": dict(input_metadata),
+        "parameters": dict(parameters),
+        "provenance": dict(provenance),
+        "outputs": build_outputs(data=data, declarations=output_declarations),
+        "feature_keys": {name: list(keys) for name, keys in feature_keys.items()},
+        "shapes": build_shapes(data),
+        "dtypes": build_dtypes(data),
+        "counts": build_counts(counts),
+    }
+    if model is not None:
+        metadata["model"] = dict(model)
+    if extensions is not None:
+        metadata["extensions"] = {
+            namespace: dict(content) for namespace, content in extensions.items()
+        }
+
+    return validate_schema_v2(metadata, data, strict=True)
+
+
 def _outputs_by_role(outputs: list[dict[str, Any]]) -> dict[str, list[str]]:
     result: dict[str, list[str]] = {}
     for output in outputs:
@@ -805,6 +851,7 @@ __all__ = [
     "ARTIFACT_SCHEMA_V2_VERSION",
     "ArtifactSchemaV2Metadata",
     "ArtifactSchemaV2ValidationError",
+    "build_artifact_metadata",
     "build_counts",
     "build_dtypes",
     "build_feature_keys",

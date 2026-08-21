@@ -9,6 +9,7 @@ from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueContactGraphConfig
 from eris.core.io import load_and_extract_residue
 from eris.core.representations import GraphRepresentation
+from eris.core.representations.output_declarations import RESIDUE_GRAPH_OUTPUTS
 from eris.features.edge.edge import build_edge_attr
 from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
 from eris.features.node.residue import build_node_attr
@@ -24,6 +25,7 @@ class ResidueContactGraph(BaseResidueEncoder):
     #Identity
     name: ClassVar[str] = "residue_contact_graph"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
+    output_declarations_v2: ClassVar = RESIDUE_GRAPH_OUTPUTS
 
     config: ResidueContactGraphConfig = field(init=False)
 

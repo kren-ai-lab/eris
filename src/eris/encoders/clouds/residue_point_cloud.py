@@ -9,6 +9,7 @@ from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResiduePointCloudConfig
 from eris.core.io import load_and_extract_residue
 from eris.core.representations import PointCloudRepresentation
+from eris.core.representations.output_declarations import RESIDUE_POINT_CLOUD_OUTPUTS
 from eris.features.node.residue import build_node_attr
 
 if TYPE_CHECKING:
@@ -21,6 +22,7 @@ class ResiduePointCloudCA(BaseResidueEncoder):
     #Identity
     name: ClassVar[str] = "residue_point_cloud"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
+    output_declarations_v2: ClassVar = RESIDUE_POINT_CLOUD_OUTPUTS
 
     config: ResiduePointCloudConfig = field(init=False)
 

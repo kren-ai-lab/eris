@@ -3,7 +3,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple, Callable, TypeVar
+from typing import Dict, Iterable, List, Optional, Callable
 
 import gemmi
 import numpy as np
@@ -12,11 +12,36 @@ from eris.exceptions import ErisError
 from eris.core.types import StructureInput
 from eris.core.aminoacids import AA3_TO_AA1, AA1_TO_INDEX, UNKNOWN_INDEX
 
-T = TypeVar("T")
-
-
 class StructureLoadError(ErisError):
     pass
+
+
+class LoadedStructureData(dict[str, np.ndarray]):
+    """Extracted arrays with the parser-confirmed coordinate format as typed side data."""
+
+    input_format: str
+
+    def __init__(self, data: dict[str, np.ndarray], *, input_format: str) -> None:
+        super().__init__(data)
+        self.input_format = input_format
+
+
+_GEMMI_INPUT_FORMATS = {
+    gemmi.CoorFormat.Pdb: "pdb",
+    gemmi.CoorFormat.Mmcif: "mmcif",
+    gemmi.CoorFormat.Mmjson: "mmjson",
+    gemmi.CoorFormat.ChemComp: "chemcomp",
+}
+
+
+def _parsed_input_format(st: gemmi.Structure) -> str:
+    input_format = getattr(st, "input_format", gemmi.CoorFormat.Unknown)
+    try:
+        return _GEMMI_INPUT_FORMATS[input_format]
+    except KeyError as error:
+        raise StructureLoadError(
+            f"Gemmi did not report a supported parsed coordinate format: {input_format!r}"
+        ) from error
 
 
 # -----------------------
@@ -316,11 +341,15 @@ def extract_residue_bundle(
 
     
 
-def load_select_and_extract(inp, extractor: Callable[[object], T]) -> T:
+def load_select_and_extract(
+    inp: StructureInput,
+    extractor: Callable[[object], dict[str, np.ndarray]],
+) -> LoadedStructureData:
     try:
         st = load_structure(Path(inp.source))
         ch = select_chain(st, inp.chain_id, inp.model_index)
-        return extractor(ch)
+        data = extractor(ch)
+        return LoadedStructureData(data, input_format=_parsed_input_format(st))
     except Exception:
         logger.exception(
             "Failed to load structure",
@@ -340,7 +369,7 @@ def load_and_extract_residue(
     mode:str = "ca",
     altloc: str = "first",
     missing_ca: str = "skip",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> LoadedStructureData:
     def _extract(ch):
         return extract_residue_bundle(
             ch,
@@ -555,7 +584,7 @@ def load_and_extract_atoms(
     keep_ions: bool = True,
     altloc: str = "first",
     amino_acids_only: bool = False,
-) -> Dict[str, np.ndarray]:
+) -> LoadedStructureData:
     """
     Atom-level extraction wrapper using StructureInput.
     """

@@ -9,6 +9,7 @@ from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueDistogramConfig
 from eris.core.io import load_and_extract_residue
 from eris.core.representations import DistogramRepresentation
+from eris.core.representations.output_declarations import RESIDUE_DISTOGRAM_OUTPUTS
 
 if TYPE_CHECKING:
     from eris.core.cache import DiskCache
@@ -20,6 +21,7 @@ class DistogramCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_distogram"
     representation: ClassVar[BaseRepresentation] = DistogramRepresentation()
+    output_declarations_v2: ClassVar = RESIDUE_DISTOGRAM_OUTPUTS
 
     config: ResidueDistogramConfig = field(init=False)
 

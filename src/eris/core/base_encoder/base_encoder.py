@@ -57,6 +57,7 @@ def _structure_validation(ctx: EncodingContext):
 class EncodingContext:
     inp: StructureInput
     source_sha256: str | None = None
+    input_format: str | None = None
     raw_structure: dict | None = None
     centroid: np.ndarray | None = None
     pos: np.ndarray | None = None
@@ -72,8 +73,10 @@ class BaseEncoder(ABC):
     #Identity 
     version: ClassVar[str] = "0.1.0" #Extraer desde versión instalada / pyproject
     name: ClassVar[str]
+    representation_family: ClassVar[str] = "explicit"
     granularity_contract: ClassVar[GranularityContract]
     representation: ClassVar[BaseRepresentation]
+    output_declarations_v2: ClassVar[Any]
 
     #Instance attr
     use_cache: bool = True
@@ -169,6 +172,74 @@ class BaseEncoder(ABC):
         return self.representation.feature_keys(data, meta, ctx)
 
 
+    def _feature_keys_v2(self, data: dict[str, Any], ctx: EncodingContext):
+        return self.representation.feature_keys_v2(data, ctx)
+
+
+    def _counts_v2(self, data: dict[str, Any]):
+        return self.representation.counts_v2(data)
+
+
+    def _build_metadata_v2(
+        self,
+        ctx: EncodingContext,
+        data: dict[str, np.ndarray],
+    ):
+        """Build prospective strict-valid v2 metadata without activating it in encode()."""
+        from eris.core.artifact_schema_v2 import (
+            build_artifact_metadata,
+            build_input_metadata,
+            build_provenance,
+        )
+
+        if ctx.source_sha256 is None:
+            raise ValueError("prospective Schema v2 metadata requires ctx.source_sha256")
+        if ctx.input_format is None:
+            raise ValueError("prospective Schema v2 metadata requires ctx.input_format")
+
+        representation_name = self.config.representation_name
+        if representation_name != self.name:
+            raise ValueError(
+                "config representation_name does not match encoder name: "
+                f"{representation_name!r} != {self.name!r}"
+            )
+        granularity = self.config.granularity
+        if granularity != self.granularity_contract.level:
+            raise ValueError(
+                "config granularity does not match encoder contract: "
+                f"{granularity!r} != {self.granularity_contract.level!r}"
+            )
+
+        parameters = self.config.to_dict()
+        return build_artifact_metadata(
+            data=data,
+            representation_name=representation_name,
+            representation_family=self.representation_family,
+            representation_type=self.representation.representation_type,
+            granularity=granularity,
+            coordinate_source=self.config.coordinate_source,
+            encoder={
+                "implementation": f"{type(self).__module__}.{type(self).__qualname__}",
+                "version": self.version,
+            },
+            input_metadata=build_input_metadata(
+                source=ctx.inp.source,
+                source_sha256=ctx.source_sha256,
+                input_format=ctx.input_format,
+                model_index=ctx.inp.model_index,
+                chain_id=ctx.inp.chain_id,
+            ),
+            parameters=parameters,
+            provenance=build_provenance(
+                representation_name=representation_name,
+                parameters=parameters,
+            ),
+            output_declarations=self.output_declarations_v2,
+            feature_keys=self._feature_keys_v2(data, ctx),
+            counts=self._counts_v2(data),
+        )
+
+
     def encode(self, inp: StructureInput) -> StructureArtifact:
         from eris.core.hashing import sha256_file
 
@@ -205,6 +276,12 @@ class BaseEncoder(ABC):
         )
 
         strc = self._load_structure(ctx)
+        input_format = getattr(strc, "input_format", None)
+        if not isinstance(input_format, str) or not input_format:
+            raise exc.ExecutionError("Structure loader did not report a parsed input format.")
+        if ctx.input_format is not None:
+            raise exc.ExecutionError("Encoding context input format was already populated.")
+        ctx.input_format = input_format
         ctx.raw_structure = strc
 
         centroid, pos_out = self._normalize_structure(pos=strc["pos"])

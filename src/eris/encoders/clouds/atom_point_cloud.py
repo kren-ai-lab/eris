@@ -8,6 +8,7 @@ import numpy as np
 from eris.core.base_encoder import BaseAtomEncoder, EncodingContext
 from eris.core.config import AtomPointCloudConfig
 from eris.core.representations import PointCloudRepresentation
+from eris.core.representations.output_declarations import ATOM_POINT_CLOUD_OUTPUTS
 from eris.features.node.atom import build_node_attr
 
 if TYPE_CHECKING:
@@ -38,6 +39,7 @@ class AtomPointCloud(BaseAtomEncoder):
     #Identity
     name: ClassVar[str] = "atom_point_cloud"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
+    output_declarations_v2: ClassVar = ATOM_POINT_CLOUD_OUTPUTS
 
     config: AtomPointCloudConfig = field(init=False)
 

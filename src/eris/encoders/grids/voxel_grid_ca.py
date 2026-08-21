@@ -9,6 +9,7 @@ from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueVoxelGridConfig
 from eris.core.io import load_and_extract_residue
 from eris.core.representations import VoxelGridRepresentation
+from eris.core.representations.output_declarations import VOXEL_OUTPUTS
 from eris.features import build_grid_attr
 
 if TYPE_CHECKING:
@@ -21,6 +22,7 @@ class VoxelGridCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_voxel_grid"
     representation: ClassVar[BaseRepresentation] = VoxelGridRepresentation()
+    output_declarations_v2: ClassVar = VOXEL_OUTPUTS
 
     config: ResidueVoxelGridConfig = field(init=False)
 

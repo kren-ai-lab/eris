@@ -9,6 +9,7 @@ from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueContactMapConfig
 from eris.core.io import load_and_extract_residue
 from eris.core.representations import ContactMapRepresentation
+from eris.core.representations.output_declarations import RESIDUE_CONTACT_MAP_OUTPUTS
 
 if TYPE_CHECKING:
     from eris.core.cache import DiskCache
@@ -20,6 +21,7 @@ class ContactMapCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_contact_map"
     representation: ClassVar[BaseRepresentation] = ContactMapRepresentation()
+    output_declarations_v2: ClassVar = RESIDUE_CONTACT_MAP_OUTPUTS
 
     config: ResidueContactMapConfig = field(init=False)
 

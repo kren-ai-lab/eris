@@ -9,6 +9,7 @@ from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueDistogramBinsConfig
 from eris.core.io import load_and_extract_residue
 from eris.core.representations import DistogramBinsRepresentation
+from eris.core.representations.output_declarations import RESIDUE_DISTOGRAM_BINS_OUTPUTS
 from eris.features.utils import validate_bin_edges
 
 if TYPE_CHECKING:
@@ -32,6 +33,7 @@ class DistogramBinsCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_distogram_bins"
     representation: ClassVar[BaseRepresentation] = DistogramBinsRepresentation()
+    output_declarations_v2: ClassVar = RESIDUE_DISTOGRAM_BINS_OUTPUTS
 
     config: ResidueDistogramBinsConfig = field(init=False)
 

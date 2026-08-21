@@ -8,6 +8,7 @@ import numpy as np
 from eris.core.base_encoder import BaseAtomEncoder, EncodingContext
 from eris.core.config import AtomKNNGraphConfig
 from eris.core.representations import GraphRepresentation
+from eris.core.representations.output_declarations import ATOM_GRAPH_OUTPUTS
 from eris.features.edge.edge import build_edge_attr
 from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
 from eris.features.node.atom import build_node_attr
@@ -33,6 +34,7 @@ class AtomKNNGraph(BaseAtomEncoder):
     # Identity
     name: ClassVar[str] = "atom_knn_graph"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
+    output_declarations_v2: ClassVar = ATOM_GRAPH_OUTPUTS
 
     config: AtomKNNGraphConfig = field(init=False)
 
