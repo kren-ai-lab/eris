@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
@@ -18,6 +20,115 @@ ALLOWED_LEVELS = {"atom", "residue", "structure", "mixed"}
 
 class ArtifactValidationError(ErisError):
     pass
+
+
+_PROVISIONAL_V1_REQUIRED = {
+    "encoder_name",
+    "encoder_version",
+    "encoder_fingerprint",
+    "type",
+    "level",
+    "params",
+    "input",
+    "feature_keys",
+}
+_V2_IDENTITY_FIELDS = {
+    "representation_name",
+    "representation_family",
+    "representation_type",
+    "coordinate_source",
+    "encoder",
+    "model",
+    "parameters",
+    "provenance",
+    "outputs",
+}
+
+
+def _detect_artifact_schema(meta: dict[str, Any]) -> str:
+    if not isinstance(meta, dict):
+        raise ArtifactValidationError("Artifact metadata must be a dict.")
+
+    if "schema_version" not in meta:
+        missing = sorted(_PROVISIONAL_V1_REQUIRED - meta.keys())
+        mixed = sorted(_V2_IDENTITY_FIELDS & meta.keys())
+        if not missing and not mixed:
+            return "provisional_v1"
+        details = []
+        if missing:
+            details.append(f"missing legacy fields: {missing}")
+        if mixed:
+            details.append(f"contains Schema v2 fields: {mixed}")
+        raise ArtifactValidationError(
+            "Versionless metadata is not a complete provisional Schema v1 artifact"
+            f" ({'; '.join(details)})."
+        )
+
+    version = meta["schema_version"]
+    if type(version) is not int:
+        raise ArtifactValidationError("schema_version must be an exact plain Python int.")
+    if version == 1:
+        return "v1"
+    if version == 2:
+        return "v2"
+    raise ArtifactValidationError(f"Unsupported schema_version={version}.")
+
+
+def _validate_artifact_v2(
+    meta: dict[str, Any],
+    data: Mapping[str, np.ndarray],
+) -> dict[str, Any]:
+    from eris.core.artifact_schema_v2 import (
+        ArtifactSchemaV2ValidationError,
+        validate_schema_v2,
+    )
+
+    try:
+        return validate_schema_v2(meta, data, strict=True)
+    except ArtifactSchemaV2ValidationError as error:
+        raise ArtifactValidationError(str(error)) from error
+
+
+def _write_staged_npz(path: Path, data: Mapping[str, np.ndarray]) -> None:
+    with path.open("wb") as handle:
+        np.savez_compressed(handle, **data)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _write_staged_json(path: Path, serialized_meta: str) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(serialized_meta)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _temporary_path(outdir: Path, *, prefix: str, suffix: str) -> Path:
+    descriptor, name = tempfile.mkstemp(dir=outdir, prefix=prefix, suffix=suffix)
+    os.close(descriptor)
+    return Path(name)
+
+
+def _save_staged(
+    outdir: Path,
+    *,
+    data: Mapping[str, np.ndarray],
+    serialized_meta: str,
+) -> None:
+    data_tmp: Path | None = None
+    meta_tmp: Path | None = None
+    try:
+        data_tmp = _temporary_path(outdir, prefix=".eris-data-", suffix=".npz")
+        meta_tmp = _temporary_path(outdir, prefix=".eris-meta-", suffix=".json")
+        _write_staged_npz(data_tmp, data)
+        _write_staged_json(meta_tmp, serialized_meta)
+        os.replace(data_tmp, outdir / "data.npz")
+        os.replace(meta_tmp, outdir / "meta.json")
+    finally:
+        if data_tmp is not None:
+            data_tmp.unlink(missing_ok=True)
+        if meta_tmp is not None:
+            meta_tmp.unlink(missing_ok=True)
 
 
 def _safe_shape(x: Any) -> Optional[List[int]]:
@@ -302,6 +413,16 @@ class StructureArtifact:
     meta: Dict[str, Any]
 
     def finalize(self) -> None:
+        schema = _detect_artifact_schema(self.meta)
+        if schema == "v2":
+            canonical_meta = _validate_artifact_v2(self.meta, self.data)
+            if canonical_meta != self.meta:
+                self.meta = canonical_meta
+            return
+
+        self._finalize_v1()
+
+    def _finalize_v1(self) -> None:
         # Normalize/upgrade meta in-place and (re)compute derived fields
         self.meta["schema_version"] = ARTIFACT_SCHEMA_VERSION
 
@@ -319,19 +440,44 @@ class StructureArtifact:
 
 
     def validate(self, strict = False):
+        schema = _detect_artifact_schema(self.meta)
+        if schema == "provisional_v1":
+            raise ArtifactValidationError(
+                "Provisional Schema v1 artifacts must be finalized before validation."
+            )
+        if schema == "v2":
+            _validate_artifact_v2(self.meta, self.data)
+            return
         validate_artifact(self.meta, self.data, strict=strict)
 
 
     def save(self, outdir: Path, *, validate: bool = True) -> None:
-        outdir.mkdir(parents=True, exist_ok=True)
-
         self.finalize()
+        schema = _detect_artifact_schema(self.meta)
 
-        if validate:
+        if schema == "v2":
             self.validate(strict=True)
+            output_names = [output["name"] for output in self.meta["outputs"]]
+            serialized_data = {name: self.data[name] for name in output_names}
+            serialized_meta = json.dumps(
+                self.meta,
+                indent=2,
+                sort_keys=True,
+                ensure_ascii=False,
+                allow_nan=False,
+            )
+        else:
+            if validate:
+                self.validate(strict=True)
+            serialized_data = self.data
+            serialized_meta = json.dumps(self.meta, indent=2, sort_keys=True)
 
-        np.savez_compressed(outdir / "data.npz", **self.data)
-        (outdir / "meta.json").write_text(json.dumps(self.meta, indent=2, sort_keys=True), encoding="utf-8")
+        outdir.mkdir(parents=True, exist_ok=True)
+        _save_staged(
+            outdir,
+            data=serialized_data,
+            serialized_meta=serialized_meta,
+        )
 
     @staticmethod
     def load(indir: Path, *, validate: bool = True, strict: bool = False) -> "StructureArtifact":
@@ -342,6 +488,16 @@ class StructureArtifact:
             raise ArtifactValidationError(f"Missing artifact files in {indir} (need meta.json + data.npz)")
 
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        schema = _detect_artifact_schema(meta)
+        if schema == "v2":
+            raise ArtifactValidationError(
+                "Schema v2 loading is not supported yet; it is deferred to M3.6."
+            )
+        if schema == "provisional_v1":
+            raise ArtifactValidationError(
+                "Stored Schema v1 artifacts must contain schema_version=1."
+            )
+
         with np.load(data_path, allow_pickle=False) as npz:
             data = {k: npz[k] for k in npz.files}
 

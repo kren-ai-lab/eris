@@ -107,7 +107,7 @@ def test_missing_feature_keys_use_existing_legacy_fallback():
             "graph_attr": np.zeros((2,), dtype=np.float32),
             "graph_attr_keys": np.asarray(["graph.0", "graph.1"]),
         },
-        legacy={"node_attr_keys": ["node.0"]},
+        legacy={"schema_version": 1, "node_attr_keys": ["node.0"]},
     )
 
     artifact.finalize()

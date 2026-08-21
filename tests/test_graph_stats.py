@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import pytest
 
-from eris.core.artifacts import StructureArtifact
+from eris.core.artifacts import infer_counts
 from eris.core.base_encoder import EncodingContext
 from eris.core.types import StructureInput
 from eris.encoders.graphs.atom_knn_graph import AtomKNNGraph
@@ -123,13 +123,9 @@ def _assert_encoder_statistics(
     assert stats["edge_dist_min"] == 1.0
     assert stats["edge_dist_max"] == 1.0
 
-    artifact = StructureArtifact(
-        data=data,
-        meta={"feature_keys": {"graph_attr_keys": ctx.runtime["graph_attr_keys"]}},
-    )
-    artifact.finalize()
-    assert artifact.meta["counts"]["n_edges"] == n_edges
-    assert stats["n_edges"] == float(artifact.meta["counts"]["n_edges"])
+    counts = infer_counts(data)
+    assert counts["n_edges"] == n_edges
+    assert stats["n_edges"] == float(counts["n_edges"])
 
 
 def test_two_node_symmetric_pair_uses_unique_neighbor_degree():
