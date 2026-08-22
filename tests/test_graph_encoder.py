@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -35,14 +36,28 @@ def _check_artifact_graph_basic(art):
 
     # ---- meta contract (minimal) ----
     meta = art.meta
-    for k in ["schema_version", "encoder_name", "encoder_version", "encoder_fingerprint",
-              "type", "level", "params", "input", "dtypes", "counts", "feature_keys"]:
+    for k in [
+        "schema_version",
+        "representation_name",
+        "representation_family",
+        "representation_type",
+        "granularity",
+        "coordinate_source",
+        "encoder",
+        "parameters",
+        "provenance",
+        "outputs",
+        "input",
+        "dtypes",
+        "counts",
+        "feature_keys",
+    ]:
         assert k in meta, f"missing meta key: {k}"
 
-    assert meta["type"] == "graph"
-    assert meta["level"] == "residue"
+    assert meta["representation_type"] == "graph"
+    assert meta["granularity"] == "residue"
 
-    assert isinstance(meta["params"], dict)
+    assert isinstance(meta["parameters"], dict)
     assert isinstance(meta["input"], dict)
     assert "source" in meta["input"]
 

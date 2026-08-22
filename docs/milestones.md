@@ -248,36 +248,36 @@ Gate evidence:
 
 ## M3 — Artifact Schema v2
 
-**Status:** `NOT STARTED`
+**Status:** `IN PROGRESS`
 
 **Objective:** Implement the first stable public artifact contract.
 
 ### Work units
 
-- [ ] **M3.1 — Implement Schema v2 models and validation**
+- [x] **M3.1 — Implement Schema v2 models and validation**
   - **Scope:** Implement all conceptual fields, vocabularies, validation, and extensions frozen in
     `docs/architecture.md`.
   - **Acceptance:** Valid artifacts pass; missing/incompatible contract values fail clearly.
   - **Depends on:** M2 gate.
-- [ ] **M3.2 — Implement reproducible input and provenance records**
+- [x] **M3.2 — Implement reproducible input and provenance records**
   - **Scope:** Record input identity/hash, selection, effective config, Eris version, producer,
     and relevant environment provenance.
   - **Acceptance:** Deterministic provenance is separated from volatile data and uses M1.2.
   - **Depends on:** M3.1 and M1.2.
-- [ ] **M3.3 — Implement outputs and authoritative feature semantics**
+- [x] **M3.3 — Implement outputs and authoritative feature semantics**
   - **Scope:** Separate output layout from ordered feature semantics and validate keys, shapes,
     dtypes, and counts against payloads.
   - **Acceptance:** Explicit metadata is never destructively re-inferred; mismatches fail early.
   - **Depends on:** M3.1 and M1.6.
-- [ ] **M3.4 — Map explicit representations to Schema v2**
+- [x] **M3.4 — Map explicit representations to Schema v2**
   - **Scope:** Define v2 metadata/outputs for all ten explicit representations.
   - **Acceptance:** Every encoder emits strict-valid family/type/granularity/source metadata.
   - **Depends on:** M3.2, M3.3, and M2 gate.
-- [ ] **M3.5 — Implement deterministic artifact serialization**
+- [x] **M3.5 — Implement deterministic artifact serialization**
   - **Scope:** Persist canonical `data.npz` and `meta.json` safely and deterministically.
   - **Acceptance:** Equivalent artifacts serialize reproducibly; incomplete writes are invalid.
   - **Depends on:** M3.3.
-- [ ] **M3.6 — Implement loading and integrity validation**
+- [x] **M3.6 — Implement loading and integrity validation**
   - **Scope:** Validate version, files, outputs, shapes, dtypes, keys, and counts on load.
   - **Acceptance:** Valid artifacts round-trip; corruption/unknown versions fail clearly.
   - **Depends on:** M3.5.

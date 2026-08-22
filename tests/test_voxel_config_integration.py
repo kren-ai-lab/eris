@@ -372,7 +372,7 @@ def test_feature_mode_adapter_preserves_requested_and_physical_orders() -> None:
     artifact = _encode(encoder)
 
     assert encoder.config.channels.to_list() == requested
-    assert artifact.meta["params"]["channels"] == requested
+    assert artifact.meta["parameters"]["channels"] == requested
     assert artifact.meta["feature_keys"]["grid_channels"] == [
         "occupancy",
         "density",
@@ -479,13 +479,13 @@ def test_requested_params_and_effective_geometry_remain_separate(
     encoder, artifact = default_pair
 
     assert encoder.get_params() == encoder.config.to_dict()
-    assert artifact.meta["params"] == encoder.config.to_dict()
-    assert artifact.meta["params"]["scale"] is None
-    assert artifact.meta["params"]["voxel_size"] is None
+    assert artifact.meta["parameters"] == encoder.config.to_dict()
+    assert artifact.meta["parameters"]["scale"] is None
+    assert artifact.meta["parameters"]["voxel_size"] is None
     assert float(artifact.data["voxel_size"][0]) > 0
     assert artifact.data["origin"].shape == (3,)
-    assert "voxel_size_effective" not in artifact.meta["params"]
-    assert "origin" not in artifact.meta["params"]
+    assert "voxel_size_effective" not in artifact.meta["parameters"]
+    assert "origin" not in artifact.meta["parameters"]
 
 
 def test_explicit_spacing_remains_requested_in_params_and_effective_in_data() -> None:
@@ -497,7 +497,7 @@ def test_explicit_spacing_remains_requested_in_params_and_effective_in_data() ->
     )
     artifact = _encode(encoder)
 
-    assert artifact.meta["params"]["voxel_size"] == 1.5
+    assert artifact.meta["parameters"]["voxel_size"] == 1.5
     assert float(artifact.data["voxel_size"][0]) == 1.5
 
 
@@ -511,8 +511,6 @@ def test_default_scientific_baseline_is_corrected_and_strict(
     assert grid.dtype == np.float32
     assert _digest(grid) == DEFAULT_GRID_HASH
     assert artifact.meta["feature_keys"] == {
-        "grid_key": "grid",
-        "grid_layout": "CXYZ",
         "grid_channels": [
             "occupancy",
             "density",
@@ -521,7 +519,9 @@ def test_default_scientific_baseline_is_corrected_and_strict(
             *AA_ONEHOT_CHANNELS,
         ],
     }
-    assert artifact.meta["params"] == encoder.config.to_dict()
+    assert artifact.meta["outputs"][0]["name"] == "grid"
+    assert artifact.meta["outputs"][0]["layout"] == "CXYZ"
+    assert artifact.meta["parameters"] == encoder.config.to_dict()
     artifact.finalize()
     artifact.validate(strict=True)
 
@@ -632,6 +632,6 @@ def test_representative_variants_emit_strict_valid_artifacts(
 ) -> None:
     artifact = _encode(encoder)
 
-    assert artifact.meta["params"] == encoder.config.to_dict()
+    assert artifact.meta["parameters"] == encoder.config.to_dict()
     artifact.finalize()
     artifact.validate(strict=True)

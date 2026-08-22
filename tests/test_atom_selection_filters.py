@@ -233,5 +233,5 @@ def test_atom_selection_filters_are_recorded_in_artifact_params(
     }
     artifact = _encode(encoder_factory(**filters), atom_selection_pdb)
 
-    assert {name: artifact.meta["params"][name] for name in filters} == filters
+    assert {name: artifact.meta["parameters"][name] for name in filters} == filters
     assert all(name not in artifact.meta for name in filters)

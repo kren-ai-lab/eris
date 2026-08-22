@@ -20,9 +20,16 @@ def show(
     art = StructureArtifact.load(artifact_dir, validate=True, strict=strict)
 
     meta = art.meta
+    encoder = meta["encoder"]
     typer.echo(f"OK | schema_version={meta.get('schema_version')}")
-    typer.echo(f"encoder: {meta.get('encoder_name')} | version={meta.get('encoder_version')}")
-    typer.echo(f"type={meta.get('type')} level={meta.get('level')}")
+    typer.echo(f"representation: {meta['representation_name']}")
+    typer.echo(
+        f"encoder: {encoder['implementation']} | version={encoder['version']}"
+    )
+    typer.echo(
+        f"type={meta['representation_type']} granularity={meta['granularity']} "
+        f"coordinate_source={meta['coordinate_source']}"
+    )
     typer.echo(f"input: {meta.get('input')}")
     typer.echo(f"counts: {meta.get('counts')}")
     typer.echo(f"keys: {list(art.data.keys())}")

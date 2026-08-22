@@ -1,6 +1,7 @@
 from typer.testing import CliRunner
 
 from eris.cli.main import app
+from eris.core.artifacts import StructureArtifact
 
 
 def test_cli_runs():
@@ -37,4 +38,21 @@ def test_cli_single_uses_canonical_default_encoder(tmp_path):
     )
 
     assert result.exit_code == 0
-    assert (tmp_path / "1AQ2" / "residue_distogram" / "meta.json").is_file()
+    artifact_dir = tmp_path / "1AQ2" / "residue_distogram"
+    artifact = StructureArtifact.load(artifact_dir)
+    assert artifact.meta["schema_version"] == 2
+
+    info = runner.invoke(app, ["info", "show", str(artifact_dir)])
+    assert info.exit_code == 0
+    assert "representation: residue_distogram" in info.output
+    assert "type=matrix granularity=residue coordinate_source=ca" in info.output
+
+
+def test_cli_single_no_longer_exposes_post_encode_node_embedding_options():
+    runner = CliRunner()
+
+    help_result = runner.invoke(app, ["encode", "single", "--help"])
+
+    assert help_result.exit_code == 0
+    assert "--node-emb" not in help_result.output
+    assert "--node-emb-key" not in help_result.output

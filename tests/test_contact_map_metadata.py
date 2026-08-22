@@ -21,10 +21,7 @@ def _encode(registry_name: str) -> StructureArtifact:
 
 def test_continuous_contact_map_metadata_matches_payload_and_survives_finalize():
     artifact = _encode("residue_contact_map")
-    expected = {
-        "matrix_key": "contact",
-        "matrix_attr_keys": ["contact"],
-    }
+    expected = {}
 
     assert "contact" in artifact.data
     assert "contact_bins" not in artifact.data
@@ -32,6 +29,7 @@ def test_continuous_contact_map_metadata_matches_payload_and_survives_finalize()
     assert artifact.data["contact"].shape[0] == artifact.data["contact"].shape[1]
     assert artifact.data["contact"].dtype == np.uint8
     assert artifact.meta["feature_keys"] == expected
+    assert [output["name"] for output in artifact.meta["outputs"]][0] == "contact"
 
     artifact.finalize()
 
@@ -42,10 +40,7 @@ def test_continuous_contact_map_metadata_matches_payload_and_survives_finalize()
 
 def test_binned_contact_map_metadata_remains_distinct_and_consistent():
     artifact = _encode("residue_contact_map_bins")
-    expected = {
-        "matrix_key": "contact_bins",
-        "matrix_attr_keys": ["contact_bins", "bin_edges"],
-    }
+    expected = {}
 
     assert "contact_bins" in artifact.data
     assert "contact" not in artifact.data
@@ -55,32 +50,31 @@ def test_binned_contact_map_metadata_remains_distinct_and_consistent():
     assert artifact.data["contact_bins"].dtype == np.uint8
     assert artifact.data["bin_edges"].dtype == np.float32
     assert artifact.meta["feature_keys"] == expected
+    assert [output["name"] for output in artifact.meta["outputs"]][:2] == [
+        "contact_bins",
+        "bin_edges",
+    ]
 
     artifact.finalize()
 
     assert artifact.meta["feature_keys"] == expected
-    assert artifact.meta["shapes"]["contact_bins"] == list(
-        artifact.data["contact_bins"].shape
-    )
+    assert artifact.meta["shapes"]["contact_bins"] == list(artifact.data["contact_bins"].shape)
     assert artifact.meta["dtypes"]["contact_bins"] == "uint8"
     assert artifact.meta["dtypes"]["bin_edges"] == "float32"
 
 
 @pytest.mark.parametrize(
-    ("registry_name", "primary_key", "expected"),
+    ("registry_name", "primary_key", "expected_outputs"),
     [
         (
             "residue_contact_map",
             "contact",
-            {"matrix_key": "contact", "matrix_attr_keys": ["contact"]},
+            ["contact"],
         ),
         (
             "residue_contact_map_bins",
             "contact_bins",
-            {
-                "matrix_key": "contact_bins",
-                "matrix_attr_keys": ["contact_bins", "bin_edges"],
-            },
+            ["contact_bins", "bin_edges"],
         ),
     ],
 )
@@ -88,7 +82,7 @@ def test_contact_map_metadata_survives_save_load_roundtrip(
     tmp_path,
     registry_name,
     primary_key,
-    expected,
+    expected_outputs,
 ):
     artifact = _encode(registry_name)
     artifact_dir = tmp_path / registry_name
@@ -97,4 +91,7 @@ def test_contact_map_metadata_survives_save_load_roundtrip(
     loaded = StructureArtifact.load(artifact_dir, validate=True, strict=True)
 
     assert primary_key in loaded.data
-    assert loaded.meta["feature_keys"] == expected
+    assert loaded.meta["feature_keys"] == {}
+    assert [output["name"] for output in loaded.meta["outputs"]][
+        : len(expected_outputs)
+    ] == expected_outputs

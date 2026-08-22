@@ -133,9 +133,10 @@ def _write_npz(path, data: dict[str, np.ndarray]) -> None:
 
 
 def _legacy_artifact() -> StructureArtifact:
-    artifact = StructureArtifact(
+    return StructureArtifact(
         data={"pos": np.zeros((2, 3), dtype=np.float32)},
         meta={
+            "schema_version": 1,
             "encoder_name": "legacy_cloud",
             "encoder_version": "0.1.0",
             "encoder_fingerprint": "legacy-fingerprint",
@@ -144,10 +145,11 @@ def _legacy_artifact() -> StructureArtifact:
             "params": {},
             "input": "source=memory://legacy|chain=None|model=0",
             "feature_keys": {},
+            "shapes": {"pos": [2, 3]},
+            "dtypes": {"pos": "float32"},
+            "counts": {"n_nodes": 2},
         },
     )
-    artifact.finalize()
-    return artifact
 
 
 def test_explicit_v2_round_trip_is_canonical_and_ordered(tmp_path):
@@ -215,29 +217,25 @@ def test_v2_load_flags_cannot_disable_strict_validation(
         StructureArtifact.load(target, **load_kwargs)
 
 
-def test_finalized_v1_load_remains_v1_without_migration(tmp_path):
+def test_saved_v1_load_is_rejected_without_migration(tmp_path):
     artifact = _legacy_artifact()
     target = tmp_path / "v1"
-    artifact.save(target)
+    _write_meta(target, artifact.meta)
+    _write_npz(target, artifact.data)
 
-    loaded = StructureArtifact.load(target, validate=True, strict=True)
-
-    assert loaded.meta == artifact.meta
-    assert loaded.meta["schema_version"] == 1
-    assert "representation_name" not in loaded.meta
-    assert "parameters" not in loaded.meta
-    assert "provenance" not in loaded.meta
+    with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
+        StructureArtifact.load(target, validate=True, strict=True)
 
 
 def test_versionless_persisted_artifact_is_rejected(tmp_path):
     artifact = _legacy_artifact()
     target = tmp_path / "versionless"
-    artifact.save(target)
-    meta = json.loads((target / "meta.json").read_text(encoding="utf-8"))
+    meta = deepcopy(artifact.meta)
     del meta["schema_version"]
     _write_meta(target, meta)
+    _write_npz(target, artifact.data)
 
-    with pytest.raises(ArtifactValidationError, match="must contain schema_version=1"):
+    with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
         StructureArtifact.load(target)
 
 

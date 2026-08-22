@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import logging
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,13 @@ from pathlib import Path
 
 from eris import exceptions as exc
 from eris.core.encoder_metadata import check_params
-from eris.core.cache import DiskCache, make_cache_key
+from eris.core.cache import (
+    DiskCache,
+    compute_cache_key_v2,
+    make_cache_key,
+    parser_hint_from_source,
+    parser_hint_matches_format,
+)
 from eris.core.types import StructureArtifact, StructureInput
 from eris.core.contracts import UniversalContract
 
@@ -130,6 +137,10 @@ class BaseEncoder(ABC):
 
         text = json.dumps(payload, sort_keys=True)
         return sha256_text(text)
+
+    @property
+    def encoder_implementation(self) -> str:
+        return f"{type(self).__module__}.{type(self).__qualname__}"
     
 
     def _check_cache(self, inp: StructureInput, source_sha256: str):
@@ -184,6 +195,8 @@ class BaseEncoder(ABC):
         self,
         ctx: EncodingContext,
         data: dict[str, np.ndarray],
+        *,
+        parameters: dict[str, Any],
     ):
         """Build prospective strict-valid v2 metadata without activating it in encode()."""
         from eris.core.artifact_schema_v2 import (
@@ -210,7 +223,6 @@ class BaseEncoder(ABC):
                 f"{granularity!r} != {self.granularity_contract.level!r}"
             )
 
-        parameters = self.config.to_dict()
         return build_artifact_metadata(
             data=data,
             representation_name=representation_name,
@@ -219,7 +231,7 @@ class BaseEncoder(ABC):
             granularity=granularity,
             coordinate_source=self.config.coordinate_source,
             encoder={
-                "implementation": f"{type(self).__module__}.{type(self).__qualname__}",
+                "implementation": self.encoder_implementation,
                 "version": self.version,
             },
             input_metadata=build_input_metadata(
@@ -239,29 +251,124 @@ class BaseEncoder(ABC):
             counts=self._counts_v2(data),
         )
 
+    def _matches_cache_identity_v2(
+        self,
+        artifact: StructureArtifact,
+        *,
+        inp: StructureInput,
+        source_sha256: str,
+        parser_hint: str,
+        parameters: dict[str, Any],
+        config_fingerprint: str,
+    ) -> bool:
+        meta = artifact.meta
+        encoder = meta.get("encoder")
+        provenance = meta.get("provenance")
+        input_meta = meta.get("input")
+        if not isinstance(encoder, dict):
+            return False
+        if not isinstance(provenance, dict):
+            return False
+        if not isinstance(input_meta, dict):
+            return False
+        return (
+            type(meta.get("schema_version")) is int
+            and meta["schema_version"] == 2
+            and meta.get("representation_name") == self.config.representation_name
+            and meta.get("representation_family") == self.representation_family
+            and meta.get("representation_type") == self.representation.representation_type
+            and meta.get("granularity") == self.config.granularity
+            and meta.get("coordinate_source") == self.config.coordinate_source
+            and meta.get("parameters") == parameters
+            and encoder.get("implementation") == self.encoder_implementation
+            and encoder.get("version") == self.version
+            and provenance.get("config_fingerprint") == config_fingerprint
+            and input_meta.get("source_sha256") == source_sha256
+            and input_meta.get("model_index") == inp.model_index
+            and input_meta.get("chain_id") == inp.chain_id
+            and isinstance(input_meta.get("format"), str)
+            and parser_hint_matches_format(parser_hint, input_meta["format"])
+            and "model" not in meta
+        )
+
+    def _refresh_cache_hit_source_v2(
+        self,
+        artifact: StructureArtifact,
+        *,
+        inp: StructureInput,
+        source_sha256: str,
+    ) -> StructureArtifact:
+        from eris.core.artifact_schema_v2 import build_input_metadata
+
+        meta = deepcopy(artifact.meta)
+        meta["input"] = build_input_metadata(
+            source=inp.source,
+            source_sha256=source_sha256,
+            input_format=artifact.meta["input"]["format"],
+            model_index=inp.model_index,
+            chain_id=inp.chain_id,
+        )
+        refreshed = StructureArtifact(data=artifact.data, meta=meta)
+        refreshed.validate(strict=True)
+        return refreshed
+
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
+        from eris.core.artifact_schema_v2 import compute_config_fingerprint
         from eris.core.hashing import sha256_file
 
         source_sha256 = sha256_file(Path(inp.source))
-        key, cache, artifact = self._check_cache(inp, source_sha256)
-        if artifact is not None:
-            return artifact
+        parameters = self.config.to_dict()
+        config_fingerprint = compute_config_fingerprint(
+            self.config.representation_name,
+            parameters,
+        )
+        cache = None
+        key = None
+        if self.use_cache:
+            cache = self.cache or DiskCache()
+            parser_hint = parser_hint_from_source(inp.source)
+            key = compute_cache_key_v2(
+                representation_name=self.config.representation_name,
+                encoder_implementation=self.encoder_implementation,
+                encoder_version=self.version,
+                config_fingerprint=config_fingerprint,
+                source_sha256=source_sha256,
+                parser_hint=parser_hint,
+                model_index=inp.model_index,
+                chain_id=inp.chain_id,
+                model=None,
+            )
+            artifact = cache.get_v2(key)
+            if artifact is not None and self._matches_cache_identity_v2(
+                artifact,
+                inp=inp,
+                source_sha256=source_sha256,
+                parser_hint=parser_hint,
+                parameters=parameters,
+                config_fingerprint=config_fingerprint,
+            ):
+                return self._refresh_cache_hit_source_v2(
+                    artifact,
+                    inp=inp,
+                    source_sha256=source_sha256,
+                )
         
         ctx = EncodingContext(inp=inp, source_sha256=source_sha256)
         self._prepare_data(ctx=ctx)
         _structure_validation(ctx=ctx)
 
         data = self._create_data(ctx=ctx)
-        meta = self._base_metadata(ctx=ctx)
-        meta = self._update_granularity_metadata(meta=meta, ctx=ctx)
-        meta = self._update_params_metadata(meta=meta, ctx=ctx)
-        meta = self._finalize_metadata(meta=meta)
 
-        artifact: StructureArtifact = self._assemble_output(data=data, meta=meta, ctx=ctx)
-        
-        if self.use_cache:
-            cache.set(key, data=artifact.data, meta=artifact.meta)
+        for contract in self.contracts():
+            contract.validate(data)
+
+        meta = self._build_metadata_v2(ctx, data, parameters=parameters)
+        artifact = StructureArtifact(data=data, meta=meta)
+        artifact.validate(strict=True)
+
+        if cache is not None and key is not None:
+            cache.set_v2(key, artifact)
 
         return artifact
     

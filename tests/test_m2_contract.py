@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from eris.core.artifact_schema_v2 import compute_config_fingerprint
 from eris.core.registry import (
     get_encoder,
     get_encoder_info,
@@ -105,19 +106,23 @@ def default_artifacts():
 def test_m2_default_artifact_metadata_is_canonical_and_strict_valid(name, default_artifacts):
     encoder, artifact = default_artifacts[name]
 
-    assert artifact.meta["params"] == encoder.config.to_dict()
-    assert artifact.meta["encoder_fingerprint"] == encoder.fingerprint()
+    assert artifact.meta["parameters"] == encoder.config.to_dict()
+    assert artifact.meta["provenance"]["config_fingerprint"] == (
+        compute_config_fingerprint(encoder.name, encoder.config.to_dict())
+    )
+    assert isinstance(encoder.fingerprint(), str)
+    assert "encoder_fingerprint" not in artifact.meta
 
 
 def test_m2_requested_and_effective_state_remain_separate(default_artifacts):
     for name in ("residue_contact_map_bins", "residue_distogram_bins"):
         encoder, artifact = default_artifacts[name]
         assert encoder.config.edges is None
-        assert artifact.meta["params"]["edges"] is None
+        assert artifact.meta["parameters"]["edges"] is None
         assert "bin_edges" in artifact.data
-        assert "bin_edges" not in artifact.meta["params"]
+        assert "bin_edges" not in artifact.meta["parameters"]
 
     encoder, artifact = default_artifacts["residue_voxel_grid"]
     assert encoder.config.voxel_size is None
-    assert artifact.meta["params"]["voxel_size"] is None
+    assert artifact.meta["parameters"]["voxel_size"] is None
     assert "voxel_size" in artifact.data

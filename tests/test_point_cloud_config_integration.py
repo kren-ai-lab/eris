@@ -342,14 +342,14 @@ def test_atom_default_output_matches_pre_config_runtime_semantics(tmp_path: Path
         "aa_index_residue",
     ):
         np.testing.assert_array_equal(artifact.data[key], raw[key])
-    assert artifact.meta["params"] == config.to_dict()
-    assert artifact.meta["params"]["scale"] is None
+    assert artifact.meta["parameters"] == config.to_dict()
+    assert artifact.meta["parameters"]["scale"] is None
     assert artifact.meta["feature_keys"]["node_attr_keys"] == expected_keys
 
     outdir = tmp_path / "atom-artifact"
     artifact.save(outdir)
     loaded = StructureArtifact.load(outdir, strict=True)
-    assert loaded.meta["params"] == config.to_dict()
+    assert loaded.meta["parameters"] == config.to_dict()
 
 
 @pytest.mark.parametrize(
@@ -391,10 +391,10 @@ def test_residue_outputs_preserve_scientific_semantics_and_strict_artifacts(
     np.testing.assert_array_equal(artifact.data["node_attr"], expected_node_attr)
     for key in ("residue_ids", "resname", "aa_index", "plddt", "bfactor_ca"):
         np.testing.assert_array_equal(artifact.data[key], raw[key])
-    assert artifact.meta["level"] == "residue"
+    assert artifact.meta["granularity"] == "residue"
     assert config.coordinate_source == coordinate_source
-    assert artifact.meta["params"] == config.to_dict()
-    assert artifact.meta["params"]["scale"] is None
+    assert artifact.meta["parameters"] == config.to_dict()
+    assert artifact.meta["parameters"]["scale"] is None
     assert artifact.meta["feature_keys"]["node_attr_keys"] == expected_keys
 
     artifact.finalize()
@@ -432,4 +432,4 @@ def test_feature_mode_uses_canonical_config_without_losing_requested_order(
     artifact = _encode(encoder)
 
     assert artifact.data["node_attr"].shape[1] == expected_width
-    assert artifact.meta["params"]["node_attr_mode"] == requested_mode
+    assert artifact.meta["parameters"]["node_attr_mode"] == requested_mode

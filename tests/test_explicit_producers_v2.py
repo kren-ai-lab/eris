@@ -7,8 +7,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from eris.core.artifact_schema_v2 import validate_schema_v2
-from eris.core.artifacts import ARTIFACT_SCHEMA_VERSION
+from eris.core.artifact_schema_v2 import compute_config_fingerprint, validate_schema_v2
 from eris.core.base_encoder import EncodingContext
 from eris.core.hashing import sha256_file
 from eris.core.io import load_and_extract_residue
@@ -180,7 +179,11 @@ def _prospective(encoder: Any, source: Path = PDB):
     data = encoder._create_data(ctx)
     for contract in encoder.contracts():
         contract.validate(data)
-    metadata = encoder._build_metadata_v2(ctx, data)
+    metadata = encoder._build_metadata_v2(
+        ctx,
+        data,
+        parameters=encoder.config.to_dict(),
+    )
     return ctx, data, metadata
 
 
@@ -359,17 +362,74 @@ def test_loader_threads_gemmi_confirmed_input_format(source: Path, expected: str
     validate_schema_v2(metadata, data, strict=True)
 
 
-def test_normal_encode_remains_schema_v1_only():
+def test_normal_encode_is_strict_valid_schema_v2_without_finalization():
     artifact = ResiduePointCloudCA(use_cache=False).encode(StructureInput(source=str(PDB)))
 
-    assert {"encoder_name", "params", "level", "encoder_fingerprint"} <= artifact.meta.keys()
+    artifact.validate(strict=True)
+    assert artifact.meta["schema_version"] == 2
     assert {
         "representation_name",
         "representation_family",
         "parameters",
         "provenance",
         "outputs",
+    } <= artifact.meta.keys()
+    assert {
+        "encoder_name",
+        "encoder_version",
+        "encoder_fingerprint",
+        "type",
+        "level",
+        "params",
     }.isdisjoint(artifact.meta)
 
-    artifact.finalize()
-    assert artifact.meta["schema_version"] == ARTIFACT_SCHEMA_VERSION == 1
+
+@pytest.mark.parametrize("encoder_type", ENCODER_TYPES, ids=lambda value: value.name)
+def test_all_explicit_encoders_return_complete_schema_v2(encoder_type):
+    encoder = encoder_type(use_cache=False)
+    artifact = encoder.encode(StructureInput(source=str(PDB)))
+    metadata = artifact.meta
+
+    assert validate_schema_v2(metadata, artifact.data, strict=True) == metadata
+    assert metadata["schema_version"] == 2
+    assert metadata["representation_name"] == encoder.name
+    assert metadata["representation_family"] == "explicit"
+    assert metadata["representation_type"] == encoder.representation.representation_type
+    assert metadata["granularity"] == encoder.config.granularity
+    assert metadata["coordinate_source"] == encoder.config.coordinate_source
+    assert metadata["encoder"] == {
+        "implementation": encoder.encoder_implementation,
+        "version": encoder.version,
+    }
+    assert metadata["parameters"] == encoder.config.to_dict()
+    assert metadata["provenance"]["config_fingerprint"] == compute_config_fingerprint(
+        encoder.name,
+        encoder.config.to_dict(),
+    )
+    assert [output["name"] for output in metadata["outputs"]] == [
+        declaration["name"] for declaration in EXPECTED_DECLARATIONS[encoder.name]
+    ]
+    expected_feature_fields = {
+        "cloud": {"node_attr_keys"},
+        "graph": {"node_attr_keys", "edge_attr_keys", "graph_attr_keys"},
+        "matrix": set(),
+        "grid": {"grid_channels"},
+    }
+    assert set(metadata["feature_keys"]) == expected_feature_fields[metadata["representation_type"]]
+    assert metadata["counts"] == _expected_counts(
+        artifact.data,
+        metadata["representation_type"],
+    )
+    assert _compact_array_contract(artifact.data) == ARRAY_BASELINES[encoder.name]
+    assert {
+        "encoder_name",
+        "encoder_version",
+        "encoder_fingerprint",
+        "type",
+        "level",
+        "params",
+        "matrix_key",
+        "matrix_attr_keys",
+        "grid_key",
+        "grid_layout",
+    }.isdisjoint(metadata)

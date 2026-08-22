@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -16,10 +17,23 @@ from eris.core.artifact_schema_v2 import (
     compute_config_fingerprint,
 )
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
-from eris.core.cache import DiskCache, compute_cache_key_v2, make_cache_key
-from eris.core.hashing import sha256_text
+from eris.core.cache import (
+    DiskCache,
+    compute_cache_key_v2,
+    make_cache_key,
+    parser_hint_from_source,
+    parser_hint_matches_format,
+)
+from eris.core.hashing import sha256_file, sha256_text
+from eris.core.io import StructureLoadError
 from eris.core.types import StructureInput
+from eris.encoders.clouds.atom_point_cloud import AtomPointCloud
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
+from eris.encoders.geometry.distogram_ca import DistogramCA
+from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
+from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
+
+PDB = Path("tests/data/1AQ2.pdb")
 
 
 def _artifact() -> StructureArtifact:
@@ -60,9 +74,10 @@ def _artifact() -> StructureArtifact:
 
 
 def _legacy_artifact() -> StructureArtifact:
-    artifact = StructureArtifact(
+    return StructureArtifact(
         data={"pos": np.zeros((1, 3), dtype=np.float32)},
         meta={
+            "schema_version": 1,
             "encoder_name": "legacy",
             "encoder_version": "0.1.0",
             "encoder_fingerprint": "legacy-fingerprint",
@@ -71,10 +86,11 @@ def _legacy_artifact() -> StructureArtifact:
             "params": {},
             "input": "source=memory://legacy|chain=None|model=0",
             "feature_keys": {},
+            "shapes": {"pos": [1, 3]},
+            "dtypes": {"pos": "float32"},
+            "counts": {"n_nodes": 1},
         },
     )
-    artifact.finalize()
-    return artifact
 
 
 def _identity(**overrides) -> dict:
@@ -84,6 +100,7 @@ def _identity(**overrides) -> dict:
         "encoder_version": "0.1.0",
         "config_fingerprint": "b" * 64,
         "source_sha256": "a" * 64,
+        "parser_hint": ".pdb",
         "model_index": 0,
         "chain_id": None,
         "model": None,
@@ -121,6 +138,55 @@ def test_compute_cache_key_v2_is_deterministic_and_has_explicit_inputs():
     assert "parameters" not in parameters
 
 
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("foo.pdb", ".pdb"),
+        ("foo.PDB", ".pdb"),
+        ("foo.ent", ".ent"),
+        ("foo.cif", ".cif"),
+        ("foo.mmcif", ".mmcif"),
+        ("foo.pdb.gz", ".pdb.gz"),
+        ("foo.ent.gz", ".ent.gz"),
+        ("foo.cif.gz", ".cif.gz"),
+        ("foo.mmcif.gz", ".mmcif.gz"),
+        ("foo.unknown", ".unknown"),
+        ("foo", "<no-suffix>"),
+    ],
+)
+def test_parser_hint_uses_only_normalized_parser_relevant_suffix(source, expected):
+    assert parser_hint_from_source(source) == expected
+
+
+def test_parser_hint_is_path_independent_and_conservative():
+    assert parser_hint_from_source("first/place/protein.pdb") == parser_hint_from_source(
+        "second/place/protein.PDB"
+    )
+    assert _key(parser_hint=parser_hint_from_source("first/place/protein.pdb")) == _key(
+        parser_hint=parser_hint_from_source("second/place/protein.PDB")
+    )
+    assert _key(parser_hint=".pdb") != _key(parser_hint=".cif")
+    assert _key(parser_hint=".pdb") != _key(parser_hint=".ent")
+    assert _key(parser_hint=".cif") != _key(parser_hint=".mmcif")
+    assert _key(parser_hint=".pdb.gz") != _key(parser_hint=".pdb")
+
+
+@pytest.mark.parametrize(
+    ("parser_hint", "input_format", "expected"),
+    [
+        (".pdb", "pdb", True),
+        (".ent.gz", "pdb", True),
+        (".cif", "mmcif", True),
+        (".mmcif.gz", "mmcif", True),
+        (".pdb", "mmcif", False),
+        (".cif", "pdb", False),
+        (".unknown", "custom", True),
+    ],
+)
+def test_parser_hint_checks_known_confirmed_formats(parser_hint, input_format, expected):
+    assert parser_hint_matches_format(parser_hint, input_format) is expected
+
+
 def test_cache_key_payload_contains_exact_namespaces_and_identity(monkeypatch):
     monkeypatch.setattr(cache_module, "sha256_text", lambda value: value)
 
@@ -136,6 +202,7 @@ def test_cache_key_payload_contains_exact_namespaces_and_identity(monkeypatch):
         },
         "config_fingerprint": "b" * 64,
         "source_sha256": "a" * 64,
+        "parser_hint": ".pdb",
         "input_selection": {"model_index": 0, "chain_id": None},
     }
 
@@ -148,6 +215,7 @@ def test_cache_key_payload_contains_exact_namespaces_and_identity(monkeypatch):
         ("encoder_version", "0.2.0"),
         ("config_fingerprint", "c" * 64),
         ("source_sha256", "d" * 64),
+        ("parser_hint", ".cif"),
         ("chain_id", "A"),
         ("model_index", 1),
         (
@@ -198,6 +266,7 @@ def test_parameter_mapping_order_is_abstracted_by_config_fingerprint():
         ("encoder_version", ""),
         ("config_fingerprint", "A" * 64),
         ("source_sha256", "short"),
+        ("parser_hint", ""),
         ("model_index", True),
         ("model_index", -1),
         ("chain_id", 1),
@@ -271,7 +340,8 @@ def test_stale_or_corrupt_v2_cache_entry_is_a_non_destructive_miss(tmp_path, cas
     entry = _entry(tmp_path, key)
 
     if case == "v1":
-        _legacy_artifact().save(entry)
+        legacy = _legacy_artifact()
+        _write_entry(tmp_path, key, meta=legacy.meta, data=legacy.data)
     elif case == "versionless":
         legacy = _legacy_artifact()
         del legacy.meta["schema_version"]
@@ -344,29 +414,184 @@ def test_legacy_cache_get_set_and_key_behavior_remain_unchanged(tmp_path):
     assert (tmp_path / f"{key}.json").is_file()
 
 
-class _LegacyRecordingCache:
-    def __init__(self) -> None:
-        self.get_keys: list[str] = []
+def test_legacy_base_encoder_cache_helper_remains_dormant():
+    encoder = ResiduePointCloudCA(use_cache=False)
+
+    assert callable(encoder._check_cache)
+
+
+class _NoLegacyDiskCache(DiskCache):
+    def __init__(self, cache_dir) -> None:
+        super().__init__(cache_dir)
+        self.v2_get_keys: list[str] = []
+        self.v2_set_keys: list[str] = []
 
     def get(self, key: str):
-        self.get_keys.append(key)
-        return None
+        raise AssertionError("active encode must not consult legacy cache")
+
+    def set(self, key: str, data, meta) -> None:
+        raise AssertionError("active encode must not write legacy cache")
+
+    def get_v2(self, key: str):
+        self.v2_get_keys.append(key)
+        return super().get_v2(key)
+
+    def set_v2(self, key: str, artifact: StructureArtifact) -> None:
+        self.v2_set_keys.append(key)
+        super().set_v2(key, artifact)
 
 
-def test_base_encoder_still_uses_legacy_cache_api():
-    cache = _LegacyRecordingCache()
-    encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
-    source_sha256 = "f" * 64
-    inp = StructureInput(source="synthetic.pdb", chain_id="A", model_index=1)
+@pytest.mark.parametrize(
+    "encoder_type",
+    [AtomPointCloud, ResiduePointCloudCA, ResidueKNNGraph, DistogramCA, VoxelGridCA],
+    ids=lambda value: value.name,
+)
+def test_active_encoder_cache_miss_then_hit_uses_only_v2_api(
+    tmp_path,
+    monkeypatch,
+    encoder_type,
+):
+    cache = _NoLegacyDiskCache(tmp_path)
+    inp = StructureInput(source=str(PDB))
+    first_encoder = encoder_type(use_cache=True, cache=cache)
+    first = first_encoder.encode(inp)
+    second_encoder = encoder_type(use_cache=True, cache=cache)
 
-    key, returned_cache, artifact = encoder._check_cache(inp, source_sha256)
+    def fail_recompute(ctx):
+        raise AssertionError("a valid v2 cache hit must not recompute arrays")
 
-    assert key == make_cache_key(
+    monkeypatch.setattr(second_encoder, "_create_data", fail_recompute)
+    second = second_encoder.encode(inp)
+
+    assert first.meta["schema_version"] == second.meta["schema_version"] == 2
+    assert first.meta == second.meta
+    assert cache.v2_get_keys == [cache.v2_set_keys[0], cache.v2_set_keys[0]]
+    assert cache.v2_set_keys == [cache.v2_get_keys[0]]
+    assert set(first.data) == set(second.data)
+    for name, expected in first.data.items():
+        np.testing.assert_array_equal(second.data[name], expected)
+
+
+def test_active_encoder_ignores_corresponding_legacy_flat_cache(tmp_path):
+    inp = StructureInput(source=str(PDB))
+    encoder = ResiduePointCloudCA(use_cache=True)
+    legacy_key = make_cache_key(
         encoder.name,
         encoder.fingerprint(),
-        source_sha256,
+        sha256_file(PDB),
         inp.to_string(),
     )
-    assert cache.get_keys == [key]
-    assert returned_cache is cache
-    assert artifact is None
+    legacy = _legacy_artifact()
+    DiskCache(tmp_path).set(legacy_key, legacy.data, legacy.meta)
+    cache = _NoLegacyDiskCache(tmp_path)
+    encoder.cache = cache
+
+    artifact = encoder.encode(inp)
+
+    assert artifact.meta["schema_version"] == 2
+    assert (tmp_path / f"{legacy_key}.npz").is_file()
+    assert (tmp_path / f"{legacy_key}.json").is_file()
+    assert len(cache.v2_get_keys) == len(cache.v2_set_keys) == 1
+
+
+def test_cache_hit_refreshes_current_source_without_rewriting_cached_metadata(
+    tmp_path,
+    monkeypatch,
+):
+    source_a = tmp_path / "dir_a" / "protein.pdb"
+    source_b = tmp_path / "dir_b" / "protein.pdb"
+    source_a.parent.mkdir()
+    source_b.parent.mkdir()
+    source_bytes = PDB.read_bytes()
+    source_a.write_bytes(source_bytes)
+    source_b.write_bytes(source_bytes)
+    cache = _NoLegacyDiskCache(tmp_path / "cache")
+
+    first = ResiduePointCloudCA(use_cache=True, cache=cache).encode(
+        StructureInput(source=str(source_a))
+    )
+    second_encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
+
+    def fail_recompute(ctx):
+        raise AssertionError("same bytes and suffix must hit the v2 cache")
+
+    monkeypatch.setattr(second_encoder, "_create_data", fail_recompute)
+    second = second_encoder.encode(StructureInput(source=str(source_b)))
+
+    assert first.meta["input"]["source"] == str(source_a)
+    assert second.meta["input"]["source"] == str(source_b)
+    assert second.meta["input"]["format"] == "pdb"
+    assert cache.v2_get_keys[0] == cache.v2_get_keys[1]
+    cached_meta = json.loads(
+        (_entry(cache.cache_dir, cache.v2_get_keys[0]) / "meta.json").read_text(encoding="utf-8")
+    )
+    assert cached_meta["input"]["source"] == str(source_a)
+    for name, expected in first.data.items():
+        np.testing.assert_array_equal(second.data[name], expected)
+
+
+def test_parser_hint_prevents_pdb_cache_from_satisfying_cif_parse(tmp_path):
+    pdb_source = tmp_path / "protein.pdb"
+    cif_source = tmp_path / "protein.cif"
+    source_bytes = PDB.read_bytes()
+    pdb_source.write_bytes(source_bytes)
+    cif_source.write_bytes(source_bytes)
+    cache = _NoLegacyDiskCache(tmp_path / "cache")
+
+    ResiduePointCloudCA(use_cache=True, cache=cache).encode(StructureInput(source=str(pdb_source)))
+    with pytest.raises(StructureLoadError, match="Failed to parse structure"):
+        ResiduePointCloudCA(use_cache=True, cache=cache).encode(
+            StructureInput(source=str(cif_source))
+        )
+
+    assert cache.v2_get_keys[0] != cache.v2_get_keys[1]
+    assert len(list((cache.cache_dir / "v2").iterdir())) == 1
+
+
+def test_strict_valid_cache_artifact_with_wrong_identity_is_a_miss(tmp_path):
+    cache = _NoLegacyDiskCache(tmp_path)
+    inp = StructureInput(source=str(PDB))
+    expected_encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
+    parameters = expected_encoder.config.to_dict()
+    key = compute_cache_key_v2(
+        representation_name=expected_encoder.name,
+        encoder_implementation=expected_encoder.encoder_implementation,
+        encoder_version=expected_encoder.version,
+        config_fingerprint=compute_config_fingerprint(expected_encoder.name, parameters),
+        source_sha256=sha256_file(PDB),
+        parser_hint=".pdb",
+        model_index=0,
+        chain_id=None,
+    )
+    wrong = AtomPointCloud(use_cache=False).encode(inp)
+    cache.set_v2(key, wrong)
+    cache.v2_set_keys.clear()
+
+    result = expected_encoder.encode(inp)
+
+    assert result.meta["representation_name"] == "residue_point_cloud"
+    assert cache.v2_get_keys == [key]
+    assert cache.v2_set_keys == [key]
+    assert cache.get_v2(key).meta["representation_name"] == "residue_point_cloud"
+
+
+def test_use_cache_false_does_not_instantiate_or_compute_cache(monkeypatch):
+    def fail_cache_construction():
+        raise AssertionError("use_cache=False must not instantiate DiskCache")
+
+    def fail_cache_key(**kwargs):
+        raise AssertionError("use_cache=False must not compute a cache key")
+
+    monkeypatch.setattr(cache_module, "DiskCache", fail_cache_construction)
+    monkeypatch.setattr(
+        "eris.core.base_encoder.base_encoder.DiskCache",
+        fail_cache_construction,
+    )
+    monkeypatch.setattr(
+        "eris.core.base_encoder.base_encoder.compute_cache_key_v2",
+        fail_cache_key,
+    )
+
+    artifact = ResiduePointCloudCA(use_cache=False).encode(StructureInput(source=str(PDB)))
+
+    assert artifact.meta["schema_version"] == 2

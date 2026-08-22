@@ -314,11 +314,11 @@ def test_default_features_params_and_strict_artifacts(
         assert artifact.data["edge_attr"].shape[1] == 19
         assert artifact.data["graph_attr"].shape == (13,)
         assert artifact.data["graph_attr"].dtype == np.float32
-        assert artifact.meta["params"] == encoder.config.to_dict()
-        assert artifact.meta["params"]["scale"] is None
+        assert artifact.meta["parameters"] == encoder.config.to_dict()
+        assert artifact.meta["parameters"]["scale"] is None
         artifact.finalize()
         artifact.validate(strict=True)
-        assert artifact.meta["params"] == encoder.config.to_dict()
+        assert artifact.meta["parameters"] == encoder.config.to_dict()
 
 
 def test_default_topology_matches_frozen_ordered_regression(
@@ -382,10 +382,10 @@ def test_residue_knn_modes_and_loops_preserve_topology_counts() -> None:
         local_none.data["edge_index"],
         global_graph.data["edge_index"],
     )
-    assert local_none.meta["params"]["knn_mode"] == "local"
-    assert local_none.meta["params"]["cutoff"] is None
-    assert global_graph.meta["params"]["knn_mode"] == "global"
-    assert global_graph.meta["params"]["cutoff"] is None
+    assert local_none.meta["parameters"]["knn_mode"] == "local"
+    assert local_none.meta["parameters"]["cutoff"] is None
+    assert global_graph.meta["parameters"]["knn_mode"] == "global"
+    assert global_graph.meta["parameters"]["cutoff"] is None
     assert loops.data["edge_index"].shape == (2, 10180)
     np.testing.assert_array_equal(
         loops.data["edge_index"][:, -534:],

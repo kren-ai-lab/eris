@@ -368,48 +368,59 @@ def test_invalid_versionless_metadata_is_not_treated_as_v1(meta):
         artifact.finalize()
 
 
-def test_provisional_v1_requires_finalize_and_save_remains_v1(tmp_path):
+@pytest.mark.parametrize("operation", ["validate", "finalize", "save"])
+def test_provisional_v1_is_rejected_by_canonical_operations(tmp_path, operation):
     artifact = _provisional_v1_artifact()
-
-    with pytest.raises(ArtifactValidationError, match="must be finalized"):
-        artifact.validate()
-
     target = tmp_path / "provisional-v1"
-    artifact.save(target)
 
-    assert artifact.meta["schema_version"] == 1
-    assert "representation_name" not in artifact.meta
-    stored_meta = json.loads((target / "meta.json").read_text(encoding="utf-8"))
-    assert stored_meta["schema_version"] == 1
-    assert "parameters" not in stored_meta
-    loaded = StructureArtifact.load(target, validate=True, strict=True)
-    assert loaded.meta == stored_meta
-    np.testing.assert_array_equal(loaded.data["pos"], artifact.data["pos"])
+    with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
+        if operation == "save":
+            artifact.save(target)
+        else:
+            getattr(artifact, operation)()
+
+    assert "schema_version" not in artifact.meta
+    assert not target.exists()
 
 
-def test_finalized_v1_validate_and_save_without_conversion(tmp_path):
+@pytest.mark.parametrize("operation", ["validate", "finalize", "save"])
+def test_saved_schema_v1_is_rejected_by_canonical_operations(tmp_path, operation):
     artifact = _provisional_v1_artifact()
-    artifact.finalize()
+    artifact.meta.update(
+        {
+            "schema_version": 1,
+            "shapes": {"pos": [2, 3]},
+            "dtypes": {"pos": "float32"},
+            "counts": {"n_nodes": 2},
+        }
+    )
     meta_before = deepcopy(artifact.meta)
+    target = tmp_path / "saved-v1"
 
-    artifact.validate(strict=True)
-    artifact.save(tmp_path / "finalized-v1")
+    with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
+        if operation == "save":
+            artifact.save(target)
+        else:
+            getattr(artifact, operation)()
 
     assert artifact.meta == meta_before
     assert artifact.meta["schema_version"] == 1
     assert "representation_name" not in artifact.meta
+    assert not target.exists()
 
 
-def test_v1_save_validate_false_preserves_historical_bypass(tmp_path):
+def test_v1_save_validate_false_cannot_bypass_hard_cut(tmp_path):
     artifact = StructureArtifact(
         data={"value": np.array([1], dtype=np.float32)},
         meta={"schema_version": 1},
     )
 
-    artifact.save(tmp_path / "v1-unvalidated", validate=False)
+    target = tmp_path / "v1-unvalidated"
+    with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
+        artifact.save(target, validate=False)
 
-    assert (tmp_path / "v1-unvalidated" / "data.npz").is_file()
     assert artifact.meta["schema_version"] == 1
+    assert not target.exists()
 
 
 def test_staging_failure_preserves_existing_artifact_and_cleans_temps(

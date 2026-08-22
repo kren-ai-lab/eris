@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 import logging
 logger = logging.getLogger(__name__)
 
@@ -73,22 +74,35 @@ def batch_encode(
             data_npz = outdir / "data.npz"
 
             if not overwrite and data_npz.exists():
-                stats["skipped"] += 1
-                
-                logger.debug(
-                    "Skipping existing artifact",
-                    extra={
-                        "input_id": row.id,
-                        "encoder": enc_name
-                    }
-                )
+                try:
+                    StructureArtifact.load(outdir)
+                except ArtifactValidationError as error:
+                    stats["failed"] += 1
+                    logger.error(
+                        "Existing artifact is not reusable; use overwrite to regenerate: %s",
+                        error,
+                        extra={"input_id": row.id, "encoder": enc_name},
+                    )
+                    if fail_fast:
+                        raise
+                    continue
+                else:
+                    stats["skipped"] += 1
 
-                out_manifest_rows.append({
-                    "id": row.id+"_"+enc_name,
-                    "artifact_dir": str(outdir)
-                    })
+                    logger.debug(
+                        "Skipping existing valid Schema v2 artifact",
+                        extra={
+                            "input_id": row.id,
+                            "encoder": enc_name
+                        }
+                    )
 
-                continue
+                    out_manifest_rows.append({
+                        "id": row.id+"_"+enc_name,
+                        "artifact_dir": str(outdir)
+                        })
+
+                    continue
 
             try:
                 art = enc.encode(inp)

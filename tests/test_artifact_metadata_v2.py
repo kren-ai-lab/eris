@@ -13,7 +13,6 @@ from eris.core.artifact_schema_v2 import (
     build_provenance,
     compute_config_fingerprint,
 )
-from eris.core.artifacts import ARTIFACT_SCHEMA_VERSION
 from eris.core.base_encoder import EncodingContext
 from eris.core.hashing import sha256_file
 from eris.core.types import StructureInput
@@ -27,12 +26,18 @@ class _RecordingCache:
         self.get_keys: list[str] = []
         self.set_keys: list[str] = []
 
-    def get(self, key: str):
+    def get_v2(self, key: str):
         self.get_keys.append(key)
         return None
 
-    def set(self, key: str, *, data, meta) -> None:
+    def set_v2(self, key: str, artifact) -> None:
         self.set_keys.append(key)
+
+    def get(self, key: str):
+        raise AssertionError("active encode must not consult legacy cache")
+
+    def set(self, key: str, data, meta) -> None:
+        raise AssertionError("active encode must not write legacy cache")
 
 
 class _CapturingResiduePointCloud(ResiduePointCloudCA):
@@ -174,37 +179,51 @@ def test_encode_hashes_once_reuses_digest_and_threads_context(monkeypatch, use_c
     encoder = _CapturingResiduePointCloud(use_cache=use_cache, cache=cache)
     inp = StructureInput(source=str(DATA), chain_id="A", model_index=0)
     hash_spy = Mock(return_value=digest)
-    cache_key_spy = Mock(return_value="legacy-cache-key")
+    cache_key_spy = Mock(return_value="f" * 64)
     monkeypatch.setattr("eris.core.hashing.sha256_file", hash_spy)
     monkeypatch.setattr(
-        "eris.core.base_encoder.base_encoder.make_cache_key",
+        "eris.core.base_encoder.base_encoder.compute_cache_key_v2",
         cache_key_spy,
     )
 
     encoder.encode(inp)
 
     hash_spy.assert_called_once_with(Path(inp.source))
-    cache_key_spy.assert_called_once_with(
-        encoder.name,
-        encoder.fingerprint(),
-        digest,
-        inp.to_string(),
-    )
+    if use_cache:
+        cache_key_spy.assert_called_once_with(
+            representation_name=encoder.name,
+            encoder_implementation=encoder.encoder_implementation,
+            encoder_version=encoder.version,
+            config_fingerprint=compute_config_fingerprint(
+                encoder.name,
+                encoder.config.to_dict(),
+            ),
+            source_sha256=digest,
+            parser_hint=".pdb",
+            model_index=inp.model_index,
+            chain_id=inp.chain_id,
+            model=None,
+        )
+    else:
+        cache_key_spy.assert_not_called()
     assert encoder.captured_context is not None
     assert encoder.captured_context.source_sha256 == digest
-    assert cache.get_keys == (["legacy-cache-key"] if use_cache else [])
-    assert cache.set_keys == (["legacy-cache-key"] if use_cache else [])
+    assert cache.get_keys == (["f" * 64] if use_cache else [])
+    assert cache.set_keys == (["f" * 64] if use_cache else [])
 
 
-def test_current_explicit_encoding_remains_schema_v1_without_v2_metadata():
-    artifact = ResiduePointCloudCA(use_cache=False).encode(
-        StructureInput(source=str(DATA), chain_id="A", model_index=0)
+def test_current_explicit_encoding_is_complete_schema_v2():
+    encoder = ResiduePointCloudCA(use_cache=False)
+    artifact = encoder.encode(StructureInput(source=str(DATA), chain_id="A", model_index=0))
+    artifact.validate(strict=True)
+    encoder_parameters = encoder.config.to_dict()
+
+    assert artifact.meta["schema_version"] == 2
+    assert artifact.meta["parameters"] == encoder_parameters
+    assert artifact.meta["provenance"]["config_fingerprint"] == (
+        compute_config_fingerprint("residue_point_cloud", encoder_parameters)
     )
-    artifact.finalize()
-
-    assert artifact.meta["schema_version"] == ARTIFACT_SCHEMA_VERSION == 1
-    assert "params" in artifact.meta
-    assert "parameters" not in artifact.meta
-    assert "provenance" not in artifact.meta
-    assert "source_sha256" not in artifact.meta
-    assert "source_sha256" not in artifact.meta["input"]
+    assert artifact.meta["input"]["source_sha256"] == sha256_file(DATA)
+    assert {"params", "encoder_name", "encoder_fingerprint", "type", "level"}.isdisjoint(
+        artifact.meta
+    )

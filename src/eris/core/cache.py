@@ -37,6 +37,33 @@ def _validate_cache_key_v2(key: str) -> str:
     return _require_sha256(key, "v2 cache key")
 
 
+def parser_hint_from_source(source: str | Path) -> str:
+    """Return a path-independent parser selector from the source suffix."""
+    path = Path(source)
+    suffixes = [suffix.lower() for suffix in path.suffixes]
+    if not suffixes:
+        return "<no-suffix>"
+    if suffixes[-1] == ".gz" and len(suffixes) > 1:
+        return f"{suffixes[-2]}.gz"
+    return suffixes[-1]
+
+
+def parser_hint_matches_format(parser_hint: str, input_format: str) -> bool:
+    """Check known Gemmi suffix selectors against a confirmed input format."""
+    expected_formats = {
+        ".pdb": "pdb",
+        ".ent": "pdb",
+        ".pdb.gz": "pdb",
+        ".ent.gz": "pdb",
+        ".cif": "mmcif",
+        ".mmcif": "mmcif",
+        ".cif.gz": "mmcif",
+        ".mmcif.gz": "mmcif",
+    }
+    expected = expected_formats.get(parser_hint)
+    return expected is None or input_format == expected
+
+
 def compute_cache_key_v2(
     *,
     representation_name: str,
@@ -44,6 +71,7 @@ def compute_cache_key_v2(
     encoder_version: str,
     config_fingerprint: str,
     source_sha256: str,
+    parser_hint: str,
     model_index: int,
     chain_id: str | None,
     model: Mapping[str, Any] | None = None,
@@ -60,6 +88,7 @@ def compute_cache_key_v2(
     _require_non_empty_string(encoder_version, "encoder_version")
     _require_sha256(config_fingerprint, "config_fingerprint")
     _require_sha256(source_sha256, "source_sha256")
+    hint = _require_non_empty_string(parser_hint, "parser_hint")
     if type(model_index) is not int or model_index < 0:
         raise ValueError("model_index must be a plain integer >= 0")
     if chain_id is not None and not isinstance(chain_id, str):
@@ -77,6 +106,7 @@ def compute_cache_key_v2(
         },
         "config_fingerprint": config_fingerprint,
         "source_sha256": source_sha256,
+        "parser_hint": hint,
         "input_selection": {
             "model_index": model_index,
             "chain_id": chain_id,

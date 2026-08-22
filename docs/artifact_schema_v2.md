@@ -1,12 +1,12 @@
 # Eris Artifact Schema v2
 
-Artifact Schema v2 is the first stable public artifact contract for Eris v0.1. It describes
-explicit and learned structural representations with one Registry-independent metadata and
-array contract. M3.1 freezes and validates that isolated contract; it does not migrate current
-encoders, persistence, loading, cache behavior, or Schema v1 runtime code.
+Artifact Schema v2 is the canonical active runtime artifact contract for Eris v0.1. It
+describes explicit and learned structural representations with one Registry-independent
+metadata and array contract. All ten canonical explicit encoders produce complete, strict-valid
+Schema v2 artifacts directly from `BaseEncoder.encode()`.
 
-The canonical on-disk design remains `meta.json` plus `data.npz`, but M3.1 does not write or
-load either file. Its validator receives a metadata mapping and a `dict[str, numpy.ndarray]`.
+The canonical on-disk form is `meta.json` plus `data.npz`. `StructureArtifact` validates,
+finalizes, saves, and loads Schema v2; Schema v1 is unsupported by these public operations.
 
 ## Top-level contract
 
@@ -203,10 +203,11 @@ the representation name or canonical requested parameters change. It does not de
 version, encoder/package version, source, paths, arrays, timestamps, environment, or cache
 settings.
 
-`config_fingerprint` is not an artifact identity and is not a cache key. A later cache boundary
-may independently combine values such as `schema_version`, `representation_name`,
-`encoder.version`, `config_fingerprint`, `source_sha256`, and input selection. M3.1 neither
-defines nor implements that cache identity and does not replace `BaseEncoder.fingerprint()`.
+`config_fingerprint` is not a complete artifact identity and is not itself a cache key. The active
+v2 cache boundary combines it with schema/cache contract versions, representation and encoder
+identity, source SHA-256, parser hint, and input selection. This independent v2 identity does not
+replace `BaseEncoder.fingerprint()`, which remains available as a distinct legacy/Registry
+contract but is not used by active encoding cache lookup.
 
 ## Outputs
 
@@ -303,14 +304,14 @@ kinds are signed integer, unsigned integer, float, Boolean, and Unicode string. 
 structured/record, complex, datetime, timedelta, and byte-string arrays are rejected. Schema v2
 therefore has no pickle-dependent array payload.
 
-M3.1 validates in-memory arrays only and does not persist NPZ files.
+The same array-safety policy is enforced in memory and at persistence boundaries.
 
 ## Loading and disk integrity
 
 Persisted Schema v2 artifacts are always loaded with strict validation, regardless of the
-historical `validate` and `strict` flags retained for transitional Schema v1 loading. NPZ data is
-opened with `allow_pickle=False`, and its member names must exactly match the names declared by
-`outputs`.
+historical `validate` and `strict` arguments retained in the method signature. NPZ data is opened
+with `allow_pickle=False`, and its member names must exactly match the names declared by
+`outputs`. Schema v1 and versionless provisional v1 artifacts are rejected rather than loaded.
 
 `outputs` is the semantic ordering authority. Physical ZIP member order is not contractual; a
 loader reconstructs the runtime data mapping in `outputs` order after confirming exact member
@@ -324,19 +325,31 @@ numeric values with identical structural metadata cannot be detected.
 
 ## Schema v2 cache identity
 
-The dormant Schema v2 cache key hashes a canonical mapping containing separate
+The active Schema v2 cache key hashes a canonical mapping containing separate
 `cache_contract = 2` and `artifact_schema_version = 2` fields, representation name, encoder
-implementation and version, config fingerprint, input source SHA-256, and structured chain/model
-selection. An optional canonical model mapping participates when present.
+implementation and version, config fingerprint, input source SHA-256, parser hint, and structured
+chain/model selection. An optional canonical model mapping participates when present.
 
-Input source locator, Eris package version, input format, representation type, granularity,
-coordinate source, and the full parameter mapping are excluded. The source SHA identifies bytes,
-selection identifies the requested structure subset, and `config_fingerprint` already identifies
-canonical requested parameters.
+`parser_hint` is derived only from the normalized parser-relevant suffix. It is path-independent:
+`.PDB` and `.pdb` are equivalent, while `.pdb`, `.ent`, `.cif`, `.mmcif`, and their compressed
+forms remain conservatively distinct. An unknown terminal suffix is preserved in normalized form;
+no suffix uses the explicit value `<no-suffix>`.
+
+Input source locator, Eris package version, confirmed input format, representation type,
+granularity, coordinate source, and the full parameter mapping are excluded. The source SHA
+identifies bytes, selection identifies the requested structure subset, `parser_hint` prevents
+cross-parser cache reuse, and `config_fingerprint` identifies canonical requested parameters.
+
+On a cache miss, `input.format` is the format confirmed by Gemmi. On a hit, the cached confirmed
+format is preserved; it is never inferred from the suffix. Because the source locator is excluded
+from the key, a valid hit rebuilds only `input` with the current invocation's `source`, hash, model,
+and chain selection, then validates the refreshed artifact. The persisted cache entry is not
+rewritten merely to refresh the locator.
 
 Schema v2 cache entries live under a separate `v2/<key>/` namespace and use canonical
 `data.npz`/`meta.json` files. Legacy, stale, corrupt, or invalid entries are cache misses; they are
-never migrated to Schema v2 and are not automatically deleted.
+never migrated to Schema v2 and are not automatically deleted. Active encoding calls only the v2
+cache API; legacy flat cache entries are ignored.
 
 ## Basic and strict validation
 
@@ -383,19 +396,22 @@ It uses `representation_family = learned`, `representation_type = embedding`,
 ## Schema v1 hard cut
 
 Schema v1 is a pre-release internal format and has no public v0.1 compatibility guarantee. The
-frozen eventual runtime policy is:
+active runtime policy is:
 
-- new saves produce Schema v2 only;
-- Schema v1 load is explicitly rejected as legacy;
+- new encodes and saves produce Schema v2 only;
+- Schema v1 load, validate, finalize, and save are explicitly rejected as legacy, including
+  `save(validate=False)`;
 - no transparent migration or automatic provenance reconstruction is performed;
-- Schema v1 is not saved;
+- versionless provisional v1 metadata is unsupported;
 - artifacts should be regenerated from their source and canonical config.
 
-M3.1 records this policy only. It does not change `StructureArtifact`, `finalize()`, `save()`, or
-`load()`. Runtime migration and enforcement remain assigned to M3.2-M3.8.
+Legacy detection and private helpers may remain quarantined temporarily, but there is no public
+supported Schema v1 path. Batch processing validates an existing artifact before skipping it, so
+a v1, corrupt, or incomplete output cannot silently satisfy a request.
 
-## Explicitly unchanged in M3.1
+## Encode CLI boundary
 
-M3.1 does not change any runtime producer, existing encoder, Registry/config definition,
-scientific builder, cache, CLI, exporter, dataset, or persistence path. Current Schema v1
-behavior remains intact until its owning later M3 units are implemented and reviewed.
+`eris encode single` saves the strict-valid Schema v2 artifact returned by the encoder. Historical
+`--node-emb` and `--node-emb-key` options were removed because they mutated payload arrays after
+schema construction. Learned embeddings belong to the later `eris embed` learned-representation
+path; they are not injected into explicit artifacts.

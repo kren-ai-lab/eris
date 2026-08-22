@@ -13,9 +13,10 @@ DATA = Path("tests/data/1AQ2.pdb")
 
 
 def _minimal_artifact(level: str) -> StructureArtifact:
-    artifact = StructureArtifact(
+    return StructureArtifact(
         data={"pos": np.zeros((1, 3), dtype=np.float32)},
         meta={
+            "schema_version": 1,
             "encoder_name": "test_encoder",
             "encoder_version": "0.1.0",
             "encoder_fingerprint": "test",
@@ -31,19 +32,18 @@ def _minimal_artifact(level: str) -> StructureArtifact:
             "feature_keys": {},
         },
     )
-    artifact.finalize()
-    return artifact
 
 
 @pytest.mark.parametrize("level", ["atom", "residue", "structure", "mixed"])
-def test_schema_v1_accepts_granularity_levels(level):
-    _minimal_artifact(level).validate(strict=True)
+def test_schema_v1_granularity_variants_are_unsupported(level):
+    with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
+        _minimal_artifact(level).validate(strict=True)
 
 
-def test_schema_v1_rejects_ca_as_level():
+def test_schema_v1_ca_level_is_unsupported_before_legacy_validation():
     artifact = _minimal_artifact("ca")
 
-    with pytest.raises(ArtifactValidationError, match=r"Invalid meta\.level='ca'"):
+    with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
         artifact.validate(strict=True)
 
 
@@ -53,8 +53,9 @@ def test_residue_coordinate_source_is_separate_from_level(mode):
 
     artifact = encoder.encode(StructureInput(source=str(DATA), model_index=0))
 
-    assert artifact.meta["level"] == "residue"
-    assert artifact.meta["params"]["residue_center"] == mode
+    assert artifact.meta["granularity"] == "residue"
+    assert artifact.meta["coordinate_source"] == ("ca" if mode == "ca" else f"residue_{mode}")
+    assert artifact.meta["parameters"]["residue_center"] == mode
     assert "residue_center" not in artifact.meta
     assert artifact.meta["input"]["model_index"] == 0
 
@@ -67,7 +68,9 @@ def test_residue_coordinate_source_changes_fingerprint_not_level():
     mean_artifact = mean_encoder.encode(StructureInput(source=str(DATA)))
 
     assert ca_encoder.fingerprint() != mean_encoder.fingerprint()
-    assert ca_artifact.meta["level"] == mean_artifact.meta["level"] == "residue"
+    assert ca_artifact.meta["granularity"] == mean_artifact.meta["granularity"] == "residue"
+    assert ca_artifact.meta["coordinate_source"] == "ca"
+    assert mean_artifact.meta["coordinate_source"] == "residue_mean"
 
 
 @pytest.mark.parametrize(
@@ -91,9 +94,9 @@ def test_explicit_encoder_level_follows_represented_entity(registry_name, expect
 
     artifact = encoder.encode(StructureInput(source=str(DATA)))
 
-    assert artifact.meta["encoder_name"] == registry_name
-    assert artifact.meta["level"] == expected_level
+    assert artifact.meta["representation_name"] == registry_name
+    assert artifact.meta["granularity"] == expected_level
     if expected_level == "residue":
-        assert artifact.meta["params"]["residue_center"] == "ca"
+        assert artifact.meta["parameters"]["residue_center"] == "ca"
     else:
-        assert "residue_center" not in artifact.meta["params"]
+        assert "residue_center" not in artifact.meta["parameters"]

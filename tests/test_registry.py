@@ -305,14 +305,19 @@ def test_registry_defaults_have_no_stale_manual_parameters():
     assert voxel["clamp"] is True
 
 
-def test_registry_matches_schema_v1_meta():
+def test_registry_matches_active_schema_v2_meta():
     encoder = get_encoder("residue_contact_graph", use_cache=False)
     info = get_encoder_info("residue_contact_graph")
 
     artifact = encoder.encode(StructureInput(source=str(DATA)))
     artifact.finalize()
 
-    assert artifact.meta["encoder_name"] == info.name
-    assert artifact.meta["type"] == info.representation_type
-    assert artifact.meta["level"] == info.granularity
-    assert artifact.meta["encoder_fingerprint"] == encoder.fingerprint()
+    assert artifact.meta["representation_name"] == info.name
+    assert artifact.meta["representation_type"] == info.representation_type
+    assert artifact.meta["granularity"] == info.granularity
+    assert artifact.meta["encoder"] == {
+        "implementation": encoder.encoder_implementation,
+        "version": encoder.version,
+    }
+    assert isinstance(encoder.fingerprint(), str)
+    assert "encoder_fingerprint" not in artifact.meta

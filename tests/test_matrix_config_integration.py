@@ -324,11 +324,14 @@ def test_residue_policies_are_passed_explicitly_to_loader(
         "missing_ca": "skip",
     }
     assert encoder.granularity_contract.level == "residue"
-    assert encoder.config.coordinate_source == {
-        "ca": "ca",
-        "mean": "residue_mean",
-        "com": "residue_com",
-    }[residue_center]
+    assert (
+        encoder.config.coordinate_source
+        == {
+            "ca": "ca",
+            "mean": "residue_mean",
+            "com": "residue_com",
+        }[residue_center]
+    )
 
 
 def test_default_outputs_match_frozen_scientific_regression(
@@ -364,7 +367,7 @@ def test_default_outputs_match_frozen_scientific_regression(
         assert matrix.dtype == dtype
         np.testing.assert_array_equal(matrix, matrix.T)
         assert _digest(matrix) == digest
-        assert artifact.meta["params"] == encoder.config.to_dict()
+        assert artifact.meta["parameters"] == encoder.config.to_dict()
         artifact.finalize()
         artifact.validate(strict=True)
 
@@ -430,7 +433,7 @@ def test_mean_and_com_outputs_match_frozen_regression(
     digest: str,
 ) -> None:
     artifact = _encode(encoder)
-    assert artifact.meta["level"] == "residue"
+    assert artifact.meta["granularity"] == "residue"
     assert _digest(artifact.data[key]) == digest
 
 
@@ -523,7 +526,7 @@ def test_approved_variants_match_frozen_regression_and_remain_strict(
 
     assert artifact.data[key].dtype == dtype
     assert _digest(artifact.data[key]) == digest
-    assert artifact.meta["params"] == encoder.config.to_dict()
+    assert artifact.meta["parameters"] == encoder.config.to_dict()
     artifact.finalize()
     artifact.validate(strict=True)
 
@@ -554,9 +557,7 @@ def test_contact_map_preserves_threshold_dtype_and_diagonal_semantics() -> None:
 def test_explicit_edges_preserve_boundary_and_no_contact_semantics(
     encoder_type: type[DistogramBinsCA] | type[ContactMapBinsCA],
 ) -> None:
-    ctx = _context(
-        np.asarray([[0, 0, 0], [1, 0, 0], [2, 0, 0], [4, 0, 0], [8, 0, 0], [9, 0, 0]])
-    )
+    ctx = _context(np.asarray([[0, 0, 0], [1, 0, 0], [2, 0, 0], [4, 0, 0], [8, 0, 0], [9, 0, 0]]))
     with_no_contact = encoder_type(edges=[2, 4, 8], include_self=True)._create_data(ctx)
     without_no_contact = encoder_type(
         edges=[2, 4, 8],
@@ -678,18 +679,18 @@ def test_requested_and_effective_binning_state_remain_separate(
     for name in ("residue_distogram_bins", "residue_contact_map_bins"):
         encoder, artifact = default_artifacts[name]
         assert encoder.config.edges is None
-        assert artifact.meta["params"] == encoder.config.to_dict()
-        assert artifact.meta["params"]["edges"] is None
-        assert artifact.meta["params"]["num_bins"] == 36
+        assert artifact.meta["parameters"] == encoder.config.to_dict()
+        assert artifact.meta["parameters"]["edges"] is None
+        assert artifact.meta["parameters"]["num_bins"] == 36
         assert artifact.data["bin_edges"].shape == (37,)
 
     explicit = DistogramBinsCA(edges=[2, 4, 8], use_cache=False, cache=object())
     artifact = _encode(explicit)
     assert explicit.config.edges == (2.0, 4.0, 8.0)
-    assert artifact.meta["params"]["edges"] == [2.0, 4.0, 8.0]
-    assert artifact.meta["params"]["dmin"] is None
-    assert artifact.meta["params"]["dmax"] is None
-    assert artifact.meta["params"]["num_bins"] is None
+    assert artifact.meta["parameters"]["edges"] == [2.0, 4.0, 8.0]
+    assert artifact.meta["parameters"]["dmin"] is None
+    assert artifact.meta["parameters"]["dmax"] is None
+    assert artifact.meta["parameters"]["num_bins"] is None
     np.testing.assert_array_equal(
         artifact.data["bin_edges"],
         np.asarray([2, 4, 8], dtype=np.float32),

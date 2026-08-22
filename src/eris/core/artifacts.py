@@ -23,6 +23,12 @@ class ArtifactValidationError(ErisError):
     pass
 
 
+_SCHEMA_V1_UNSUPPORTED = (
+    "Artifact Schema v1 is no longer supported by this Eris release. "
+    "Regenerate the artifact from the original structure and configuration."
+)
+
+
 _PROVISIONAL_V1_REQUIRED = {
     "encoder_name",
     "encoder_version",
@@ -483,8 +489,7 @@ class StructureArtifact:
             if canonical_meta != self.meta:
                 self.meta = canonical_meta
             return
-
-        self._finalize_v1()
+        raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
 
     def _finalize_v1(self) -> None:
         # Normalize/upgrade meta in-place and (re)compute derived fields
@@ -505,14 +510,10 @@ class StructureArtifact:
 
     def validate(self, strict = False):
         schema = _detect_artifact_schema(self.meta)
-        if schema == "provisional_v1":
-            raise ArtifactValidationError(
-                "Provisional Schema v1 artifacts must be finalized before validation."
-            )
         if schema == "v2":
             _validate_artifact_v2(self.meta, self.data)
             return
-        validate_artifact(self.meta, self.data, strict=strict)
+        raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
 
 
     def save(self, outdir: Path, *, validate: bool = True) -> None:
@@ -558,21 +559,10 @@ class StructureArtifact:
 
         meta = _read_artifact_metadata(meta_path)
         schema = _detect_artifact_schema(meta)
-        if schema == "provisional_v1":
-            raise ArtifactValidationError(
-                "Stored Schema v1 artifacts must contain schema_version=1."
-            )
+        if schema != "v2":
+            raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
 
-        if schema == "v2":
-            output_names = _v2_output_names(meta)
-            data = _load_npz_data(data_path, output_names=output_names)
-            canonical_meta = _validate_artifact_v2(meta, data)
-            return StructureArtifact(data=data, meta=canonical_meta)
-
-        data = _load_npz_data(data_path)
-
-        art = StructureArtifact(data=data, meta=meta)
-        # do not auto-finalize on load; validate the stored content
-        if validate:
-            art.validate(strict=strict)
-        return art
+        output_names = _v2_output_names(meta)
+        data = _load_npz_data(data_path, output_names=output_names)
+        canonical_meta = _validate_artifact_v2(meta, data)
+        return StructureArtifact(data=data, meta=canonical_meta)

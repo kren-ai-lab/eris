@@ -5,6 +5,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from eris.core.artifact_schema_v2 import (
+    build_artifact_metadata,
+    build_feature_keys,
+    build_input_metadata,
+    build_provenance,
+)
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.types import StructureInput
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
@@ -13,9 +19,7 @@ from eris.features.feature_registry import VoxelFeatureSpec
 from eris.features.grid.grid import build_grid_attr
 
 DATA = Path("tests/data/1AQ2.pdb")
-AA_ONEHOT_CHANNELS = [
-    f"aa_onehot.{aa}" for aa in "ACDEFGHIKLMNPQRSTVWYX"
-]
+AA_ONEHOT_CHANNELS = [f"aa_onehot.{aa}" for aa in "ACDEFGHIKLMNPQRSTVWYX"]
 
 
 def _grid_inputs():
@@ -46,27 +50,33 @@ def _grid_artifact(
     grid: np.ndarray,
     channels: list[str],
 ) -> StructureArtifact:
+    parameters: dict = {}
     return StructureArtifact(
         data={"grid": grid},
-        meta={
-            "encoder_name": "test_voxel",
-            "encoder_version": "0.1.0",
-            "encoder_fingerprint": "test",
-            "type": "grid",
-            "level": "residue",
-            "params": {},
-            "input": {
-                "source": "memory",
-                "chain_id": None,
-                "model_index": 0,
-                "format": None,
-            },
-            "feature_keys": {
-                "grid_key": "grid",
-                "grid_layout": "CXYZ",
-                "grid_channels": channels,
-            },
-        },
+        meta=build_artifact_metadata(
+            data={"grid": grid},
+            representation_name="synthetic_voxel_grid",
+            representation_family="explicit",
+            representation_type="grid",
+            granularity="residue",
+            coordinate_source="ca",
+            encoder={"implementation": "tests.synthetic.VoxelEncoder", "version": "0.1.0"},
+            input_metadata=build_input_metadata(
+                source="memory://synthetic",
+                source_sha256="a" * 64,
+                input_format="pdb",
+                model_index=0,
+                chain_id=None,
+            ),
+            parameters=parameters,
+            provenance=build_provenance(
+                representation_name="synthetic_voxel_grid",
+                parameters=parameters,
+            ),
+            output_declarations=[{"name": "grid", "role": "grid", "layout": "CXYZ"}],
+            feature_keys=build_feature_keys(grid_channels=channels),
+            counts={},
+        ),
     )
 
 
@@ -165,11 +175,11 @@ def test_default_voxel_encoder_metadata_matches_physical_grid():
 
     assert artifact.data["grid"].shape == (25, 64, 64, 64)
     assert artifact.meta["feature_keys"] == {
-        "grid_key": "grid",
-        "grid_layout": "CXYZ",
         "grid_channels": expected_physical_channels,
     }
-    assert artifact.meta["params"]["channels"] == [
+    assert artifact.meta["outputs"][0]["name"] == "grid"
+    assert artifact.meta["outputs"][0]["layout"] == "CXYZ"
+    assert artifact.meta["parameters"]["channels"] == [
         "occupancy",
         "density",
         "aa_onehot",
@@ -183,7 +193,7 @@ def test_scalar_occupancy_metadata_uses_one_token_and_one_channel():
 
     assert artifact.data["grid"].shape[0] == 1
     assert artifact.meta["feature_keys"]["grid_channels"] == ["occupancy"]
-    assert artifact.meta["params"]["channels"] == ["occupancy"]
+    assert artifact.meta["parameters"]["channels"] == ["occupancy"]
 
 
 def test_aa_onehot_metadata_has_exact_physical_channel_order():
@@ -191,7 +201,7 @@ def test_aa_onehot_metadata_has_exact_physical_channel_order():
 
     assert artifact.data["grid"].shape[0] == 21
     assert artifact.meta["feature_keys"]["grid_channels"] == AA_ONEHOT_CHANNELS
-    assert artifact.meta["params"]["channels"] == ["aa_onehot"]
+    assert artifact.meta["parameters"]["channels"] == ["aa_onehot"]
 
 
 def test_aa_onehot_a_and_x_channels_follow_declared_positions():
@@ -218,7 +228,7 @@ def test_unordered_request_preserves_requested_tokens_and_physical_order():
     )
 
     assert artifact.data["grid"].shape[0] == 23
-    assert artifact.meta["params"]["channels"] == [
+    assert artifact.meta["parameters"]["channels"] == [
         "aa_onehot",
         "occupancy",
         "bfactor",
@@ -234,7 +244,7 @@ def test_parameterized_channel_metadata_preserves_token_parameters():
     requested = [{"density": {"sigma": 2.0}}, "occupancy"]
     artifact = _encode_grid(channels=requested, grid_size=4)
 
-    assert artifact.meta["params"]["channels"] == requested
+    assert artifact.meta["parameters"]["channels"] == requested
     assert artifact.meta["feature_keys"]["grid_channels"] == [
         "occupancy",
         "density",
@@ -251,8 +261,6 @@ def test_pool_mode_does_not_change_channel_metadata(pool):
 
     assert artifact.data["grid"].shape[0] == 22
     assert artifact.meta["feature_keys"] == {
-        "grid_key": "grid",
-        "grid_layout": "CXYZ",
         "grid_channels": ["occupancy", *AA_ONEHOT_CHANNELS],
     }
 
@@ -273,10 +281,9 @@ def test_all_zero_grid_preserves_shape_channels_and_layout():
     assert not np.any(grid)
     assert grid.shape == (2, 4, 4, 4)
     assert artifact.meta["feature_keys"] == {
-        "grid_key": "grid",
-        "grid_layout": "CXYZ",
         "grid_channels": ["occupancy", "bfactor"],
     }
+    assert artifact.meta["outputs"][0]["layout"] == "CXYZ"
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float16"])
@@ -294,7 +301,7 @@ def test_dtype_does_not_change_channel_metadata(dtype):
     ]
 
 
-def test_valid_schema_v1_grid_artifact_finalizes_and_validates():
+def test_valid_schema_v2_grid_artifact_finalizes_and_validates():
     artifact = _grid_artifact(
         np.zeros((3, 2, 2, 2), dtype=np.float32),
         ["channel.0", "channel.1", "channel.2"],
@@ -304,7 +311,7 @@ def test_valid_schema_v1_grid_artifact_finalizes_and_validates():
     artifact.validate(strict=True)
 
 
-def test_schema_v1_grid_rejects_truncated_channel_metadata():
+def test_schema_v2_grid_rejects_truncated_channel_metadata():
     artifact = _grid_artifact(
         np.zeros((3, 2, 2, 2), dtype=np.float32),
         ["channel.0", "channel.1", "channel.2"],
@@ -312,23 +319,22 @@ def test_schema_v1_grid_rejects_truncated_channel_metadata():
     artifact.finalize()
     artifact.meta["feature_keys"]["grid_channels"] = ["channel.0", "channel.1"]
 
-    with pytest.raises(ArtifactValidationError, match=r"2 keys.*3 channels"):
+    with pytest.raises(ArtifactValidationError, match=r"2 entries.*3 features"):
         artifact.validate(strict=True)
 
 
-def test_schema_v1_grid_rejects_wrong_layout():
+def test_schema_v2_grid_records_layout_in_outputs():
     artifact = _grid_artifact(
         np.zeros((1, 2, 2, 2), dtype=np.float32),
         ["channel.0"],
     )
-    artifact.finalize()
-    artifact.meta["feature_keys"]["grid_layout"] = "XYZC"
+    artifact.validate(strict=True)
 
-    with pytest.raises(ArtifactValidationError, match="grid_layout must be 'CXYZ'"):
-        artifact.validate(strict=True)
+    assert artifact.meta["feature_keys"] == {"grid_channels": ["channel.0"]}
+    assert artifact.meta["outputs"][0]["layout"] == "CXYZ"
 
 
-def test_schema_v1_grid_rejects_non_4d_tensor():
+def test_schema_v2_grid_rejects_non_4d_tensor():
     artifact = _grid_artifact(
         np.zeros((1, 2, 2, 2), dtype=np.float32),
         ["channel.0"],
@@ -336,7 +342,7 @@ def test_schema_v1_grid_rejects_non_4d_tensor():
     artifact.finalize()
     artifact.data["grid"] = np.zeros((2, 2, 2), dtype=np.float32)
 
-    with pytest.raises(ArtifactValidationError, match="data.grid must be 4D"):
+    with pytest.raises(ArtifactValidationError, match="meta.shapes.grid"):
         artifact.validate(strict=True)
 
 
@@ -353,5 +359,5 @@ def test_voxel_artifact_roundtrip_preserves_channel_contract(tmp_path):
     assert loaded.meta["feature_keys"] == artifact.meta["feature_keys"]
     assert loaded.meta["shapes"] == artifact.meta["shapes"]
     assert loaded.meta["dtypes"] == artifact.meta["dtypes"]
-    assert loaded.meta["counts"]["grid_c"] == 23
-    assert loaded.meta["counts"]["grid_g"] == 4
+    assert loaded.meta["counts"] == {}
+    assert loaded.meta["outputs"][0]["layout"] == "CXYZ"
