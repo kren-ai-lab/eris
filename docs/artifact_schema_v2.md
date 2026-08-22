@@ -305,6 +305,39 @@ therefore has no pickle-dependent array payload.
 
 M3.1 validates in-memory arrays only and does not persist NPZ files.
 
+## Loading and disk integrity
+
+Persisted Schema v2 artifacts are always loaded with strict validation, regardless of the
+historical `validate` and `strict` flags retained for transitional Schema v1 loading. NPZ data is
+opened with `allow_pickle=False`, and its member names must exactly match the names declared by
+`outputs`.
+
+`outputs` is the semantic ordering authority. Physical ZIP member order is not contractual; a
+loader reconstructs the runtime data mapping in `outputs` order after confirming exact member
+coverage. Shapes, dtypes, feature cardinality, counts, learned alignment, and other generic v2
+integrity rules are then checked by the strict schema validator.
+
+This provides structural integrity, not cryptographic generation identity. Schema v2 has no
+checksum for the complete `data.npz` payload. Metadata and data from different generations are
+rejected when keys, shapes, dtypes, counts, or validated semantics differ, but different valid
+numeric values with identical structural metadata cannot be detected.
+
+## Schema v2 cache identity
+
+The dormant Schema v2 cache key hashes a canonical mapping containing separate
+`cache_contract = 2` and `artifact_schema_version = 2` fields, representation name, encoder
+implementation and version, config fingerprint, input source SHA-256, and structured chain/model
+selection. An optional canonical model mapping participates when present.
+
+Input source locator, Eris package version, input format, representation type, granularity,
+coordinate source, and the full parameter mapping are excluded. The source SHA identifies bytes,
+selection identifies the requested structure subset, and `config_fingerprint` already identifies
+canonical requested parameters.
+
+Schema v2 cache entries live under a separate `v2/<key>/` namespace and use canonical
+`data.npz`/`meta.json` files. Legacy, stale, corrupt, or invalid entries are cache misses; they are
+never migrated to Schema v2 and are not automatically deleted.
+
 ## Basic and strict validation
 
 `validate_schema_v2(meta, data, strict=False)` returns a normalized metadata copy. Basic

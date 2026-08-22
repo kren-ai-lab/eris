@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
@@ -129,6 +130,69 @@ def _save_staged(
             data_tmp.unlink(missing_ok=True)
         if meta_tmp is not None:
             meta_tmp.unlink(missing_ok=True)
+
+
+def _read_artifact_metadata(meta_path: Path) -> dict[str, Any]:
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise ArtifactValidationError(f"Invalid artifact metadata JSON: {meta_path}") from error
+    if not isinstance(meta, dict):
+        raise ArtifactValidationError("Artifact metadata must be a JSON object.")
+    return meta
+
+
+def _v2_output_names(meta: dict[str, Any]) -> list[str]:
+    outputs = meta.get("outputs")
+    if not isinstance(outputs, list) or not outputs:
+        raise ArtifactValidationError("Schema v2 meta.outputs must be a non-empty list.")
+
+    names: list[str] = []
+    for index, output in enumerate(outputs):
+        if not isinstance(output, dict):
+            raise ArtifactValidationError(
+                f"Schema v2 meta.outputs[{index}] must be an object."
+            )
+        name = output.get("name")
+        if not isinstance(name, str) or not name:
+            raise ArtifactValidationError(
+                f"Schema v2 meta.outputs[{index}].name must be a non-empty string."
+            )
+        names.append(name)
+
+    if len(names) != len(set(names)):
+        raise ArtifactValidationError("Schema v2 meta.outputs names must be unique.")
+    return names
+
+
+def _load_npz_data(
+    data_path: Path,
+    *,
+    output_names: list[str] | None = None,
+) -> dict[str, np.ndarray]:
+    try:
+        loaded = np.load(data_path, allow_pickle=False)
+        if not isinstance(loaded, np.lib.npyio.NpzFile):
+            raise ArtifactValidationError(f"Artifact payload is not an NPZ archive: {data_path}")
+        with loaded as npz:
+            member_names = list(npz.files)
+            if output_names is not None:
+                if len(member_names) != len(set(member_names)):
+                    raise ArtifactValidationError(
+                        "Schema v2 data.npz contains duplicate member names."
+                    )
+                if set(member_names) != set(output_names):
+                    raise ArtifactValidationError(
+                        "Schema v2 data.npz members must exactly match meta.outputs names."
+                    )
+                names = output_names
+            else:
+                names = member_names
+            return {name: np.array(npz[name], copy=True) for name in names}
+    except ArtifactValidationError:
+        raise
+    except (EOFError, KeyError, ValueError, zipfile.BadZipFile) as error:
+        raise ArtifactValidationError(f"Invalid or unsafe artifact NPZ: {data_path}") from error
 
 
 def _safe_shape(x: Any) -> Optional[List[int]]:
@@ -481,25 +545,31 @@ class StructureArtifact:
 
     @staticmethod
     def load(indir: Path, *, validate: bool = True, strict: bool = False) -> "StructureArtifact":
+        if not indir.exists():
+            raise ArtifactValidationError(f"Artifact directory does not exist: {indir}")
+        if not indir.is_dir():
+            raise ArtifactValidationError(f"Artifact path is not a directory: {indir}")
+
         meta_path = indir / "meta.json"
         data_path = indir / "data.npz"
 
         if not meta_path.exists() or not data_path.exists():
             raise ArtifactValidationError(f"Missing artifact files in {indir} (need meta.json + data.npz)")
 
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta = _read_artifact_metadata(meta_path)
         schema = _detect_artifact_schema(meta)
-        if schema == "v2":
-            raise ArtifactValidationError(
-                "Schema v2 loading is not supported yet; it is deferred to M3.6."
-            )
         if schema == "provisional_v1":
             raise ArtifactValidationError(
                 "Stored Schema v1 artifacts must contain schema_version=1."
             )
 
-        with np.load(data_path, allow_pickle=False) as npz:
-            data = {k: npz[k] for k in npz.files}
+        if schema == "v2":
+            output_names = _v2_output_names(meta)
+            data = _load_npz_data(data_path, output_names=output_names)
+            canonical_meta = _validate_artifact_v2(meta, data)
+            return StructureArtifact(data=data, meta=canonical_meta)
+
+        data = _load_npz_data(data_path)
 
         art = StructureArtifact(data=data, meta=meta)
         # do not auto-finalize on load; validate the stored content

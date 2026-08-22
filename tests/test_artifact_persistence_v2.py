@@ -455,9 +455,12 @@ def test_v2_save_replaces_canonical_files_and_leaves_unrelated_files(tmp_path):
     assert not [path for path in target.iterdir() if path.name.startswith(".eris-")]
 
 
-def test_v2_load_is_explicitly_deferred(tmp_path):
+def test_v2_load_uses_persisted_contract(tmp_path):
     target = tmp_path / "v2"
-    _explicit_artifact().save(target)
+    artifact = _explicit_artifact()
+    artifact.save(target)
 
-    with pytest.raises(ArtifactValidationError, match="v2 loading is not supported"):
-        StructureArtifact.load(target)
+    loaded = StructureArtifact.load(target)
+
+    assert loaded.meta == artifact.meta
+    assert list(loaded.data) == [output["name"] for output in artifact.meta["outputs"]]
