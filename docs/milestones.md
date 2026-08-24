@@ -319,12 +319,12 @@ backend.
   - **Scope:** Represent model/backend ID, source, license/citation, checkpoint, and SHA-256.
   - **Acceptance:** Correct files validate before load; hash mismatches are rejected.
   - **Depends on:** M4.1 and M3.2.
-- [ ] **M4.4 — Implement backend-agnostic model weight cache**
+- [x] **M4.4 — Implement backend-agnostic model weight cache**
   - **Scope:** Use `platformdirs` for local/cached resolution, safe insertion, verification, and
     partial/collision handling.
   - **Acceptance:** Fake checkpoints resolve reproducibly and corrupt files are not reused.
   - **Depends on:** M4.3 and M1.1.
-- [ ] **M4.5 — Define canonical local/global learned outputs and node mapping**
+- [x] **M4.5 — Define canonical local/global learned outputs and node mapping**
   - **Scope:** Implement `node_embedding`, `global_embedding`, `node_ids`, optional
     `valid_mask`, and unambiguous biological mapping.
   - **Acceptance:** Every local row maps to a node ID and outputs validate against v2.

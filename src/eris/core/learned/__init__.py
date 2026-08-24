@@ -1,5 +1,7 @@
 """Framework-independent contracts for learned structural representations."""
 
+from eris.core.learned.artifacts import build_learned_artifact
+from eris.core.learned.checkpoint_cache import CheckpointCache
 from eris.core.learned.checkpoints import (
     CheckpointDescriptor,
     StructuralModelDescriptor,
@@ -19,6 +21,7 @@ from eris.core.learned.types import StructuralEmbeddingResult, validate_embeddin
 __all__ = [
     "BackendAvailability",
     "CheckpointDescriptor",
+    "CheckpointCache",
     "EmbedderInfo",
     "EmbedderRegistry",
     "OutputMode",
