@@ -56,6 +56,7 @@ class ExtendedConfig(StructuralEmbedderConfig):
 
 
 FAKE_IMPLEMENTATION = f"{FakeBackend.__module__}.{FakeBackend.__qualname__}"
+FAKE_ENCODER_VERSION = "test-v1"
 
 
 def _available() -> BackendAvailability:
@@ -68,6 +69,7 @@ def _register(
     representation_name: str = "synthetic_embedding",
     backend_id: str = "fake",
     implementation: str = FAKE_IMPLEMENTATION,
+    encoder_version: str = FAKE_ENCODER_VERSION,
     config_type: type[StructuralEmbedderConfig] = StructuralEmbedderConfig,
     backend_factory=None,
     availability_probe=None,
@@ -78,6 +80,7 @@ def _register(
         representation_name=representation_name,
         backend_id=backend_id,
         implementation=implementation,
+        encoder_version=encoder_version,
         config_type=config_type,
         backend_factory=factory,
         availability_probe=probe,
@@ -138,6 +141,8 @@ def test_registration_and_discovery_are_deterministic_and_lazy():
     assert registry.names() == ["a_embedding", "z_embedding"]
     assert registry.list_info() == [first, second]
     assert registry.get_info("z_embedding") is second
+    assert first.encoder_version == FAKE_ENCODER_VERSION
+    assert second.encoder_version == FAKE_ENCODER_VERSION
     assert calls == {"probe": 0, "factory": 0}
 
     assert registry.availability("a_embedding") == BackendAvailability(available=True)
@@ -261,6 +266,7 @@ def test_backend_id_can_be_shared_by_distinct_representations():
 
     assert registry.names() == ["first_embedding", "second_embedding"]
     assert {info.backend_id for info in registry.list_info()} == {"shared"}
+    assert {info.encoder_version for info in registry.list_info()} == {FAKE_ENCODER_VERSION}
 
 
 def test_create_config_binds_registered_identity_and_validates_options():
@@ -296,6 +302,11 @@ def test_registration_supports_compatible_config_subclasses():
         ("backend_id", "", "backend_id"),
         ("backend_id", " fake ", "surrounding whitespace"),
         ("implementation", "not-dotted", "implementation"),
+        ("encoder_version", None, "encoder_version"),
+        ("encoder_version", "", "encoder_version"),
+        ("encoder_version", "   ", "encoder_version"),
+        ("encoder_version", " test-v1", "surrounding whitespace"),
+        ("encoder_version", "test-v1 ", "surrounding whitespace"),
         ("backend_factory", None, "backend_factory"),
         ("availability_probe", None, "availability_probe"),
     ],
@@ -306,6 +317,7 @@ def test_registration_rejects_invalid_descriptor_fields(field_name, value, match
         "representation_name": "synthetic_embedding",
         "backend_id": "fake",
         "implementation": FAKE_IMPLEMENTATION,
+        "encoder_version": FAKE_ENCODER_VERSION,
         "config_type": StructuralEmbedderConfig,
         "backend_factory": FakeBackend,
         "availability_probe": _available,
@@ -350,6 +362,7 @@ def test_registration_rejects_unrelated_config_types():
             representation_name="synthetic_embedding",
             backend_id="fake",
             implementation=FAKE_IMPLEMENTATION,
+            encoder_version=FAKE_ENCODER_VERSION,
             config_type=object,
             backend_factory=FakeBackend,
             availability_probe=_available,

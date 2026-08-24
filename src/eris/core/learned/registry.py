@@ -36,11 +36,15 @@ class BackendAvailability:
 
 @dataclass(frozen=True)
 class EmbedderInfo:
-    """One learned representation registration without an instantiated backend."""
+    """One learned representation registration without an instantiated backend.
+
+    ``encoder_version`` versions the Eris adapter contract, independently of model weights.
+    """
 
     representation_name: str
     backend_id: str
     implementation: str
+    encoder_version: str
     config_type: type[StructuralEmbedderConfig]
     backend_factory: BackendFactory = field(repr=False)
     availability_probe: AvailabilityProbe = field(repr=False)
@@ -63,6 +67,7 @@ class EmbedderRegistry:
         representation_name: str,
         backend_id: str,
         implementation: str,
+        encoder_version: str,
         config_type: type[StructuralEmbedderConfig],
         backend_factory: BackendFactory,
         availability_probe: AvailabilityProbe,
@@ -86,6 +91,10 @@ class EmbedderRegistry:
             or _IMPLEMENTATION_PATH.fullmatch(implementation) is None
         ):
             raise TypeError("implementation must be a dotted import-path-like string")
+        if not isinstance(encoder_version, str) or not encoder_version.strip():
+            raise TypeError("encoder_version must be a non-empty str")
+        if encoder_version != encoder_version.strip():
+            raise TypeError("encoder_version must not contain surrounding whitespace")
         if not callable(backend_factory):
             raise TypeError("backend_factory must be callable")
         if not callable(availability_probe):
@@ -97,6 +106,7 @@ class EmbedderRegistry:
             representation_name=canonical_name,
             backend_id=backend_id,
             implementation=implementation,
+            encoder_version=encoder_version,
             config_type=config_type,
             backend_factory=backend_factory,
             availability_probe=availability_probe,

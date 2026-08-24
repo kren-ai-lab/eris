@@ -30,6 +30,7 @@ __all__ = [
     "StructuralEmbeddingResult",
     "StructuralModelDescriptor",
     "VerifiedCheckpoint",
+    "build_learned_artifact",
     "learned_registry",
     "validate_embedding_result",
     "verify_checkpoint",
