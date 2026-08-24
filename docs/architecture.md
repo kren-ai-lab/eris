@@ -2,8 +2,8 @@
 
 This document records the frozen conceptual architecture for Eris v0.1. It distinguishes the
 target public contract from the partially implemented historical codebase. Unless explicitly
-stated otherwise, target APIs, CLI commands, learned backends, and Artifact Schema v2 described
-here are not claims about current implementation status.
+stated otherwise, target APIs, CLI commands, and learned backends described here are not claims
+about current implementation status.
 
 ## Purpose and framework boundaries
 
@@ -183,7 +183,8 @@ Explicit artifacts must contain enough Eris package and environment information 
 the representation. Learned artifacts additionally require model, backend, and checkpoint
 provenance, including the checkpoint SHA-256.
 
-Artifact Schema v2 is not implemented by this document.
+Artifact Schema v2 is implemented and is the canonical active runtime artifact contract. Its
+detailed executable contract is documented in `docs/artifact_schema_v2.md`.
 
 ## Target Python API
 

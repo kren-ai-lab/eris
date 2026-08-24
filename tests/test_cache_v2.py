@@ -414,12 +414,6 @@ def test_legacy_cache_get_set_and_key_behavior_remain_unchanged(tmp_path):
     assert (tmp_path / f"{key}.json").is_file()
 
 
-def test_legacy_base_encoder_cache_helper_remains_dormant():
-    encoder = ResiduePointCloudCA(use_cache=False)
-
-    assert callable(encoder._check_cache)
-
-
 class _NoLegacyDiskCache(DiskCache):
     def __init__(self, cache_dir) -> None:
         super().__init__(cache_dir)

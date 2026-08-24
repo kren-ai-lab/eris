@@ -6,17 +6,11 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Mapping
 
 import numpy as np
 
 from eris.exceptions import ErisError
-
-
-ARTIFACT_SCHEMA_VERSION = 1
-
-ALLOWED_TYPES = {"graph", "matrix", "cloud", "grid", "mesh"}
-ALLOWED_LEVELS = {"atom", "residue", "structure", "mixed"}
 
 
 class ArtifactValidationError(ErisError):
@@ -201,29 +195,6 @@ def _load_npz_data(
         raise ArtifactValidationError(f"Invalid or unsafe artifact NPZ: {data_path}") from error
 
 
-def _safe_shape(x: Any) -> Optional[List[int]]:
-    if isinstance(x, np.ndarray):
-        return list(x.shape)
-    return None
-
-
-def _safe_dtype(x: Any) -> Optional[str]:
-    if isinstance(x, np.ndarray):
-        return str(x.dtype)
-    return None
-
-
-def infer_shapes_dtypes(data: Mapping[str, np.ndarray]) -> Tuple[Dict[str, List[int]], Dict[str, str]]:
-    shapes: Dict[str, List[int]] = {}
-    dtypes: Dict[str, str] = {}
-    for k, v in data.items():
-        if not isinstance(v, np.ndarray):
-            continue
-        shapes[k] = list(v.shape)
-        dtypes[k] = str(v.dtype)
-    return shapes, dtypes
-
-
 def infer_counts(data: Mapping[str, np.ndarray]) -> Dict[str, int]:
     counts: Dict[str, int] = {}
 
@@ -254,222 +225,6 @@ def infer_counts(data: Mapping[str, np.ndarray]) -> Dict[str, int]:
     return counts
 
 
-_FEATURE_KEY_LIST_FIELDS = (
-    "node_attr_keys",
-    "edge_attr_keys",
-    "graph_attr_keys",
-    "matrix_attr_keys",
-    "grid_attr_keys",
-    "mesh_attr_keys",
-    "grid_channels",
-)
-
-
-def _validate_feature_keys(
-    feature_keys: Dict[str, Any],
-    data: Mapping[str, np.ndarray],
-) -> None:
-    for field in _FEATURE_KEY_LIST_FIELDS:
-        if field not in feature_keys:
-            continue
-        keys = feature_keys[field]
-        if not isinstance(keys, list) or not all(isinstance(key, str) for key in keys):
-            raise ArtifactValidationError(
-                f"meta.feature_keys.{field} must be a list[str]"
-            )
-
-    grid_fields = {"grid_key", "grid_layout", "grid_channels"}
-    if grid_fields.intersection(feature_keys):
-        missing = sorted(grid_fields.difference(feature_keys))
-        if missing:
-            raise ArtifactValidationError(
-                f"meta.feature_keys grid metadata is missing required fields: {missing}"
-            )
-        if feature_keys["grid_key"] != "grid":
-            raise ArtifactValidationError(
-                "meta.feature_keys.grid_key must be 'grid' for Schema v1 voxel artifacts"
-            )
-        if feature_keys["grid_layout"] != "CXYZ":
-            raise ArtifactValidationError(
-                "meta.feature_keys.grid_layout must be 'CXYZ' for Schema v1 voxel artifacts"
-            )
-
-        grid = data.get("grid")
-        if not isinstance(grid, np.ndarray):
-            raise ArtifactValidationError(
-                "data.grid must exist as a numpy array when grid feature metadata is provided"
-            )
-        if grid.ndim != 4:
-            raise ArtifactValidationError(
-                f"data.grid must be 4D with CXYZ layout, got shape {grid.shape}"
-            )
-        if len(feature_keys["grid_channels"]) != grid.shape[0]:
-            raise ArtifactValidationError(
-                "meta.feature_keys.grid_channels has "
-                f"{len(feature_keys['grid_channels'])} keys for data.grid with "
-                f"{grid.shape[0]} channels"
-            )
-
-    for keys_field, data_field in (
-        ("node_attr_keys", "node_attr"),
-        ("edge_attr_keys", "edge_attr"),
-    ):
-        if keys_field not in feature_keys or data_field not in data:
-            continue
-        array = data[data_field]
-        if not isinstance(array, np.ndarray):
-            continue
-        if array.ndim != 2:
-            raise ArtifactValidationError(
-                f"data.{data_field} must be 2D when {keys_field} are provided, "
-                f"got shape {array.shape}"
-            )
-        if len(feature_keys[keys_field]) != array.shape[1]:
-            raise ArtifactValidationError(
-                f"meta.feature_keys.{keys_field} has {len(feature_keys[keys_field])} "
-                f"keys for data.{data_field} with {array.shape[1]} columns"
-            )
-
-    if "graph_attr_keys" in feature_keys and "graph_attr" in data:
-        graph_attr = data["graph_attr"]
-        if isinstance(graph_attr, np.ndarray):
-            if graph_attr.ndim != 1:
-                raise ArtifactValidationError(
-                    "data.graph_attr must be 1D when graph_attr_keys are provided, "
-                    f"got shape {graph_attr.shape}"
-                )
-            if len(feature_keys["graph_attr_keys"]) != graph_attr.shape[0]:
-                raise ArtifactValidationError(
-                    "meta.feature_keys.graph_attr_keys has "
-                    f"{len(feature_keys['graph_attr_keys'])} keys for data.graph_attr "
-                    f"with length {graph_attr.shape[0]}"
-                )
-
-
-def infer_feature_keys(meta: Dict[str, Any], data: Mapping[str, np.ndarray]) -> Dict[str, Any]:
-    """
-    Canonical place for feature key lists.
-    - Preserve an explicit, non-empty feature_keys dict as authoritative.
-    - Otherwise use the existing Schema v1 legacy fallback.
-    """
-    if "feature_keys" in meta:
-        explicit = meta["feature_keys"]
-        if not isinstance(explicit, dict):
-            raise ArtifactValidationError("meta.feature_keys must be a dict")
-        if explicit:
-            return explicit
-
-    out: Dict[str, List[str]] = {}
-
-    for k in ("node_attr_keys", "edge_attr_keys", "graph_attr_keys", "matrix_attr_keys", "grid_attr_keys", "mesh_attr_keys"):
-        if k in meta and isinstance(meta[k], list) and all(isinstance(x, str) for x in meta[k]):
-            out[k] = list(meta[k])
-
-    # allow storing keys arrays inside data.npz (strings)
-    if "graph_attr_keys" not in out and "graph_attr_keys" in data:
-        arr = data["graph_attr_keys"]
-        if isinstance(arr, np.ndarray) and arr.dtype.kind in {"U", "S"}:
-            out["graph_attr_keys"] = [str(x) for x in arr.tolist()]
-
-    return out
-
-
-def normalize_input_meta(inp: Any) -> Dict[str, Any]:
-    """
-    Ensure meta['input'] is always a dict with stable keys.
-    Backward compatible with legacy string "source=...|chain=...|model=..."
-    """
-    if isinstance(inp, dict):
-        # minimal stability: ensure keys exist (may be None)
-        return {
-            "source": inp.get("source"),
-            "chain_id": inp.get("chain_id"),
-            "model_index": inp.get("model_index"),
-            "format": inp.get("format"),
-        }
-
-    if isinstance(inp, str):
-        # parse legacy StructureInput.to_string()
-        parts = {}
-        for tok in inp.split("|"):
-            if "=" in tok:
-                k, v = tok.split("=", 1)
-                parts[k.strip()] = v.strip()
-        return {
-            "source": parts.get("source"),
-            "chain_id": (None if parts.get("chain") in (None, "None", "") else parts.get("chain")),
-            "model_index": int(parts.get("model", 0)) if parts.get("model") not in (None, "") else 0,
-            "format": None,
-        }
-
-    return {"source": None, "chain_id": None, "model_index": 0, "format": None}
-
-
-def validate_artifact(meta: Dict[str, Any], data: Mapping[str, np.ndarray], *, strict: bool = True) -> None:
-    """
-    Validate artifact schema contract.
-    Raises ArtifactValidationError with actionable messages.
-    """
-    required = [
-        "schema_version",
-        "encoder_name",
-        "encoder_version",
-        "encoder_fingerprint",
-        "type",
-        "level",
-        "params",
-        "input",
-        "shapes",
-        "dtypes",
-        "counts",
-        "feature_keys",
-    ]
-    missing = [k for k in required if k not in meta]
-    if missing:
-        raise ArtifactValidationError(f"meta.json missing required keys: {missing}")
-
-    if meta["schema_version"] != ARTIFACT_SCHEMA_VERSION:
-        raise ArtifactValidationError(
-            f"Unsupported schema_version={meta['schema_version']} (expected {ARTIFACT_SCHEMA_VERSION})."
-        )
-
-    t = str(meta["type"])
-    if t not in ALLOWED_TYPES:
-        raise ArtifactValidationError(f"Invalid meta.type={t!r}. Allowed: {sorted(ALLOWED_TYPES)}")
-
-    lvl = str(meta["level"])
-    if lvl not in ALLOWED_LEVELS:
-        raise ArtifactValidationError(f"Invalid meta.level={lvl!r}. Allowed: {sorted(ALLOWED_LEVELS)}")
-
-
-    if not isinstance(meta["params"], dict):
-        raise ArtifactValidationError("meta.params must be a dict")
-    if not isinstance(meta["shapes"], dict) or not isinstance(meta["dtypes"], dict):
-        raise ArtifactValidationError("meta.shapes and meta.dtypes must be dicts")
-    if not isinstance(meta["counts"], dict):
-        raise ArtifactValidationError("meta.counts must be a dict")
-    if not isinstance(meta["feature_keys"], dict):
-        raise ArtifactValidationError("meta.feature_keys must be a dict")
-    _validate_feature_keys(meta["feature_keys"], data)
-
-    # Ensure input is normalized dict
-    if not isinstance(meta["input"], dict):
-        raise ArtifactValidationError("meta.input must be a dict (source/chain_id/model_index/format)")
-
-    # Data must be numpy arrays only (avoid pickles)
-    bad = [k for k, v in data.items() if not isinstance(v, np.ndarray)]
-    if bad:
-        raise ArtifactValidationError(f"data.npz contains non-numpy entries: {bad}")
-
-    # Basic consistency checks (strict)
-    if strict:
-        shapes, dtypes = infer_shapes_dtypes(data)
-        if meta["shapes"] != shapes:
-            raise ArtifactValidationError("meta.shapes does not match data.npz arrays (re-save artifact).")
-        if meta["dtypes"] != dtypes:
-            raise ArtifactValidationError("meta.dtypes does not match data.npz arrays (re-save artifact).")
-
-
 @dataclass
 class StructureArtifact:
     """
@@ -491,23 +246,6 @@ class StructureArtifact:
             return
         raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
 
-    def _finalize_v1(self) -> None:
-        # Normalize/upgrade meta in-place and (re)compute derived fields
-        self.meta["schema_version"] = ARTIFACT_SCHEMA_VERSION
-
-        # normalize input
-        self.meta["input"] = normalize_input_meta(self.meta.get("input"))
-
-        # derived
-        shapes, dtypes = infer_shapes_dtypes(self.data)
-        self.meta["shapes"] = shapes
-        self.meta["dtypes"] = dtypes
-        self.meta["counts"] = infer_counts(self.data)
-        feature_keys = infer_feature_keys(self.meta, self.data)
-        _validate_feature_keys(feature_keys, self.data)
-        self.meta["feature_keys"] = feature_keys
-
-
     def validate(self, strict = False):
         schema = _detect_artifact_schema(self.meta)
         if schema == "v2":
@@ -518,24 +256,16 @@ class StructureArtifact:
 
     def save(self, outdir: Path, *, validate: bool = True) -> None:
         self.finalize()
-        schema = _detect_artifact_schema(self.meta)
-
-        if schema == "v2":
-            self.validate(strict=True)
-            output_names = [output["name"] for output in self.meta["outputs"]]
-            serialized_data = {name: self.data[name] for name in output_names}
-            serialized_meta = json.dumps(
-                self.meta,
-                indent=2,
-                sort_keys=True,
-                ensure_ascii=False,
-                allow_nan=False,
-            )
-        else:
-            if validate:
-                self.validate(strict=True)
-            serialized_data = self.data
-            serialized_meta = json.dumps(self.meta, indent=2, sort_keys=True)
+        self.validate(strict=True)
+        output_names = [output["name"] for output in self.meta["outputs"]]
+        serialized_data = {name: self.data[name] for name in output_names}
+        serialized_meta = json.dumps(
+            self.meta,
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+        )
 
         outdir.mkdir(parents=True, exist_ok=True)
         _save_staged(

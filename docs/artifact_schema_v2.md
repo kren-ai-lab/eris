@@ -318,10 +318,15 @@ loader reconstructs the runtime data mapping in `outputs` order after confirming
 coverage. Shapes, dtypes, feature cardinality, counts, learned alignment, and other generic v2
 integrity rules are then checked by the strict schema validator.
 
-This provides structural integrity, not cryptographic generation identity. Schema v2 has no
-checksum for the complete `data.npz` payload. Metadata and data from different generations are
-rejected when keys, shapes, dtypes, counts, or validated semantics differ, but different valid
-numeric values with identical structural metadata cannot be detected.
+This provides structural integrity, not cryptographic generation identity. Persistence has three
+deliberate limitations:
+
+- an NPZ archive is not guaranteed to be byte-identical across equivalent writes;
+- staging and replacement protect each file independently, but replacing `data.npz` and
+  `meta.json` is not a pair-level transactional atomic operation;
+- Schema v2 has no checksum for the complete numeric payload, so structural validation cannot
+  detect different valid numeric values with identical keys, shapes, dtypes, counts, and other
+  validated semantic metadata.
 
 ## Schema v2 cache identity
 
@@ -405,9 +410,10 @@ active runtime policy is:
 - versionless provisional v1 metadata is unsupported;
 - artifacts should be regenerated from their source and canonical config.
 
-Legacy detection and private helpers may remain quarantined temporarily, but there is no public
-supported Schema v1 path. Batch processing validates an existing artifact before skipping it, so
-a v1, corrupt, or incomplete output cannot silently satisfy a request.
+Legacy classification remains solely to produce clear unsupported-format errors. No active Schema
+v1 validation, finalization, save, load, or migration implementation remains. Batch processing
+validates an existing artifact before skipping it, so a v1, corrupt, or incomplete output cannot
+silently satisfy a request.
 
 ## Encode CLI boundary
 

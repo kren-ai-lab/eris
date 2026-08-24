@@ -248,7 +248,7 @@ Gate evidence:
 
 ## M3 — Artifact Schema v2
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE`
 
 **Objective:** Implement the first stable public artifact contract.
 
@@ -281,13 +281,13 @@ Gate evidence:
   - **Scope:** Validate version, files, outputs, shapes, dtypes, keys, and counts on load.
   - **Acceptance:** Valid artifacts round-trip; corruption/unknown versions fail clearly.
   - **Depends on:** M3.5.
-- [ ] **M3.7 — Define explicit Schema v1 pre-release behavior**
+- [x] **M3.7 — Define explicit Schema v1 pre-release behavior**
   - **Scope:** Detect v1 and implement reviewed rejection or limited internal handling without a
     public compatibility promise.
   - **Acceptance:** v1 behavior is explicit/tested and never silently treated as v2.
   - **Depends on:** M3.6.
   - **Decision note:** Additional schema policy belongs to David/project owner.
-- [ ] **M3.8 — Add Schema v2 conformance suite for all explicit representations**
+- [x] **M3.8 — Add Schema v2 conformance suite for all explicit representations**
   - **Scope:** Test valid/invalid cases, strict validation, round-trip, semantics, and extensions.
   - **Acceptance:** All ten representations pass without historical `out/` as a golden corpus.
   - **Depends on:** M3.4, M3.6, and M3.7.

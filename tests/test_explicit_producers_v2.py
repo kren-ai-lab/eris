@@ -101,32 +101,30 @@ ARRAY_BASELINES = {
     "atom_knn_graph": (
         ("pos", (4114, 3), "float32"),
         ("centroid", (1, 3), "float32"),
+        ("node_attr", (4114, 25), "float32"),
         ("edge_index", (2, 75900), "int64"),
         ("edge_dist", (75900,), "float32"),
-        ("node_attr", (4114, 25), "float32"),
         ("edge_attr", (75900, 19), "float32"),
         ("graph_attr", (13,), "float32"),
         *ATOM_AUX_BASELINE,
     ),
     "residue_knn_graph": (
         *RESIDUE_PREFIX_BASELINE,
-        *RESIDUE_AUX_BASELINE[:3],
+        ("node_attr", (534, 38), "float32"),
         ("edge_index", (2, 9646), "int64"),
         ("edge_dist", (9646,), "float32"),
-        ("node_attr", (534, 38), "float32"),
         ("edge_attr", (9646, 19), "float32"),
         ("graph_attr", (13,), "float32"),
-        *RESIDUE_AUX_BASELINE[3:],
+        *RESIDUE_AUX_BASELINE,
     ),
     "residue_contact_graph": (
         *RESIDUE_PREFIX_BASELINE,
-        *RESIDUE_AUX_BASELINE[:3],
+        ("node_attr", (534, 38), "float32"),
         ("edge_index", (2, 5396), "int64"),
         ("edge_dist", (5396,), "float32"),
-        ("node_attr", (534, 38), "float32"),
         ("edge_attr", (5396, 19), "float32"),
         ("graph_attr", (13,), "float32"),
-        *RESIDUE_AUX_BASELINE[3:],
+        *RESIDUE_AUX_BASELINE,
     ),
     "residue_distogram": (
         ("dist", (534, 534), "float32"),
@@ -341,7 +339,12 @@ def test_all_explicit_producers_build_strict_valid_prospective_v2(encoder_type):
         ctx, encoder.representation.representation_type
     )
     assert metadata["counts"] == _expected_counts(data, encoder.representation.representation_type)
-    assert _compact_array_contract(data) == ARRAY_BASELINES[encoder.name]
+    assert (
+        _compact_array_contract(
+            {output["name"]: data[output["name"]] for output in metadata["outputs"]}
+        )
+        == ARRAY_BASELINES[encoder.name]
+    )
     for name, before in arrays_before_validation.items():
         np.testing.assert_array_equal(data[name], before)
 
