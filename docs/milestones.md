@@ -299,23 +299,23 @@ exact semantic metadata, and do not depend on historical `out/`.
 
 ## M4 — Learned representation infrastructure
 
-**Status:** `NOT STARTED`
+**Status:** `IN PROGRESS`
 
 **Objective:** Build framework-independent learned structural infrastructure before a real
 backend.
 
 ### Work units
 
-- [ ] **M4.1 — Define generic structural embedder protocol/config**
+- [x] **M4.1 — Define generic structural embedder protocol/config**
   - **Scope:** Define availability, preprocessing, checkpoint loading, inference, local/global
     output, and validated config interfaces.
   - **Acceptance:** A backend implements the protocol without GearNet-specific generic concepts.
   - **Depends on:** M3 gate.
-- [ ] **M4.2 — Implement learned Registry and lazy availability detection**
+- [x] **M4.2 — Implement learned Registry and lazy availability detection**
   - **Scope:** Keep learned registration separate from explicit Registry and load frameworks lazily.
   - **Acceptance:** Missing optional deps do not break core import or explicit discovery.
   - **Depends on:** M4.1.
-- [ ] **M4.3 — Define checkpoint metadata and SHA-256 verification**
+- [x] **M4.3 — Define checkpoint metadata and SHA-256 verification**
   - **Scope:** Represent model/backend ID, source, license/citation, checkpoint, and SHA-256.
   - **Acceptance:** Correct files validate before load; hash mismatches are rejected.
   - **Depends on:** M4.1 and M3.2.
