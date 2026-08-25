@@ -1,0 +1,171 @@
+# Eris v0.1 — GearNet-Edge Backend Contract
+
+This document is the authoritative M5.1 contract for the required learned structural backend in
+Eris v0.1. It freezes the scientific checkpoint identity, upstream architecture, deterministic
+inference preprocessing, output semantics, licensing, and provenance needed by M5.2–M5.6. It does
+not claim that the production backend is implemented.
+
+## Selected backend and checkpoint
+
+The official Eris v0.1 learned backend is the GearNet-family **GearNet-Edge** variant pretrained
+with the **Multiview Contrast** objective. The upstream model is configured as `GearNet` with edge
+message passing, and its official checkpoint is `mc_gearnet_edge.pth`.
+
+The checkpoint identity is frozen as:
+
+| field | value |
+| --- | --- |
+| Zenodo record | v2, DOI [`10.5281/zenodo.7723075`](https://doi.org/10.5281/zenodo.7723075) |
+| filename | `mc_gearnet_edge.pth` |
+| exact size | `80,700,937` bytes |
+| MD5 | `c35402108f14e43f20feb475918f9c26` |
+| SHA-256 | `6dc11e2db6eff3c90f90672af227c647125adb7476de18a2bb860457bdb598ec` |
+
+The SHA-256 value above is the authoritative byte identity for the official Eris backend. The
+existing M4 checkpoint contract must verify it before loading the checkpoint.
+
+The file is a modern `torch.save` ZIP archive containing an `OrderedDict` state dictionary with
+138 tensor entries. It does not serialize a model class. This agrees with the official
+[`script/pretrain.py`](https://github.com/DeepGraphLearning/GearNet/blob/main/script/pretrain.py),
+which saves `model.state_dict()`.
+
+Eris v0.1 must not bundle this approximately 80 MB checkpoint in the source repository, wheel,
+or sdist. Checkpoint acquisition and loading policy is implemented in later M5 work.
+
+## Frozen architecture
+
+The architecture is frozen from the official
+[`mc_gearnet_edge.yaml`](https://github.com/DeepGraphLearning/GearNet/blob/main/config/pretrain/mc_gearnet_edge.yaml)
+configuration and the TorchDrug
+[`models.GearNet`](https://github.com/DeepGraphLearning/torchdrug/blob/master/torchdrug/models/gearnet.py)
+implementation:
+
+| field | value |
+| --- | --- |
+| TorchDrug Registry model | `models.GearNet` |
+| implementation class | `GeometryAwareRelationalGraphNeuralNetwork` |
+| `input_dim` | `21` |
+| `hidden_dims` | `[512, 512, 512, 512, 512, 512]` |
+| `concat_hidden` | `true` |
+| `short_cut` | `true` |
+| `batch_norm` | `true` |
+| activation | default `relu` |
+| readout | `sum` |
+| `num_relation` | `7` |
+| `edge_input_dim` | `59` |
+| `num_angle_bin` | `8` |
+| resulting `output_dim` | `3072` |
+
+With `concat_hidden = true`, the six 512-dimensional hidden outputs concatenate to produce the
+3072-dimensional model output.
+
+## Frozen inference preprocessing
+
+Inference uses the upstream residue view and `AlphaCarbonNode`: there is one model node for each
+retained residue with a CA atom. The residue input feature dimension is 21.
+
+The graph construction is:
+
+- `SequentialEdge(max_distance=2)`;
+- `SpatialEdge(radius=10.0, min_distance=5, max_distance=None, max_num_neighbors=32)`;
+- `KNNEdge(k=10, min_distance=5, max_distance=None)`;
+- `edge_feature="gearnet"`.
+
+The relations are five sequential relations, one spatial relation, and one kNN relation, for a
+total of seven. The 59-dimensional GearNet edge feature is composed of:
+
+| component | dimensions |
+| --- | ---: |
+| source residue type | 20 |
+| target residue type | 20 |
+| relation | 7 |
+| sequential distance | 11 |
+| spatial distance | 1 |
+| **total** | **59** |
+
+The upstream graph construction is defined in TorchDrug's
+[`geometry/graph.py`](https://github.com/DeepGraphLearning/torchdrug/blob/master/torchdrug/layers/geometry/graph.py)
+and edge/node layers in
+[`geometry/function.py`](https://github.com/DeepGraphLearning/torchdrug/blob/master/torchdrug/layers/geometry/function.py).
+
+### Pretraining-only augmentations
+
+The following Multiview Contrast transformations are pretraining augmentations and must not run
+during embedding inference:
+
+- `SubsequenceNode(max_length=50)`;
+- `SubspaceNode(entity_level="residue", min_neighbor=15, min_radius=15.0)`;
+- `IdentityNode`;
+- `RandomEdgeMask(mask_rate=0.15)`.
+
+Inference constructs the deterministic model graph above and runs the frozen GearNet-Edge model;
+it does not construct random contrastive views.
+
+## Canonical Eris outputs
+
+For one input structure, the canonical learned outputs are:
+
+| Eris output | upstream value | shape |
+| --- | --- | --- |
+| `node_embedding` | `output["node_feature"]` | `(N, 3072)` |
+| `global_embedding` | `output["graph_feature"][0]` | `(3072,)` |
+
+`N` is the number of model nodes retained by the frozen preprocessing. The upstream `sum` readout
+produces `graph_feature`; Eris must not add another pooling operation.
+
+Every node-embedding row must map exactly to its biological input entity. M5.1 freezes that
+scientific requirement, but the concrete `node_ids` and optional `valid_mask` implementation is
+deferred to M5.3.
+
+## Precision baseline and deferred runtime decisions
+
+FP32 is the required M5 baseline. M5.1 does not freeze:
+
+- the optional backend's Python version range;
+- an exact PyTorch version;
+- the TorchDrug installation strategy;
+- `torch-scatter` or `torch-cluster` versions;
+- a CUDA compatibility matrix;
+- FP16 or BF16 support;
+- dependency-diagnostics implementation.
+
+Those runtime and packaging decisions belong to M5.2 and M5.4 and must not narrow the independent
+Eris core contract implicitly.
+
+## Licensing
+
+The code and checkpoint licenses are separate:
+
+- GearNet source code: [MIT](https://github.com/DeepGraphLearning/GearNet/blob/main/LICENSE);
+- TorchDrug source code:
+  [Apache-2.0](https://github.com/DeepGraphLearning/torchdrug/blob/master/LICENSE);
+- checkpoint and Zenodo record:
+  [CC BY 4.0](https://zenodo.org/api/records/7723075).
+
+The checkpoint license is taken from its Zenodo record metadata; it is not inferred from either
+source-code license. Any later redistribution must preserve the applicable attribution and
+license obligations.
+
+## Citation and upstream provenance
+
+The scientific project and paper are:
+
+> Zhang, Zuobai; Xu, Minghao; Jamasb, Arian; Chenthamarakshan, Vijil; Lozano,
+> Aurelie; Das, Payel; Tang, Jian. “Protein Representation Learning by Geometric
+> Structure Pretraining.” International Conference on Learning Representations, 2023.
+
+Primary provenance:
+
+- [GearNet official repository](https://github.com/DeepGraphLearning/GearNet);
+- [paper, arXiv:2203.06125](https://arxiv.org/abs/2203.06125);
+- [official Zenodo checkpoint record v2](https://zenodo.org/records/7723075);
+- [TorchDrug official repository](https://github.com/DeepGraphLearning/torchdrug).
+
+The upstream source revisions inspected while freezing this contract were:
+
+- GearNet: `28bf75f5dfb6cd7b9bf4394d153a87f69bddf1a6`;
+- TorchDrug: `6066fbd82360abb5f270cba1eca560af01b8cc90`.
+
+These revisions are reproducibility references for the inspected source. They are not asserted to
+be the historical commits used to train the checkpoint. The checkpoint's scientific identity is
+instead frozen by its official record, filename, architecture/configuration contract, and hashes.

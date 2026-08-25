@@ -347,17 +347,18 @@ dependencies.
 
 ## M5 — GearNet / GearNet-Edge
 
-**Status:** `NOT STARTED`
+**Status:** `IN PROGRESS`
 
-**Objective:** Integrate one robust pretrained GearNet-family backend. The preferred target is
-`gearnet_edge`; a second model/variant is not required for v0.1.
+**Objective:** Integrate the frozen pretrained GearNet-Edge backend. A second model/variant is not
+required for v0.1.
 
 ### Work units
 
-- [ ] **M5.1 — Select and freeze the official backend/checkpoint**
+- [x] **M5.1 — Select and freeze the official backend/checkpoint**
   - **Scope:** Record architecture, exact checkpoint, source, license, citation, SHA-256,
     preprocessing, output dimensions, and pooling semantics.
-  - **Acceptance:** One backend/checkpoint has approved, verifiable provenance and a full contract.
+  - **Acceptance:** GearNet-Edge with `mc_gearnet_edge.pth` has approved, verifiable provenance
+    and the full frozen contract in `docs/gearnet_edge_backend.md`.
   - **Depends on:** M4 gate and required stakeholder decisions.
 - [ ] **M5.2 — Establish optional backend dependency boundary**
   - **Scope:** Package backend deps optionally with lazy availability/version diagnostics.

@@ -27,9 +27,10 @@ Eris must not become a duplicate of Sylphy, Roxy, or Rudeus.
 The explicit representations already present in the codebase must be stabilized before new
 explicit representation families are added.
 
-GearNet/GearNet-Edge is the mandatory learned backend for v0.1. Its implementation begins only
-after the core, configuration, and artifact contracts are stable. GearNet is not implemented in
-the current repository state.
+GearNet-Edge pretrained with Multiview Contrast is the selected learned backend for v0.1. Its
+scientific architecture, checkpoint, preprocessing, and output contract are frozen in
+`docs/gearnet_edge_backend.md`. The production GearNet backend is not implemented in the current
+repository state.
 
 ## Canonical public representation identifiers
 
