@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
-import json
 import numpy as np
 from platformdirs import user_cache_dir
 
@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-_IMPLEMENTATION_PATTERN = re.compile(
-    r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"
-)
+_IMPLEMENTATION_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
 
 
 def _require_non_empty_string(value: Any, name: str) -> str:
@@ -75,6 +73,7 @@ def compute_cache_key_v2(
     model_index: int,
     chain_id: str | None,
     model: Mapping[str, Any] | None = None,
+    execution: Mapping[str, Any] | None = None,
 ) -> str:
     from eris.core.artifact_schema_v2 import canonical_json, normalize_metadata
 
@@ -95,6 +94,8 @@ def compute_cache_key_v2(
         raise ValueError("chain_id must be a string or None")
     if model is not None and not isinstance(model, Mapping):
         raise ValueError("model must be a mapping or None")
+    if execution is not None and not isinstance(execution, Mapping):
+        raise ValueError("execution must be a mapping or None")
 
     payload: dict[str, Any] = {
         "cache_contract": 2,
@@ -114,6 +115,8 @@ def compute_cache_key_v2(
     }
     if model is not None:
         payload["model"] = normalize_metadata(model, _path="model")
+    if execution is not None:
+        payload["execution"] = normalize_metadata(execution, _path="execution")
     return sha256_text(canonical_json(payload))
 
 
@@ -128,17 +131,17 @@ def make_cache_key(*parts: str) -> str:
 
 
 class DiskCache:
-    def __init__(self, cache_dir: Optional[Path] = None) -> None:
+    def __init__(self, cache_dir: Path | None = None) -> None:
         self.cache_dir = cache_dir or default_cache_dir()
 
-    def _paths(self, key: str) -> Tuple[Path, Path]:
+    def _paths(self, key: str) -> tuple[Path, Path]:
         base = self.cache_dir / key
         return base.with_suffix(".npz"), base.with_suffix(".json")
 
     def _v2_entry_dir(self, key: str) -> Path:
         return self.cache_dir / "v2" / _validate_cache_key_v2(key)
 
-    def get(self, key: str) -> Optional[Tuple[Dict[str, np.ndarray], Dict[str, Any]]]:
+    def get(self, key: str) -> tuple[dict[str, np.ndarray], dict[str, Any]] | None:
         npz_path, meta_path = self._paths(key)
         if not npz_path.exists() or not meta_path.exists():
             return None
@@ -147,7 +150,7 @@ class DiskCache:
         meta = json.loads(meta_path.read_text())
         return data, meta
 
-    def set(self, key: str, data: Dict[str, np.ndarray], meta: Dict[str, Any]) -> None:
+    def set(self, key: str, data: dict[str, np.ndarray], meta: dict[str, Any]) -> None:
         npz_path, meta_path = self._paths(key)
         np.savez_compressed(npz_path, **data)
         meta_path.write_text(json.dumps(meta, indent=2))

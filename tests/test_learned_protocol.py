@@ -17,6 +17,7 @@ from eris.core.learned import (
     StructuralEmbedderConfig,
     StructuralEmbeddingResult,
     StructuralExecutionConfig,
+    StructuralPreprocessingResult,
     VerifiedCheckpoint,
     resolve_execution,
     validate_embedding_result,
@@ -47,9 +48,12 @@ class FakeBackend:
         structure: tuple[str, ...],
         *,
         config: StructuralEmbedderConfig,
-    ) -> tuple[str, ...]:
+    ) -> StructuralPreprocessingResult[tuple[str, ...]]:
         del config
-        return tuple(structure)
+        return StructuralPreprocessingResult(
+            prepared=tuple(structure),
+            input_format="pdb",
+        )
 
     def load(
         self,
@@ -97,6 +101,21 @@ def _global_result(**overrides: object) -> StructuralEmbeddingResult:
     values = {"global_embedding": np.array([0.2, 0.3], dtype=np.float32)}
     values.update(overrides)
     return StructuralEmbeddingResult(**values)
+
+
+def test_preprocessing_result_is_frozen_and_validates_confirmed_format():
+    result = StructuralPreprocessingResult(prepared=("A:1",), input_format="pdb")
+
+    assert result.prepared == ("A:1",)
+    assert result.input_format == "pdb"
+    with pytest.raises(FrozenInstanceError):
+        result.input_format = "mmcif"
+    with pytest.raises(ExecutionError, match="must not be empty"):
+        StructuralPreprocessingResult(prepared=(), input_format="")
+    with pytest.raises(ExecutionError, match="must be a string"):
+        StructuralPreprocessingResult(prepared=(), input_format=None)
+    with pytest.raises(ExecutionError, match="surrounding whitespace"):
+        StructuralPreprocessingResult(prepared=(), input_format=" pdb ")
 
 
 def _both_result(**overrides: object) -> StructuralEmbeddingResult:
@@ -283,7 +302,8 @@ def test_fake_backend_outputs_are_deterministic_and_valid(output_mode):
         representation_name="synthetic_embedding",
         output_mode=output_mode,
     )
-    prepared = backend.preprocess(("A:1", "A:2"), config=config)
+    preprocessed = backend.preprocess(("A:1", "A:2"), config=config)
+    prepared = preprocessed.prepared
     execution = resolve_execution(
         StructuralExecutionConfig(),
         backend.execution_capabilities(),
@@ -292,6 +312,7 @@ def test_fake_backend_outputs_are_deterministic_and_valid(output_mode):
 
     assert backend.loaded_checkpoint is checkpoint
     assert backend.loaded_execution is execution
+    assert preprocessed.input_format == "pdb"
 
     left = backend.infer(model, prepared, config=config, execution=execution)
     right = backend.infer(model, prepared, config=config, execution=execution)

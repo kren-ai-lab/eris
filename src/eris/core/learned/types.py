@@ -1,11 +1,30 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Generic, TypeVar
 
 import numpy as np
 
 from eris.core.learned.config import OutputMode
 from eris.exceptions import ExecutionError
+
+PreparedT = TypeVar("PreparedT")
+
+
+@dataclass(frozen=True, kw_only=True)
+class StructuralPreprocessingResult(Generic[PreparedT]):
+    """Prepared backend input plus the parser-confirmed structure format."""
+
+    prepared: PreparedT
+    input_format: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.input_format, str):
+            raise ExecutionError("input_format must be a string")
+        if not self.input_format:
+            raise ExecutionError("input_format must not be empty")
+        if self.input_format != self.input_format.strip():
+            raise ExecutionError("input_format must not contain surrounding whitespace")
 
 
 @dataclass(frozen=True, kw_only=True)

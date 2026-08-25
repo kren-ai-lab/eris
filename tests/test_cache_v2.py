@@ -130,6 +130,7 @@ def test_compute_cache_key_v2_is_deterministic_and_has_explicit_inputs():
     parameters = inspect.signature(compute_cache_key_v2).parameters
 
     assert first == second
+    assert first == "6d8d2365bec8aacb3a6a93d688e7c9386300c9d9aa79dfe1abf4af9f5e2280e9"
     assert len(first) == 64
     assert "source" not in parameters
     assert "source_locator" not in parameters
@@ -205,6 +206,18 @@ def test_cache_key_payload_contains_exact_namespaces_and_identity(monkeypatch):
         "parser_hint": ".pdb",
         "input_selection": {"model_index": 0, "chain_id": None},
     }
+
+
+def test_optional_execution_identity_is_canonical_and_precision_sensitive(monkeypatch):
+    assert _key(execution={"precision": "fp32"}) == _key(execution={"precision": "fp32"})
+    assert _key(execution={"precision": "fp32"}) != _key(execution={"precision": "fp16"})
+    assert _key(execution={"precision": "fp32"}) != _key()
+
+    monkeypatch.setattr(cache_module, "sha256_text", lambda value: value)
+    payload = json.loads(_key(execution={"precision": "fp32"}))
+
+    assert payload["execution"] == {"precision": "fp32"}
+    assert payload["cache_contract"] == 2
 
 
 @pytest.mark.parametrize(

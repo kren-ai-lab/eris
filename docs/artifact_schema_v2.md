@@ -333,7 +333,10 @@ deliberate limitations:
 The active Schema v2 cache key hashes a canonical mapping containing separate
 `cache_contract = 2` and `artifact_schema_version = 2` fields, representation name, encoder
 implementation and version, config fingerprint, input source SHA-256, parser hint, and structured
-chain/model selection. An optional canonical model mapping participates when present.
+chain/model selection. An optional canonical model mapping participates when present. Learned
+runtime calls also add an optional execution identity containing only resolved/requested-equivalent
+precision. When execution is omitted, the canonical payload and existing explicit keys are
+unchanged.
 
 `parser_hint` is derived only from the normalized parser-relevant suffix. It is path-independent:
 `.PDB` and `.pdb` are equivalent, while `.pdb`, `.ent`, `.cif`, `.mmcif`, and their compressed
@@ -344,12 +347,16 @@ Input source locator, Eris package version, confirmed input format, representati
 granularity, coordinate source, and the full parameter mapping are excluded. The source SHA
 identifies bytes, selection identifies the requested structure subset, `parser_hint` prevents
 cross-parser cache reuse, and `config_fingerprint` identifies canonical requested parameters.
+Learned checkpoint source locators and execution devices are also excluded; scientific model
+identity and precision participate instead.
 
-On a cache miss, `input.format` is the format confirmed by Gemmi. On a hit, the cached confirmed
+On an explicit cache miss, `input.format` is the format confirmed by Gemmi; learned preprocessing
+returns its parser-confirmed format with the prepared backend input. On a hit, the cached confirmed
 format is preserved; it is never inferred from the suffix. Because the source locator is excluded
 from the key, a valid hit rebuilds only `input` with the current invocation's `source`, hash, model,
 and chain selection, then validates the refreshed artifact. The persisted cache entry is not
-rewritten merely to refresh the locator.
+rewritten merely to refresh the locator. Learned cache hits preserve the original model-source and
+execution-generation provenance.
 
 Schema v2 cache entries live under a separate `v2/<key>/` namespace and use canonical
 `data.npz`/`meta.json` files. Legacy, stale, corrupt, or invalid entries are cache misses; they are

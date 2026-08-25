@@ -16,6 +16,7 @@ from eris.core.learned.execution import (
     StructuralExecutionConfig,
     build_execution_provenance,
     execution_cache_identity,
+    execution_request_cache_identity,
     resolve_execution,
 )
 from eris.core.learned.protocol import StructuralEmbedderBackend
@@ -25,7 +26,12 @@ from eris.core.learned.registry import (
     EmbedderRegistry,
     learned_registry,
 )
-from eris.core.learned.types import StructuralEmbeddingResult, validate_embedding_result
+from eris.core.learned.runner import StructuralEmbedderRunner
+from eris.core.learned.types import (
+    StructuralEmbeddingResult,
+    StructuralPreprocessingResult,
+    validate_embedding_result,
+)
 
 __all__ = [
     "BackendAvailability",
@@ -39,13 +45,16 @@ __all__ = [
     "ResolvedExecution",
     "StructuralEmbedderBackend",
     "StructuralEmbedderConfig",
+    "StructuralEmbedderRunner",
     "StructuralEmbeddingResult",
+    "StructuralPreprocessingResult",
     "StructuralExecutionConfig",
     "StructuralModelDescriptor",
     "VerifiedCheckpoint",
     "build_learned_artifact",
     "build_execution_provenance",
     "execution_cache_identity",
+    "execution_request_cache_identity",
     "learned_registry",
     "resolve_execution",
     "validate_embedding_result",

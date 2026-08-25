@@ -177,6 +177,23 @@ The conceptual learned-representation keys are:
 
 Every local embedding row must map unambiguously to a biological entity.
 
+### Learned runtime infrastructure
+
+The internal learned runtime is implemented around a separate lazy learned Registry, backend
+execution-capability resolution, verified checkpoint cache, `StructuralEmbedderRunner`, learned
+Artifact Schema v2 builder, and the shared artifact cache. Backends return their prepared model
+input together with the parser-confirmed structure format; the runner preserves biological node
+mapping, generation execution provenance, and model/checkpoint identity.
+
+Artifact reuse is independent of backend and checkpoint availability after generation. Precision
+participates in learned artifact-cache identity; device, checkpoint source locator, and structure
+source path do not. A cache hit preserves generation execution and model-source provenance while
+refreshing only the current structure locator.
+
+The production learned Registry remains empty until M5. The M4 fake backend exists only in tests:
+GearNet/GearNet-Edge, real pretrained weights, `eris.embed`, and the public learned CLI are not yet
+implemented.
+
 ### Provenance
 
 Explicit artifacts must contain enough Eris package and environment information to reproduce

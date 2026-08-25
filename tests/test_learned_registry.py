@@ -14,6 +14,7 @@ from eris.core.learned import (
     ResolvedExecution,
     StructuralEmbedderBackend,
     StructuralEmbedderConfig,
+    StructuralPreprocessingResult,
     VerifiedCheckpoint,
     learned_registry,
 )
@@ -42,8 +43,9 @@ class FakeBackend:
         )
 
     def preprocess(self, structure, *, config):
+        del config
         self.preprocess_calls += 1
-        return structure
+        return StructuralPreprocessingResult(prepared=structure, input_format="pdb")
 
     def load(
         self,

@@ -5,7 +5,7 @@ from typing import Protocol, TypeVar, runtime_checkable
 from eris.core.learned.checkpoints import VerifiedCheckpoint
 from eris.core.learned.config import StructuralEmbedderConfig
 from eris.core.learned.execution import ExecutionCapabilities, ResolvedExecution
-from eris.core.learned.types import StructuralEmbeddingResult
+from eris.core.learned.types import StructuralEmbeddingResult, StructuralPreprocessingResult
 
 StructureT = TypeVar("StructureT")
 PreparedT = TypeVar("PreparedT")
@@ -28,7 +28,7 @@ class StructuralEmbedderBackend(Protocol[StructureT, PreparedT, ModelT]):
         structure: StructureT,
         *,
         config: StructuralEmbedderConfig,
-    ) -> PreparedT: ...
+    ) -> StructuralPreprocessingResult[PreparedT]: ...
 
     def load(
         self,

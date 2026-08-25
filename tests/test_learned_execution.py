@@ -15,6 +15,7 @@ from eris.core.learned import (
     StructuralExecutionConfig,
     build_execution_provenance,
     execution_cache_identity,
+    execution_request_cache_identity,
     resolve_execution,
 )
 from eris.exceptions import ConfigError, ExecutionError
@@ -237,6 +238,21 @@ def test_execution_cache_identity_uses_only_resolved_precision():
     assert execution_cache_identity(cpu_fp32) == {"precision": "fp32"}
     assert execution_cache_identity(cpu_fp32) == execution_cache_identity(cuda_fp32)
     assert execution_cache_identity(cpu_fp32) != execution_cache_identity(cpu_fp16)
+
+
+@pytest.mark.parametrize("precision", ["fp32", "fp16", "bf16"])
+def test_request_cache_identity_matches_successful_resolved_projection(precision):
+    request = StructuralExecutionConfig(device="cpu", precision=precision)
+    capabilities = ExecutionCapabilities(
+        devices=("cpu",),
+        precisions=("fp32", "fp16", "bf16"),
+        preferred_device="cpu",
+    )
+    resolved = resolve_execution(request, capabilities)
+
+    assert execution_request_cache_identity(request) == {"precision": precision}
+    assert execution_request_cache_identity(request) == execution_cache_identity(resolved)
+    assert "device" not in execution_request_cache_identity(request)
 
 
 def test_scientific_fingerprint_is_independent_of_execution_requests():

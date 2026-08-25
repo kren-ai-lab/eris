@@ -228,6 +228,34 @@ def test_builder_uses_full_model_literal_config_fingerprint_and_encoder_metadata
     )
     assert artifact.meta["encoder"] == ENCODER_METADATA
     assert artifact.meta["encoder"]["version"] != artifact.meta["provenance"]["eris_version"]
+    assert "environment" not in artifact.meta["provenance"]
+
+
+def test_builder_optional_provenance_environment_is_generic_strict_and_round_trips(tmp_path):
+    environment = {
+        "execution": {
+            "requested": {"device": "auto", "precision": "fp32"},
+            "resolved": {"device": "cpu", "precision": "fp32"},
+        },
+        "existing": {"value": "preserved"},
+    }
+    artifact = build_learned_artifact(
+        config=StructuralEmbedderConfig(
+            representation_name="synthetic_structure_embedding",
+            output_mode="both",
+        ),
+        result=_result("both"),
+        model=_model(),
+        input_metadata=_input_metadata(),
+        encoder_metadata=ENCODER_METADATA,
+        provenance_environment=environment,
+    )
+
+    assert artifact.meta["provenance"]["environment"] == environment
+    artifact.validate(strict=True)
+    artifact.save(tmp_path)
+    loaded = StructureArtifact.load(tmp_path)
+    assert loaded.meta["provenance"]["environment"] == environment
 
 
 def test_generic_builder_accepts_opaque_unicode_ids_and_subset_sized_results():

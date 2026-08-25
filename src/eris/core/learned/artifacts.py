@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import cast
+from collections.abc import Mapping
+from typing import Any, cast
 
 import numpy as np
 
@@ -76,6 +77,7 @@ def build_learned_artifact(
     model: StructuralModelDescriptor,
     input_metadata: InputMetadata,
     encoder_metadata: EncoderMetadata,
+    provenance_environment: Mapping[str, Any] | None = None,
 ) -> StructureArtifact:
     """Translate framework-independent learned outputs into a strict Schema v2 artifact."""
 
@@ -93,6 +95,17 @@ def build_learned_artifact(
         if config.output_mode in {"node", "both"}
         else {}
     )
+    if provenance_environment is not None and not isinstance(provenance_environment, Mapping):
+        raise TypeError("provenance_environment must be a mapping or None")
+    provenance = dict(
+        build_provenance(
+            representation_name=config.representation_name,
+            parameters=parameters,
+        )
+    )
+    if provenance_environment is not None:
+        provenance["environment"] = dict(provenance_environment)
+
     metadata = build_artifact_metadata(
         data=data,
         representation_name=config.representation_name,
@@ -103,10 +116,7 @@ def build_learned_artifact(
         encoder=encoder_metadata,
         input_metadata=input_metadata,
         parameters=parameters,
-        provenance=build_provenance(
-            representation_name=config.representation_name,
-            parameters=parameters,
-        ),
+        provenance=provenance,
         output_declarations=[_OUTPUT_DECLARATIONS[name] for name in data],
         feature_keys=build_feature_keys(),
         counts=counts,

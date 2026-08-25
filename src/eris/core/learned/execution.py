@@ -151,6 +151,16 @@ def execution_cache_identity(resolved: ResolvedExecution) -> dict[str, str]:
     return {"precision": resolved.precision}
 
 
+def execution_request_cache_identity(
+    request: StructuralExecutionConfig,
+) -> dict[str, str]:
+    """Project a request onto precision-sensitive artifact cache identity."""
+
+    if not isinstance(request, StructuralExecutionConfig):
+        raise TypeError("request must be a StructuralExecutionConfig")
+    return {"precision": request.precision}
+
+
 __all__ = [
     "ExecutionCapabilities",
     "Precision",
@@ -158,5 +168,6 @@ __all__ = [
     "StructuralExecutionConfig",
     "build_execution_provenance",
     "execution_cache_identity",
+    "execution_request_cache_identity",
     "resolve_execution",
 ]

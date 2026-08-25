@@ -299,7 +299,7 @@ exact semantic metadata, and do not depend on historical `out/`.
 
 ## M4 — Learned representation infrastructure
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE`
 
 **Objective:** Build framework-independent learned structural infrastructure before a real
 backend.
@@ -334,7 +334,7 @@ backend.
   - **Acceptance:** Fake CPU works; unavailable devices follow documented behavior; core remains
     framework-independent.
   - **Depends on:** M4.1 and M3.2.
-- [ ] **M4.7 — Validate the complete learned path using a fake backend**
+- [x] **M4.7 — Validate the complete learned path using a fake backend**
   - **Scope:** Exercise input → preprocessing → checkpoint/cache → fake model → local/global
     outputs → mapping → Artifact v2 → save/load.
   - **Acceptance:** The whole path passes without TorchDrug/GearNet.
