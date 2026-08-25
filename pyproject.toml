@@ -53,6 +53,16 @@ dependencies = [
 eris = "eris.cli.main:app"
 
 [project.optional-dependencies]
+gearnet = [
+  "numpy>=1.26,<2",
+  "torch==2.11.0",
+  "torchdrug==0.2.1",
+  "torch-scatter==2.1.2",
+  "torch-cluster==1.6.3",
+  "rdkit-pypi==2022.9.5",
+  "ninja>=1.11,<2"
+]
+
 pyg = [
   "torch",
   "torch-geometric"

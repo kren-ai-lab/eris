@@ -1,9 +1,10 @@
 # Eris v0.1 — GearNet-Edge Backend Contract
 
-This document is the authoritative M5.1 contract for the required learned structural backend in
-Eris v0.1. It freezes the scientific checkpoint identity, upstream architecture, deterministic
-inference preprocessing, output semantics, licensing, and provenance needed by M5.2–M5.6. It does
-not claim that the production backend is implemented.
+This document is the authoritative M5.1 scientific and M5.2 dependency contract for the required
+learned structural backend in Eris v0.1. It freezes the checkpoint identity, upstream
+architecture, deterministic inference preprocessing, output semantics, licensing, provenance,
+and optional runtime boundary needed by M5.3–M5.6. It does not claim that the production backend
+or successful GearNet inference is implemented.
 
 ## Selected backend and checkpoint
 
@@ -117,20 +118,78 @@ Every node-embedding row must map exactly to its biological input entity. M5.1 f
 scientific requirement, but the concrete `node_ids` and optional `valid_mask` implementation is
 deferred to M5.3.
 
-## Precision baseline and deferred runtime decisions
+## Optional dependency boundary
 
-FP32 is the required M5 baseline. M5.1 does not freeze:
+The Eris core remains independent of Torch, TorchDrug, compiled PyG extensions, and RDKit and
+continues to support Python `>=3.10,<3.13`. The GearNet backend has a deliberately narrower Eris
+v0.1 runtime contract:
 
-- the optional backend's Python version range;
-- an exact PyTorch version;
-- the TorchDrug installation strategy;
-- `torch-scatter` or `torch-cluster` versions;
-- a CUDA compatibility matrix;
-- FP16 or BF16 support;
-- dependency-diagnostics implementation.
+| dependency | frozen requirement |
+| --- | --- |
+| Python | `>=3.10,<3.11` |
+| NumPy | `>=1.26,<2` |
+| PyTorch | `==2.11.0` |
+| TorchDrug | `==0.2.1` |
+| `torch-scatter` | `==2.1.2` |
+| `torch-cluster` | `==1.6.3` |
+| `rdkit-pypi` | `==2022.9.5` |
+| Ninja | `>=1.11,<2` |
 
-Those runtime and packaging decisions belong to M5.2 and M5.4 and must not narrow the independent
-Eris core contract implicitly.
+Local PEP 440 wheel labels do not change the required public versions. For example,
+`torch==2.11.0+cpu`, `torch-scatter==2.1.2+pt211cpu`, and
+`torch-cluster==1.6.3+pt211cpu` satisfy this contract.
+
+TorchDrug 0.2.1 officially supports Python through 3.10 and documents PyTorch support only
+through 2.0. PyTorch 2.11 with TorchDrug 0.2.1 is therefore an **Eris-validated experimental
+compatibility baseline**, not an upstream-supported TorchDrug combination. It was selected to
+retain the relevant modern PyTorch checkpoint-loading security fixes and matching compiled PyG
+wheels.
+
+### CPU reference installation
+
+CPU is the M5.2 installation baseline for Windows and Linux. Install the environment in this
+order:
+
+1. Install PyTorch 2.11 from the official CPU index:
+
+   ```console
+   python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
+   ```
+
+2. Install the matching compiled PyG extensions from the official PyG wheel index:
+
+   ```console
+   python -m pip install torch-scatter==2.1.2 torch-cluster==1.6.3 --find-links https://data.pyg.org/whl/torch-2.11.0+cpu.html
+   ```
+
+3. Install Eris with its declarative optional dependency group:
+
+   ```console
+   python -m pip install "eris[gearnet]"
+   ```
+
+The ordering is intentional. PyPI alone does not provide portable binary resolution for the
+required compiled PyG extensions, so a clean install may otherwise attempt source compilation.
+The Eris extra declares package requirements but does not encode platform- or accelerator-specific
+external indexes.
+
+The extra does not install or download the checkpoint. Dependency availability also does not
+guarantee checkpoint presence, GPU availability, network availability, successful JIT compilation,
+or successful GearNet inference.
+
+### Availability semantics
+
+The GearNet dependency probe is explicit and lazy. Core imports and learned Registry discovery do
+not import optional frameworks. When called directly, the probe checks the Python range,
+distribution metadata, public versions, top-level import presence, and an isolated import smoke.
+It does not instantiate GearNet, inspect a GPU, obtain a checkpoint, deliberately compile RSPMM,
+or run a forward pass.
+
+## Precision and accelerator boundary
+
+FP32 and CPU are the required current M5 baselines. CUDA installation instructions, the CUDA
+compatibility matrix, FP16/BF16 behavior, actual model construction, checkpoint loading, and
+forward/inference validation remain deferred to M5.3 and M5.4. M5.2 does not promise CUDA support.
 
 ## Licensing
 

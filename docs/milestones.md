@@ -360,7 +360,7 @@ required for v0.1.
   - **Acceptance:** GearNet-Edge with `mc_gearnet_edge.pth` has approved, verifiable provenance
     and the full frozen contract in `docs/gearnet_edge_backend.md`.
   - **Depends on:** M4 gate and required stakeholder decisions.
-- [ ] **M5.2 — Establish optional backend dependency boundary**
+- [x] **M5.2 — Establish optional backend dependency boundary**
   - **Scope:** Package backend deps optionally with lazy availability/version diagnostics.
   - **Acceptance:** Core-only works; missing backend guidance is actionable.
   - **Depends on:** M5.1 and M4.2.
