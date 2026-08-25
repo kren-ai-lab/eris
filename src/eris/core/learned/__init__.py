@@ -9,6 +9,15 @@ from eris.core.learned.checkpoints import (
     verify_checkpoint,
 )
 from eris.core.learned.config import OutputMode, StructuralEmbedderConfig
+from eris.core.learned.execution import (
+    ExecutionCapabilities,
+    Precision,
+    ResolvedExecution,
+    StructuralExecutionConfig,
+    build_execution_provenance,
+    execution_cache_identity,
+    resolve_execution,
+)
 from eris.core.learned.protocol import StructuralEmbedderBackend
 from eris.core.learned.registry import (
     BackendAvailability,
@@ -24,14 +33,21 @@ __all__ = [
     "CheckpointCache",
     "EmbedderInfo",
     "EmbedderRegistry",
+    "ExecutionCapabilities",
     "OutputMode",
+    "Precision",
+    "ResolvedExecution",
     "StructuralEmbedderBackend",
     "StructuralEmbedderConfig",
     "StructuralEmbeddingResult",
+    "StructuralExecutionConfig",
     "StructuralModelDescriptor",
     "VerifiedCheckpoint",
     "build_learned_artifact",
+    "build_execution_provenance",
+    "execution_cache_identity",
     "learned_registry",
+    "resolve_execution",
     "validate_embedding_result",
     "verify_checkpoint",
 ]

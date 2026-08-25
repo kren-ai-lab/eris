@@ -10,6 +10,8 @@ from eris.core.learned import (
     BackendAvailability,
     EmbedderInfo,
     EmbedderRegistry,
+    ExecutionCapabilities,
+    ResolvedExecution,
     StructuralEmbedderBackend,
     StructuralEmbedderConfig,
     VerifiedCheckpoint,
@@ -32,16 +34,30 @@ class FakeBackend:
         self.is_available_calls += 1
         return self._available
 
+    def execution_capabilities(self) -> ExecutionCapabilities:
+        return ExecutionCapabilities(
+            devices=("cpu",),
+            precisions=("fp32",),
+            preferred_device="cpu",
+        )
+
     def preprocess(self, structure, *, config):
         self.preprocess_calls += 1
         return structure
 
-    def load(self, checkpoint: VerifiedCheckpoint):
+    def load(
+        self,
+        checkpoint: VerifiedCheckpoint,
+        *,
+        execution: ResolvedExecution,
+    ):
+        del execution
         del checkpoint
         self.load_calls += 1
         return object()
 
-    def infer(self, model, prepared, *, config):
+    def infer(self, model, prepared, *, config, execution: ResolvedExecution):
+        del execution
         self.infer_calls += 1
         raise AssertionError("inference must not run during Registry creation")
 

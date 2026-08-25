@@ -329,7 +329,7 @@ backend.
     `valid_mask`, and unambiguous biological mapping.
   - **Acceptance:** Every local row maps to a node ID and outputs validate against v2.
   - **Depends on:** M4.1 and M3.3.
-- [ ] **M4.6 — Implement device and precision abstraction**
+- [x] **M4.6 — Implement device and precision abstraction**
   - **Scope:** Expose `auto`, `cpu`, supported `cuda`, and `fp32` default with provenance.
   - **Acceptance:** Fake CPU works; unavailable devices follow documented behavior; core remains
     framework-independent.

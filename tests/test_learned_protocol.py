@@ -11,10 +11,14 @@ import pytest
 from eris.core.artifact_schema_v2 import compute_config_fingerprint
 from eris.core.learned import (
     CheckpointDescriptor,
+    ExecutionCapabilities,
+    ResolvedExecution,
     StructuralEmbedderBackend,
     StructuralEmbedderConfig,
     StructuralEmbeddingResult,
+    StructuralExecutionConfig,
     VerifiedCheckpoint,
+    resolve_execution,
     validate_embedding_result,
 )
 from eris.exceptions import ConfigError, ExecutionError
@@ -25,9 +29,18 @@ class FakeBackend:
 
     def __init__(self) -> None:
         self.loaded_checkpoint: VerifiedCheckpoint | None = None
+        self.loaded_execution: ResolvedExecution | None = None
+        self.inferred_executions: list[ResolvedExecution] = []
 
     def is_available(self) -> bool:
         return True
+
+    def execution_capabilities(self) -> ExecutionCapabilities:
+        return ExecutionCapabilities(
+            devices=("cpu",),
+            precisions=("fp32",),
+            preferred_device="cpu",
+        )
 
     def preprocess(
         self,
@@ -38,8 +51,14 @@ class FakeBackend:
         del config
         return tuple(structure)
 
-    def load(self, checkpoint: VerifiedCheckpoint) -> str:
+    def load(
+        self,
+        checkpoint: VerifiedCheckpoint,
+        *,
+        execution: ResolvedExecution,
+    ) -> str:
         self.loaded_checkpoint = checkpoint
+        self.loaded_execution = execution
         return "fake-model"
 
     def infer(
@@ -48,8 +67,10 @@ class FakeBackend:
         prepared: tuple[str, ...],
         *,
         config: StructuralEmbedderConfig,
+        execution: ResolvedExecution,
     ) -> StructuralEmbeddingResult:
         assert model == "fake-model"
+        self.inferred_executions.append(execution)
         node_embedding = np.arange(len(prepared) * 2, dtype=np.float32).reshape(-1, 2)
         global_embedding = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         node_ids = np.asarray(prepared, dtype=np.str_)
@@ -263,12 +284,19 @@ def test_fake_backend_outputs_are_deterministic_and_valid(output_mode):
         output_mode=output_mode,
     )
     prepared = backend.preprocess(("A:1", "A:2"), config=config)
-    model = backend.load(checkpoint)
+    execution = resolve_execution(
+        StructuralExecutionConfig(),
+        backend.execution_capabilities(),
+    )
+    model = backend.load(checkpoint, execution=execution)
 
     assert backend.loaded_checkpoint is checkpoint
+    assert backend.loaded_execution is execution
 
-    left = backend.infer(model, prepared, config=config)
-    right = backend.infer(model, prepared, config=config)
+    left = backend.infer(model, prepared, config=config, execution=execution)
+    right = backend.infer(model, prepared, config=config, execution=execution)
+
+    assert backend.inferred_executions == [execution, execution]
 
     validate_embedding_result(left, output_mode=config.output_mode)
     validate_embedding_result(right, output_mode=config.output_mode)
