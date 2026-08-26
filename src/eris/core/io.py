@@ -1,16 +1,18 @@
 from __future__ import annotations
-import logging
-logger = logging.getLogger(__name__)
 
+import logging
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Callable
+from typing import Callable, Dict, Iterable, List, Optional
 
 import gemmi
 import numpy as np
 
-from eris.exceptions import ErisError
+from eris.core.aminoacids import AA1_TO_INDEX, AA3_TO_AA1, UNKNOWN_INDEX
+from eris.core.residue_identity import format_residue_id
 from eris.core.types import StructureInput
-from eris.core.aminoacids import AA3_TO_AA1, AA1_TO_INDEX, UNKNOWN_INDEX
+from eris.exceptions import ErisError
+
+logger = logging.getLogger(__name__)
 
 class StructureLoadError(ErisError):
     pass
@@ -84,8 +86,12 @@ def _residue_id(chain: gemmi.Chain, res: gemmi.Residue) -> str:
     Format: <chain>:<seqnum>:<icode>:<resname>
     Example: A:123::GLY   (empty insertion code becomes "")
     """
-    icode = (res.seqid.icode or "").strip()
-    return f"{chain.name}:{res.seqid.num}:{icode}:{res.name}"
+    return format_residue_id(
+        chain_id=chain.name,
+        residue_number=res.seqid.num,
+        insertion_code=res.seqid.icode,
+        residue_name=res.name,
+    )
 
 
 # -----------------------

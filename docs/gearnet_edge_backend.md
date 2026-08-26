@@ -118,6 +118,36 @@ Every node-embedding row must map exactly to its biological input entity. M5.1 f
 scientific requirement, but the concrete `node_ids` and optional `valid_mask` implementation is
 deferred to M5.3.
 
+## Policy-neutral structural transport and mapping
+
+M5.3 has implemented the policy-neutral transport infrastructure needed before model inference.
+It does not yet implement the biological/model-node selection policy or the production backend.
+
+Eris records an ordered biological identity table before TorchDrug. Model-node records selected
+by a later approved biological policy carry an explicit index into that table. The index is stored
+as the TorchDrug residue-level attribute `eris_residue_index`, which survives packing,
+`AlphaCarbonNode`, residue compaction, and the frozen `GraphConstruction`. Final `node_ids` are
+resolved through that carrier and the biological table; they are not reconstructed from output
+length, compacted residue position, or synthetic PDB numbering.
+
+TorchDrug receives a deterministic, adapter-local, single-chain CA-only PDB made from records that
+have already been selected. Its chain and residue numbers are transport-only identifiers. Synthetic
+residue numbering begins at 2 to avoid TorchDrug 0.2.1's terminal dummy-residue collision. The
+temporary PDB is removed after TorchDrug materializes the graph and its path is not provenance.
+This sanitized single-chain boundary also prevents TorchDrug's raw multichain residue-key
+collisions. Tests against a canonical clean PDB demonstrate exact graph equivalence for node
+features, coordinates, edges, relations, and edge features.
+
+The following biological policies remain deliberately unresolved and are not implied by this
+transport implementation:
+
+- MSE and other nonstandard residues;
+- hetero residues, water, ions, and ligands;
+- alternate locations;
+- residues without CA atoms.
+
+M5.3 remains open until those policies are approved and integrated ahead of the transport layer.
+
 ## Optional dependency boundary
 
 The Eris core remains independent of Torch, TorchDrug, compiled PyG extensions, and RDKit and

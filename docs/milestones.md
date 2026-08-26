@@ -369,6 +369,10 @@ required for v0.1.
     generic Eris graphs without demonstrated equivalence.
   - **Acceptance:** Preprocessing is deterministic and every model node maps to input.
   - **Depends on:** M5.1 and M4.5.
+  - **Current status:** Policy-neutral identity, single-chain synthetic transport, explicit
+    residue-level carrier, frozen GraphConstruction, invariants, and canonical equivalence are
+    implemented. Biological selection policies remain pending stakeholder approval, so this unit
+    is not complete.
 - [ ] **M5.4 — Implement checkpoint loading and deterministic inference**
   - **Scope:** Verify/load checkpoint; use eval, inference/no-grad, fp32 default, explicit device;
     emit local/global embeddings.
