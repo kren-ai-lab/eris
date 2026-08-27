@@ -29,8 +29,9 @@ explicit representation families are added.
 
 GearNet-Edge pretrained with Multiview Contrast is the selected learned backend for v0.1. Its
 scientific architecture, checkpoint, preprocessing, and output contract are frozen in
-`docs/gearnet_edge_backend.md`. The production GearNet backend is not implemented in the current
-repository state.
+`docs/gearnet_edge_backend.md`. An internal, unregistered backend now implements the frozen
+preprocessing, verified checkpoint loading, and deterministic CPU/fp32 inference. Public learned
+registration and Artifact v2 provenance remain pending.
 
 ## Canonical public representation identifiers
 
@@ -191,9 +192,9 @@ participates in learned artifact-cache identity; device, checkpoint source locat
 source path do not. A cache hit preserves generation execution and model-source provenance while
 refreshing only the current structure locator.
 
-The production learned Registry remains empty until M5. The M4 fake backend exists only in tests:
-GearNet/GearNet-Edge, real pretrained weights, `eris.embed`, and the public learned CLI are not yet
-implemented.
+The production learned Registry remains empty while M5 provenance and integration are incomplete.
+The M4 fake backend exists only in tests; the internal GearNet-Edge backend is deliberately not
+registered yet. `eris.embed` and the public learned CLI are not yet implemented.
 
 ### Provenance
 

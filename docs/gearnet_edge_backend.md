@@ -1,10 +1,11 @@
 # Eris v0.1 — GearNet-Edge Backend Contract
 
-This document is the authoritative M5.1 scientific and M5.2 dependency contract for the required
-learned structural backend in Eris v0.1. It freezes the checkpoint identity, upstream
-architecture, deterministic inference preprocessing, output semantics, licensing, provenance,
-and optional runtime boundary needed by M5.3–M5.6. It does not claim that the production backend
-or successful GearNet inference is implemented.
+This document is the authoritative M5.1–M5.4 contract for the required learned structural
+backend in Eris v0.1. It freezes the checkpoint identity, upstream architecture, deterministic
+inference preprocessing, CPU/fp32 execution, output semantics, licensing, provenance, and
+optional runtime boundary needed by the remaining M5 work. The internal backend now completes
+preprocessing, verified model loading, and inference, but remains unregistered until the learned
+Artifact v2 provenance and public integration work are complete.
 
 ## Selected backend and checkpoint
 
@@ -112,7 +113,8 @@ For one input structure, the canonical learned outputs are:
 | `global_embedding` | `output["graph_feature"][0]` | `(3072,)` |
 
 `N` is the number of model nodes retained by the frozen preprocessing. The upstream `sum` readout
-produces `graph_feature`; Eris must not add another pooling operation.
+produces `output["graph_feature"]` with shape `(1, 3072)`; Eris exposes its first row and must not
+add another pooling operation.
 
 Every node-embedding row must map exactly to its biological input entity. M5.1 freezes that
 scientific requirement. M5.3 implements concrete `node_ids` through an explicit biological-index
@@ -227,9 +229,10 @@ or run a forward pass.
 
 ## Precision and accelerator boundary
 
-FP32 and CPU are the required current M5 baselines. CUDA installation instructions, the CUDA
-compatibility matrix, FP16/BF16 behavior, actual model construction, checkpoint loading, and
-forward/inference validation remain deferred to M5.3 and M5.4. M5.2 does not promise CUDA support.
+FP32 on CPU is the only v0.1 GearNet execution contract. The backend advertises only `cpu` and
+`fp32` and rejects CUDA, FP16, and BF16 rather than falling back or casting silently. It does not
+query CUDA availability. Future accelerator or reduced-precision work requires a separately
+validated contract.
 
 ## Verified M5.4 model-loading foundation
 
@@ -253,10 +256,54 @@ rewriting, prefix removal, partial load, or alternate architecture fallback.
 
 The current operational contract is CPU/fp32 only. Parameters and buffers are checked after
 loading, and the model is placed in `eval()` mode so BatchNorm and other training-sensitive
-modules use inference behavior. Parameters retain their normal `requires_grad` values. The later
-forward implementation must run under `torch.inference_mode()` to disable autograd and version
-tracking during inference; no forward or successful embedding claim is part of this loading
-foundation.
+modules use inference behavior. Parameters retain their normal `requires_grad` values.
+
+## Verified M5.4 deterministic inference
+
+The internal backend delegates biological preprocessing and checkpoint loading to the M5.3 and
+M5.4 foundations. Immediately before inference it revalidates CPU/fp32 execution, eval mode,
+model tensors, graph dimensions, relation count, carrier alignment and uniqueness, and biological
+node-ID alignment. The exact forward is:
+
+```python
+with torch.inference_mode():
+    output = model(
+        prepared.graph,
+        prepared.graph.node_feature.float(),
+        all_loss=None,
+        metric=None,
+    )
+```
+
+The prepared integer node features remain unchanged. Eris validates the upstream tensors as
+finite CPU `torch.float32` arrays with shapes `(N, 3072)` and `(1, 3072)`. It converts them directly
+with `.cpu().numpy()` and exposes `graph_feature[0]` as the global embedding. No Eris pooling,
+scientific cast, `detach()`, autocast, manual seed, or output-mode-dependent forward is applied.
+The result is then checked by the authoritative M4 `StructuralEmbeddingResult` validator;
+`valid_mask` is `None` for GearNet v0.1.
+
+### Determinism evidence
+
+On the frozen Python 3.10, PyTorch 2.11 CPU, TorchDrug 0.2.1, and NumPy 1.26 stack, the official
+checkpoint and canonical validation fixture produced bitwise-identical node and global embeddings
+across three forwards in one process and a fresh process. Both maximum absolute and relative
+differences were zero, and the biological mapping was identical. This is evidence for the frozen
+CPU/fp32 stack, not a universal determinism promise for future platforms, accelerators, or
+precisions.
+
+### Windows JIT and observed performance
+
+On the validated Windows environment, the first forward materialized
+`torchdrug.utils.torch.torch_ext` through PyTorch's C++ extension machinery using Ninja and a
+discoverable MSVC x64 `cl.exe`. The observed first compilation took about 25.8 seconds and the
+first complete forward about 26.1 seconds; warm forwards were about 45–49 milliseconds. These are
+observations, not performance contracts. A fresh process reused the JIT cache. This path did not
+materialize the `generalized_rspmm`, spmm, or embedding loaders.
+
+TorchDrug and PyTorch 2.11 used different nominal/effective cache-path conventions during the
+experiment. Eris neither depends on those paths nor manages, relocates, or deletes the PyTorch JIT
+cache. TorchDrug also emits an upstream deprecation warning once per process because it calls
+`torch.cross` without `dim`; Eris does not patch or globally silence that warning.
 
 ## Licensing
 

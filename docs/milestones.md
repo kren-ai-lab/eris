@@ -375,14 +375,15 @@ required for v0.1.
   - **Completion:** The frozen canonical-20/CA biological policy, fail-fast missing-CA contract,
     explicit sparse residue mapping, sanitized single-chain transport, exact GearNet
     GraphConstruction, and policy/mapping/equivalence tests are complete.
-- [ ] **M5.4 — Implement checkpoint loading and deterministic inference**
+- [x] **M5.4 — Implement checkpoint loading and deterministic inference**
   - **Scope:** Verify/load checkpoint; use eval, inference/no-grad, fp32 default, explicit device;
     emit local/global embeddings.
   - **Acceptance:** Results are deterministic within tolerance and match frozen output shapes.
   - **Depends on:** M5.2, M5.3, M4.4, and M4.6.
-  - **Current status:** Exact CPU/fp32 model construction, safe weights-only deserialization,
-    extensionless verified-checkpoint loading, strict state loading, and eval-mode enforcement are
-    implemented. Forward/inference remains pending, so this unit is not complete.
+  - **Completion:** Exact verified-checkpoint loading and the exact upstream forward now run under
+    `torch.inference_mode()` on the frozen CPU/fp32 stack. Strict pre-forward and output validation,
+    direct node/global NumPy conversion, M4 `StructuralEmbeddingResult` modes, actionable errors,
+    and bitwise repeatability with the official checkpoint are validated.
 - [ ] **M5.5 — Emit complete learned Artifact v2 provenance**
   - **Scope:** Persist model/checkpoint/hash, preprocessing, device/precision, IDs/masks, outputs.
   - **Acceptance:** Artifacts validate/round-trip without losing alignment or provenance.
