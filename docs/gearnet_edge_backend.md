@@ -115,17 +115,37 @@ For one input structure, the canonical learned outputs are:
 produces `graph_feature`; Eris must not add another pooling operation.
 
 Every node-embedding row must map exactly to its biological input entity. M5.1 freezes that
-scientific requirement, but the concrete `node_ids` and optional `valid_mask` implementation is
-deferred to M5.3.
+scientific requirement. M5.3 implements concrete `node_ids` through an explicit biological-index
+carrier; the conservative v0.1 policy fails the whole representation rather than emitting a
+`valid_mask` for retained canonical residues without CA.
 
-## Policy-neutral structural transport and mapping
+## Conservative v0.1 biological selection, transport and mapping
 
-M5.3 has implemented the policy-neutral transport infrastructure needed before model inference.
-It does not yet implement the biological/model-node selection policy or the production backend.
+GearNet v0.1 uses one CA-based residue node for each accepted residue in the selected model and
+single chain. This is an initial conservative backend contract, not a universal biological rule.
+The accepted residue names are exactly the canonical 20:
+
+```text
+ALA ARG ASN ASP CYS GLN GLU GLY HIS ILE
+LEU LYS MET PHE PRO SER THR TRP TYR VAL
+```
+
+Selection combines Gemmi's structural `Residue.het_flag == "A"` ATOM classification with
+`gemmi.find_tabulated_residue(name).is_amino_acid()` and the explicit canonical-20 set. This
+prevents a HETATM residue named `ALA` from passing by name alone. MSE and every other nonstandard
+or modified residue are excluded without chemical conversion; in particular, MSE is not converted
+to MET. Water, ligands, metals, ions, and all other HETATM residues are excluded before CA lookup,
+so a calcium ion whose atom name is `CA` cannot become a model node.
+
+Every accepted canonical residue must have a finite CA coordinate. A missing or unusable CA fails
+the complete representation: there is no silent omission, alternate-atom substitution,
+imputation, or `valid_mask=False`. CA alternate locations use Eris' existing altloc selector and
+its historical default; M5.3 introduces no new altloc policy.
 
 Eris records an ordered biological identity table before TorchDrug. Model-node records selected
-by a later approved biological policy carry an explicit index into that table. The index is stored
-as the TorchDrug residue-level attribute `eris_residue_index`, which survives packing,
+by the v0.1 policy carry an explicit, potentially sparse index into that table. Filtering removes
+records without reordering or compacting their biological indexes. The index is stored as the
+TorchDrug residue-level attribute `eris_residue_index`, which survives packing,
 `AlphaCarbonNode`, residue compaction, and the frozen `GraphConstruction`. Final `node_ids` are
 resolved through that carrier and the biological table; they are not reconstructed from output
 length, compacted residue position, or synthetic PDB numbering.
@@ -137,16 +157,6 @@ temporary PDB is removed after TorchDrug materializes the graph and its path is 
 This sanitized single-chain boundary also prevents TorchDrug's raw multichain residue-key
 collisions. Tests against a canonical clean PDB demonstrate exact graph equivalence for node
 features, coordinates, edges, relations, and edge features.
-
-The following biological policies remain deliberately unresolved and are not implied by this
-transport implementation:
-
-- MSE and other nonstandard residues;
-- hetero residues, water, ions, and ligands;
-- alternate locations;
-- residues without CA atoms.
-
-M5.3 remains open until those policies are approved and integrated ahead of the transport layer.
 
 ## Optional dependency boundary
 

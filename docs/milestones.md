@@ -221,6 +221,9 @@ representations.
   - **Scope:** Move voxel geometry/channels to canonical configuration.
   - **Acceptance:** Validation/defaults come from config and metadata preserves M1.14 alignment.
   - **Depends on:** M2.3 and M1.14.
+  - **Decision note:** Voxel coordinates are centered exactly once. Scientific review confirmed
+    historical double-centering was incorrect; the existing M2.7 single-centering correction is
+    authoritative.
 - [x] **M2.8 — Derive parameter schemas, help metadata and fingerprints from canonical config**
   - **Scope:** Generate Registry schemas, help, artifact parameters, and fingerprints from config.
   - **Acceptance:** Effective defaults do not drift and fingerprints change only for effective
@@ -364,15 +367,14 @@ required for v0.1.
   - **Scope:** Package backend deps optionally with lazy availability/version diagnostics.
   - **Acceptance:** Core-only works; missing backend guidance is actionable.
   - **Depends on:** M5.1 and M4.2.
-- [ ] **M5.3 — Implement model-specific structural preprocessing and residue mapping**
+- [x] **M5.3 — Implement model-specific structural preprocessing and residue mapping**
   - **Scope:** Reproduce checkpoint preprocessing/features/edges/selection/mapping; do not reuse
     generic Eris graphs without demonstrated equivalence.
   - **Acceptance:** Preprocessing is deterministic and every model node maps to input.
   - **Depends on:** M5.1 and M4.5.
-  - **Current status:** Policy-neutral identity, single-chain synthetic transport, explicit
-    residue-level carrier, frozen GraphConstruction, invariants, and canonical equivalence are
-    implemented. Biological selection policies remain pending stakeholder approval, so this unit
-    is not complete.
+  - **Completion:** The frozen canonical-20/CA biological policy, fail-fast missing-CA contract,
+    explicit sparse residue mapping, sanitized single-chain transport, exact GearNet
+    GraphConstruction, and policy/mapping/equivalence tests are complete.
 - [ ] **M5.4 — Implement checkpoint loading and deterministic inference**
   - **Scope:** Verify/load checkpoint; use eval, inference/no-grad, fp32 default, explicit device;
     emit local/global embeddings.

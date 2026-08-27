@@ -14,7 +14,7 @@ from typing import Any
 import gemmi
 import numpy as np
 
-from eris.core.io import _parsed_input_format, load_structure, select_chain
+from eris.core.io import _parsed_input_format, _select_atom_altloc, load_structure, select_chain
 from eris.core.residue_identity import format_residue_id
 from eris.core.types import StructureInput
 from eris.exceptions import ExecutionError
@@ -25,6 +25,30 @@ _MAX_PDB_RESIDUE_NUMBER = 9999
 _NODE_FEATURE_WIDTH = 21
 _EDGE_FEATURE_WIDTH = 59
 _NUM_RELATION = 7
+_CANONICAL_AMINO_ACIDS = frozenset(
+    {
+        "ALA",
+        "ARG",
+        "ASN",
+        "ASP",
+        "CYS",
+        "GLN",
+        "GLU",
+        "GLY",
+        "HIS",
+        "ILE",
+        "LEU",
+        "LYS",
+        "MET",
+        "PHE",
+        "PRO",
+        "SER",
+        "THR",
+        "TRP",
+        "TYR",
+        "VAL",
+    }
+)
 
 
 class GearNetPreprocessingError(ExecutionError):
@@ -145,6 +169,68 @@ def load_selected_biological_structure(
         model_index=structure_input.model_index,
         biological_table=build_biological_identity_table(chain),
     )
+
+
+def _is_gearnet_canonical_residue(residue: gemmi.Residue) -> bool:
+    residue_name = (residue.name or "").strip()
+    residue_info = gemmi.find_tabulated_residue(residue_name)
+    return (
+        residue.het_flag == "A"
+        and residue_info.is_amino_acid()
+        and residue_name in _CANONICAL_AMINO_ACIDS
+    )
+
+
+def select_gearnet_transport_records(
+    selected: SelectedBiologicalStructure,
+    *,
+    altloc: str = "first",
+) -> tuple[TransportNodeRecord, ...]:
+    """Apply the conservative GearNet v0.1 residue and CA selection policy."""
+
+    if not isinstance(selected, SelectedBiologicalStructure):
+        raise TypeError("selected must be a SelectedBiologicalStructure")
+    identities = selected.biological_table.records
+    if len(selected.chain) != len(identities):
+        raise GearNetPreprocessingError(
+            "biological identity table must align with the selected chain"
+        )
+
+    records: list[TransportNodeRecord] = []
+    for residue, identity in zip(selected.chain, identities, strict=True):
+        if not _is_gearnet_canonical_residue(residue):
+            continue
+
+        ca_atom = _select_atom_altloc(residue["CA"], altloc) if "CA" in residue else None
+        if ca_atom is None:
+            raise GearNetPreprocessingError(
+                "GearNet v0.1 preprocessing requires CA for every canonical residue; "
+                f"missing CA at {identity.node_id}"
+            )
+        coordinate = (
+            float(ca_atom.pos.x),
+            float(ca_atom.pos.y),
+            float(ca_atom.pos.z),
+        )
+        if not all(math.isfinite(value) for value in coordinate):
+            raise GearNetPreprocessingError(
+                "GearNet v0.1 preprocessing requires a finite CA coordinate for every "
+                f"canonical residue; unusable CA at {identity.node_id}"
+            )
+        records.append(
+            TransportNodeRecord(
+                transport_index=len(records),
+                biological_index=identity.index,
+                residue_name=identity.residue_name,
+                coordinate=coordinate,
+            )
+        )
+
+    if not records:
+        raise GearNetPreprocessingError(
+            "No valid canonical residues remain for GearNet v0.1 preprocessing"
+        )
+    return tuple(records)
 
 
 def _validate_transport_records(
@@ -359,5 +445,6 @@ __all__ = [
     "build_synthetic_pdb",
     "construct_gearnet_input",
     "load_selected_biological_structure",
+    "select_gearnet_transport_records",
     "temporary_synthetic_pdb",
 ]

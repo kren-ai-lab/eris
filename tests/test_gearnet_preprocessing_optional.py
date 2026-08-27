@@ -16,7 +16,10 @@ from eris.core.learned.backends.gearnet.preprocessing import (  # noqa: E402
     BiologicalResidueIdentity,
     TransportNodeRecord,
     construct_gearnet_input,
+    load_selected_biological_structure,
+    select_gearnet_transport_records,
 )
+from eris.core.types import StructureInput  # noqa: E402
 
 
 def _identity(index: int, residue_name: str) -> BiologicalResidueIdentity:
@@ -138,3 +141,34 @@ def test_synthetic_transport_is_equivalent_to_upstream_clean_pdb(tmp_path):
     assert torch.equal(upstream.node_position, synthetic.node_position)
     assert torch.equal(upstream.edge_list, synthetic.edge_list)
     assert torch.equal(upstream.edge_feature, synthetic.edge_feature)
+
+
+def test_mixed_structure_policy_maps_only_canonical_nodes(tmp_path):
+    mixed_path = tmp_path / "mixed.pdb"
+    mixed_path.write_text(
+        "\n".join(
+            [
+                _clean_pdb_atom(1, "ALA", 1, 0.0),
+                "HETATM    2  CA  MSE A   2       1.000   0.000   0.000  1.00  0.00           C  ",
+                _clean_pdb_atom(3, "GLY", 3, 3.8),
+                "HETATM    4  O   HOH A   4       5.000   0.000   0.000  1.00  0.00           O  ",
+                "HETATM    5 CA    CA A   5       6.000   0.000   0.000  1.00  0.00          CA  ",
+                _clean_pdb_atom(6, "SER", 6, 7.6),
+                "TER",
+                "END",
+            ]
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    selected = load_selected_biological_structure(
+        StructureInput(source=str(mixed_path), chain_id="A", model_index=0)
+    )
+    records = select_gearnet_transport_records(selected)
+
+    prepared = construct_gearnet_input(records, selected.biological_table)
+
+    assert [record.biological_index for record in records] == [0, 2, 5]
+    assert prepared.carrier.tolist() == [0, 2, 5]
+    assert prepared.node_ids.tolist() == ["A:1::ALA", "A:3::GLY", "A:6::SER"]
+    assert int(prepared.graph.num_node) == 3
