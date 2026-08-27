@@ -378,6 +378,9 @@ required for v0.1.
     emit local/global embeddings.
   - **Acceptance:** Results are deterministic within tolerance and match frozen output shapes.
   - **Depends on:** M5.2, M5.3, M4.4, and M4.6.
+  - **Current status:** Exact CPU/fp32 model construction, safe weights-only deserialization,
+    extensionless verified-checkpoint loading, strict state loading, and eval-mode enforcement are
+    implemented. Forward/inference remains pending, so this unit is not complete.
 - [ ] **M5.5 — Emit complete learned Artifact v2 provenance**
   - **Scope:** Persist model/checkpoint/hash, preprocessing, device/precision, IDs/masks, outputs.
   - **Acceptance:** Artifacts validate/round-trip without losing alignment or provenance.

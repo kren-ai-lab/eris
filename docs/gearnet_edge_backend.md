@@ -221,6 +221,33 @@ FP32 and CPU are the required current M5 baselines. CUDA installation instructio
 compatibility matrix, FP16/BF16 behavior, actual model construction, checkpoint loading, and
 forward/inference validation remain deferred to M5.3 and M5.4. M5.2 does not promise CUDA support.
 
+## Verified M5.4 model-loading foundation
+
+The internal M5.4 loading foundation constructs the exact frozen `models.GearNet` architecture
+and loads the official `mc_gearnet_edge.pth` state dictionary strictly. The verified official
+checkpoint has 138 tensor entries, matches the constructed model without missing, unexpected, or
+shape-mismatched keys, and produces the expected
+`GeometryAwareRelationalGraphNeuralNetwork` with `output_dim = 3072`.
+
+Loading consumes M4's `VerifiedCheckpoint`; it does not accept an arbitrary unverified path or
+rehash the file. Checkpoint paths are opaque, so the extensionless canonical `CheckpointCache`
+path named `checkpoint` is supported. Deserialization uses only:
+
+```python
+torch.load(path, map_location="cpu", weights_only=True)
+```
+
+The state-dictionary root, keys, and tensor values are validated before
+`model.load_state_dict(..., strict=True)`. There is no unsafe deserialization fallback, key
+rewriting, prefix removal, partial load, or alternate architecture fallback.
+
+The current operational contract is CPU/fp32 only. Parameters and buffers are checked after
+loading, and the model is placed in `eval()` mode so BatchNorm and other training-sensitive
+modules use inference behavior. Parameters retain their normal `requires_grad` values. The later
+forward implementation must run under `torch.inference_mode()` to disable autograd and version
+tracking during inference; no forward or successful embedding claim is part of this loading
+foundation.
+
 ## Licensing
 
 The code and checkpoint licenses are separate:
