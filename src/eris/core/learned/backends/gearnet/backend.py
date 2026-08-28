@@ -9,6 +9,12 @@ from typing import Any
 import numpy as np
 
 from eris.core.learned.backends.gearnet.dependencies import probe_gearnet_availability
+from eris.core.learned.backends.gearnet.metadata import (
+    GEARNET_EDGE_BACKEND_ID,
+    GEARNET_EDGE_EDGE_INPUT_DIM,
+    GEARNET_EDGE_NODE_INPUT_DIM,
+    GEARNET_EDGE_NUM_RELATION,
+)
 from eris.core.learned.backends.gearnet.model import (
     GEARNET_EDGE_OUTPUT_DIM,
     _validate_cpu_fp32,
@@ -31,11 +37,6 @@ from eris.core.learned.types import (
 )
 from eris.core.types import StructureInput
 from eris.exceptions import ExecutionError
-
-GEARNET_EDGE_BACKEND_ID = "gearnet-edge"
-_NODE_INPUT_DIM = 21
-_EDGE_INPUT_DIM = 59
-_NUM_RELATION = 7
 
 
 def _import_torch() -> Any:
@@ -71,20 +72,25 @@ def _validate_prepared(prepared: GearNetPreparedInput) -> int:
     node_feature = getattr(graph, "node_feature", None)
     if getattr(node_feature, "ndim", None) != 2:
         raise ExecutionError("GearNet prepared node_feature must be two-dimensional")
-    if tuple(node_feature.shape) != (num_node, _NODE_INPUT_DIM):
+    if tuple(node_feature.shape) != (num_node, GEARNET_EDGE_NODE_INPUT_DIM):
         raise ExecutionError(
-            f"GearNet prepared node_feature must have shape ({num_node}, {_NODE_INPUT_DIM})"
+            "GearNet prepared node_feature must have shape "
+            f"({num_node}, {GEARNET_EDGE_NODE_INPUT_DIM})"
         )
 
     edge_feature = getattr(graph, "edge_feature", None)
     if getattr(edge_feature, "ndim", None) != 2:
         raise ExecutionError("GearNet prepared edge_feature must be two-dimensional")
-    if edge_feature.shape[1] != _EDGE_INPUT_DIM:
-        raise ExecutionError(f"GearNet prepared edge_feature width must be {_EDGE_INPUT_DIM}")
+    if edge_feature.shape[1] != GEARNET_EDGE_EDGE_INPUT_DIM:
+        raise ExecutionError(
+            f"GearNet prepared edge_feature width must be {GEARNET_EDGE_EDGE_INPUT_DIM}"
+        )
 
     num_relation = _scalar_int(getattr(graph, "num_relation", None), "num_relation")
-    if num_relation != _NUM_RELATION:
-        raise ExecutionError(f"GearNet prepared graph must declare {_NUM_RELATION} relations")
+    if num_relation != GEARNET_EDGE_NUM_RELATION:
+        raise ExecutionError(
+            f"GearNet prepared graph must declare {GEARNET_EDGE_NUM_RELATION} relations"
+        )
 
     carrier = prepared.carrier
     if not isinstance(carrier, np.ndarray) or carrier.ndim != 1:
@@ -176,7 +182,7 @@ def _forward_error(error: Exception) -> ExecutionError:
 
 
 class GearNetEdgeBackend:
-    """Internal, unregistered GearNet-Edge adapter for the frozen v0.1 stack."""
+    """Production GearNet-Edge adapter for the frozen v0.1 stack."""
 
     @property
     def backend_id(self) -> str:

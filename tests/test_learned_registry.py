@@ -121,13 +121,13 @@ def test_backend_availability_is_frozen_and_validated():
         BackendAvailability(available=False, reason="   ")
 
 
-def test_isolated_and_production_registries_begin_empty():
+def test_isolated_registry_begins_empty_and_production_has_gearnet():
     registry = EmbedderRegistry()
 
     assert registry.names() == []
     assert registry.list_info() == []
-    assert learned_registry.names() == []
-    assert learned_registry.list_info() == []
+    assert learned_registry.names() == ["gearnet_edge"]
+    assert len(learned_registry.list_info()) == 1
 
 
 def test_registration_and_discovery_are_deterministic_and_lazy():
@@ -410,7 +410,7 @@ def test_isolated_learned_registration_does_not_affect_explicit_registry():
 
     assert len(list_encoders()) == 10
     assert "synthetic_embedding" not in list_encoders()
-    assert learned_registry.names() == []
+    assert learned_registry.names() == ["gearnet_edge"]
 
 
 def test_importing_and_listing_learned_registry_does_not_load_frameworks():
@@ -420,7 +420,7 @@ import eris
 import eris.core.learned
 from eris.core.learned.registry import learned_registry
 
-assert learned_registry.names() == []
+assert learned_registry.names() == ['gearnet_edge']
 blocked = {'torch', 'torchdrug', 'torch_geometric', 'transformers'}
 loaded = sorted(blocked.intersection(sys.modules))
 if loaded:

@@ -568,4 +568,4 @@ assert not hasattr(eris, 'StructuralEmbedderRunner')
 """
 
     subprocess.run([sys.executable, "-c", script], check=True)
-    assert learned_registry.names() == []
+    assert learned_registry.names() == ["gearnet_edge"]

@@ -350,7 +350,7 @@ dependencies.
 
 ## M5 — GearNet / GearNet-Edge
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE`
 
 **Objective:** Integrate the frozen pretrained GearNet-Edge backend. A second model/variant is not
 required for v0.1.
@@ -384,20 +384,29 @@ required for v0.1.
     `torch.inference_mode()` on the frozen CPU/fp32 stack. Strict pre-forward and output validation,
     direct node/global NumPy conversion, M4 `StructuralEmbeddingResult` modes, actionable errors,
     and bitwise repeatability with the official checkpoint are validated.
-- [ ] **M5.5 — Emit complete learned Artifact v2 provenance**
+- [x] **M5.5 — Emit complete learned Artifact v2 provenance**
   - **Scope:** Persist model/checkpoint/hash, preprocessing, device/precision, IDs/masks, outputs.
   - **Acceptance:** Artifacts validate/round-trip without losing alignment or provenance.
   - **Depends on:** M5.4 and M3.6.
-- [ ] **M5.6 — Add real-backend integration smoke test**
+  - **Completion:** The canonical `gearnet_edge` adapter, official model/checkpoint descriptor,
+    frozen preprocessing parameters, CPU/fp32 generation provenance, output metadata, and cache
+    identity/source-refresh behavior are implemented and validated through the generic M4 runner
+    and Artifact Schema v2 contracts without path leakage or a parallel schema.
+- [x] **M5.6 — Add real-backend integration smoke test**
   - **Scope:** Cover real preprocessing, checkpoint hash/load, finite embeddings, mapping,
     repeatability/tolerance, and save/load.
   - **Acceptance:** The frozen backend passes reproducibly in its documented environment.
   - **Depends on:** M5.5.
+  - **Completion:** The production Registry and generic runner complete the verified offline
+    GearNet-Edge lifecycle from real structure input through strict Artifact v2 persistence and
+    cache reuse. Cache-hit short-circuiting, source refresh, independent bitwise determinism,
+    output modes, lazy core-only failure, and fail-fast missing-CA behavior are validated.
 
 ### M5 gate
 
-One frozen pretrained structural backend generates reproducible valid residue/node and global
-embeddings. A second GearNet-family backend is not required.
+**Satisfied:** One frozen pretrained structural backend generates reproducible valid residue/node
+and global embeddings through the production Registry and runner. A second GearNet-family backend
+is not required.
 
 ## M6 — Python API and CLI
 

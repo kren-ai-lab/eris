@@ -15,6 +15,19 @@ import gemmi
 import numpy as np
 
 from eris.core.io import _parsed_input_format, _select_atom_altloc, load_structure, select_chain
+from eris.core.learned.backends.gearnet.metadata import (
+    GEARNET_EDGE_CANONICAL_RESIDUES,
+    GEARNET_EDGE_EDGE_FEATURE,
+    GEARNET_EDGE_EDGE_INPUT_DIM,
+    GEARNET_EDGE_KNN_K,
+    GEARNET_EDGE_KNN_MIN_DISTANCE,
+    GEARNET_EDGE_NODE_INPUT_DIM,
+    GEARNET_EDGE_NUM_RELATION,
+    GEARNET_EDGE_SEQUENTIAL_MAX_DISTANCE,
+    GEARNET_EDGE_SPATIAL_MAX_NEIGHBORS,
+    GEARNET_EDGE_SPATIAL_MIN_DISTANCE,
+    GEARNET_EDGE_SPATIAL_RADIUS,
+)
 from eris.core.residue_identity import format_residue_id
 from eris.core.types import StructureInput
 from eris.exceptions import ExecutionError
@@ -22,33 +35,7 @@ from eris.exceptions import ExecutionError
 _SYNTHETIC_CHAIN_ID = "A"
 _FIRST_SYNTHETIC_RESIDUE_NUMBER = 2
 _MAX_PDB_RESIDUE_NUMBER = 9999
-_NODE_FEATURE_WIDTH = 21
-_EDGE_FEATURE_WIDTH = 59
-_NUM_RELATION = 7
-_CANONICAL_AMINO_ACIDS = frozenset(
-    {
-        "ALA",
-        "ARG",
-        "ASN",
-        "ASP",
-        "CYS",
-        "GLN",
-        "GLU",
-        "GLY",
-        "HIS",
-        "ILE",
-        "LEU",
-        "LYS",
-        "MET",
-        "PHE",
-        "PRO",
-        "SER",
-        "THR",
-        "TRP",
-        "TYR",
-        "VAL",
-    }
-)
+_CANONICAL_AMINO_ACIDS = frozenset(GEARNET_EDGE_CANONICAL_RESIDUES)
 
 
 class GearNetPreprocessingError(ExecutionError):
@@ -396,16 +383,20 @@ def construct_gearnet_input(
     graph_construction = layers.GraphConstruction(
         node_layers=[geometry.AlphaCarbonNode()],
         edge_layers=[
-            geometry.SequentialEdge(max_distance=2),
+            geometry.SequentialEdge(max_distance=GEARNET_EDGE_SEQUENTIAL_MAX_DISTANCE),
             geometry.SpatialEdge(
-                radius=10.0,
-                min_distance=5,
+                radius=GEARNET_EDGE_SPATIAL_RADIUS,
+                min_distance=GEARNET_EDGE_SPATIAL_MIN_DISTANCE,
                 max_distance=None,
-                max_num_neighbors=32,
+                max_num_neighbors=GEARNET_EDGE_SPATIAL_MAX_NEIGHBORS,
             ),
-            geometry.KNNEdge(k=10, min_distance=5, max_distance=None),
+            geometry.KNNEdge(
+                k=GEARNET_EDGE_KNN_K,
+                min_distance=GEARNET_EDGE_KNN_MIN_DISTANCE,
+                max_distance=None,
+            ),
         ],
-        edge_feature="gearnet",
+        edge_feature=GEARNET_EDGE_EDGE_FEATURE,
     )
     graph = graph_construction(packed)
 
@@ -418,11 +409,11 @@ def construct_gearnet_input(
     if carrier.ndim != 1 or carrier.shape[0] != num_node:
         raise GearNetPreprocessingError("model-node carrier must align with graph nodes")
     carrier_tuple = _validate_carrier(carrier.tolist(), table_size=len(biological_table.records))
-    if graph.node_feature.ndim != 2 or graph.node_feature.shape[1] != _NODE_FEATURE_WIDTH:
+    if graph.node_feature.ndim != 2 or graph.node_feature.shape[1] != GEARNET_EDGE_NODE_INPUT_DIM:
         raise GearNetPreprocessingError("GearNet node_feature width must be 21")
-    if graph.edge_feature.ndim != 2 or graph.edge_feature.shape[1] != _EDGE_FEATURE_WIDTH:
+    if graph.edge_feature.ndim != 2 or graph.edge_feature.shape[1] != GEARNET_EDGE_EDGE_INPUT_DIM:
         raise GearNetPreprocessingError("GearNet edge_feature width must be 59")
-    if _scalar_int(graph.num_relation) != _NUM_RELATION:
+    if _scalar_int(graph.num_relation) != GEARNET_EDGE_NUM_RELATION:
         raise GearNetPreprocessingError("GearNet graph must declare 7 relations")
 
     node_ids = np.asarray(biological_table.node_ids_for(carrier_tuple), dtype=np.str_)

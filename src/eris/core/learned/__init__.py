@@ -1,6 +1,7 @@
 """Framework-independent contracts for learned structural representations."""
 
 from eris.core.learned.artifacts import build_learned_artifact
+from eris.core.learned.backends.gearnet.registration import register_gearnet_edge
 from eris.core.learned.checkpoint_cache import CheckpointCache
 from eris.core.learned.checkpoints import (
     CheckpointDescriptor,
@@ -32,6 +33,8 @@ from eris.core.learned.types import (
     StructuralPreprocessingResult,
     validate_embedding_result,
 )
+
+register_gearnet_edge(learned_registry)
 
 __all__ = [
     "BackendAvailability",

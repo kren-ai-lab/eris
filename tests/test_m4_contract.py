@@ -25,7 +25,7 @@ def test_m4_fake_backend_contract_is_complete_lazy_and_precision_safe(tmp_path):
     )
 
     first.validate(strict=True)
-    assert learned_registry.names() == []
+    assert learned_registry.names() == ["gearnet_edge"]
     assert list(first.data) == [
         "node_embedding",
         "global_embedding",
@@ -85,7 +85,7 @@ if loaded:
     raise SystemExit(f'optional frameworks loaded: {loaded}')
 assert not hasattr(eris, 'embed')
 assert not hasattr(eris, 'StructuralEmbedderRunner')
-assert eris.core.learned.learned_registry.names() == []
+assert eris.core.learned.learned_registry.names() == ['gearnet_edge']
 """
 
     subprocess.run([sys.executable, "-c", script], check=True)

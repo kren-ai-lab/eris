@@ -1,11 +1,10 @@
 # Eris v0.1 — GearNet-Edge Backend Contract
 
-This document is the authoritative M5.1–M5.4 contract for the required learned structural
+This document is the authoritative M5.1–M5.6 contract for the required learned structural
 backend in Eris v0.1. It freezes the checkpoint identity, upstream architecture, deterministic
 inference preprocessing, CPU/fp32 execution, output semantics, licensing, provenance, and
-optional runtime boundary needed by the remaining M5 work. The internal backend now completes
-preprocessing, verified model loading, and inference, but remains unregistered until the learned
-Artifact v2 provenance and public integration work are complete.
+optional runtime boundary. The production backend completes preprocessing, verified model loading,
+inference, Artifact v2 provenance, persistence, and cache reuse through the generic learned runner.
 
 ## Selected backend and checkpoint
 
@@ -141,8 +140,8 @@ so a calcium ion whose atom name is `CA` cannot become a model node.
 
 Every accepted canonical residue must have a finite CA coordinate. A missing or unusable CA fails
 the complete representation: there is no silent omission, alternate-atom substitution,
-imputation, or `valid_mask=False`. CA alternate locations use Eris' existing altloc selector and
-its historical default; M5.3 introduces no new altloc policy.
+imputation, or `valid_mask=False`. GearNet v0.1 freezes CA alternate-location selection to
+`altloc = first`; other selector modes are not exposed by `GearNetEdgeConfig`.
 
 Eris records an ordered biological identity table before TorchDrug. Model-node records selected
 by the v0.1 policy carry an explicit, potentially sparse index into that table. Filtering removes
@@ -304,6 +303,102 @@ TorchDrug and PyTorch 2.11 used different nominal/effective cache-path conventio
 experiment. Eris neither depends on those paths nor manages, relocates, or deletes the PyTorch JIT
 cache. TorchDrug also emits an upstream deprecation warning once per process because it calls
 `torch.cross` without `dim`; Eris does not patch or globally silence that warning.
+
+## Artifact Schema v2 identity and provenance
+
+The frozen learned representation and Eris adapter identity is:
+
+| field | value |
+| --- | --- |
+| `representation_name` | `gearnet_edge` |
+| `backend_id` | `gearnet-edge` |
+| implementation | `eris.core.learned.backends.gearnet.backend.GearNetEdgeBackend` |
+| adapter/encoder version | `1` |
+
+Adapter version `1` versions the Eris GearNet contract. It is independent of the Eris package
+version, Artifact Schema version, TorchDrug version, upstream source revision, and checkpoint
+revision. The Schema v2 `model` block records architecture `GearNet-Edge` and the official
+checkpoint identifier, SHA-256, Zenodo record revision, and source. Local checkpoint paths,
+checkpoint-cache paths, and temporary transport paths are never model identity.
+
+### Scientific preprocessing parameters
+
+Artifact `parameters` records the frozen canonical-20 selection, CA coordinate source,
+nonstandard/MSE/hetero/water/ligand/metal/ion exclusions, fail-fast missing-CA behavior, and
+effective `altloc = first` policy. It also records the AlphaCarbon node layer; sequential,
+spatial, and kNN edge settings; GearNet edge features; seven relations; and 21/59 node/edge input
+widths. The selected chain and model index remain in the canonical `input` block rather than being
+duplicated in `parameters`.
+
+The temporary sanitized PDB is an implementation transport and is never persisted. The Artifact
+input source is the caller's current structure locator and its SHA-256 is the scientific content
+identity.
+
+### Execution and runtime provenance
+
+Generation provenance records requested and resolved execution through the generic M4 mechanism.
+For the frozen backend both resolved device and precision are `cpu` and `fp32`. Effective precision
+participates in learned cache identity; device does not.
+
+Schema v2 and M4 do not define an authoritative dependency-version block. Python, Torch,
+TorchDrug, PyG-extension, MSVC, and Ninja versions therefore remain documented operational
+compatibility information rather than being inserted into model identity or a new schema field.
+The JIT cache location is neither provenance nor scientific identity. Extending runtime
+environment capture requires a later general convention rather than a GearNet-only schema.
+
+### Cache identity and reuse
+
+Learned artifact cache identity includes representation name, adapter implementation and version,
+canonical preprocessing parameters, input content and selection, parser hint, path-independent
+model/checkpoint identity, and effective precision. It excludes structure and checkpoint locators,
+checkpoint source mirrors, device locator, temporary PDB paths, and Torch extension cache paths.
+
+On a valid cache hit, the runner refreshes only `input.source` to the current structure locator.
+It preserves the original generation execution provenance, model/checkpoint source provenance,
+arrays, mappings, and scientific metadata and does not probe or instantiate the backend.
+
+### Learned output metadata
+
+The learned builder emits `node_embedding` plus `node_ids` for node mode, `global_embedding` for
+global mode, and all three in canonical order for both mode. Shapes are `(N, 3072)`, `(3072,)`,
+and `(N,)`; `feature_keys` is empty because embedding dimensions do not have 3072 invented feature
+names. `valid_mask` is absent for the frozen GearNet policy. Granularity is respectively
+`residue`, `structure`, or `mixed`, while coordinate source is always `model_specific`.
+
+The production learned Registry contains `gearnet_edge` exactly once, with backend ID
+`gearnet-edge`, adapter version `1`, and `GearNetEdgeConfig`. Registration stores only static
+metadata and lazy callables: importing Eris or inspecting the Registry does not import Torch,
+TorchDrug, `torch-scatter`, `torch-cluster`, or RDKit. Availability reports an actionable optional
+dependency error before factory construction or checkpoint access in a core-only environment.
+
+## Production integration evidence
+
+The M5.6 reference smoke uses the production Registry and generic `StructuralEmbedderRunner` from
+a real `StructureInput`. With the official verified checkpoint and the frozen Python 3.10 CPU/fp32
+stack, the cache-miss path covers availability, backend construction, execution resolution,
+checkpoint verification/cache, Gemmi biological selection, TorchDrug graph construction, strict
+model loading, inference, Artifact Schema v2 assembly, validation, persistence, and artifact-cache
+write.
+
+For output mode `both`, the validated artifact contains finite float32 `node_embedding` with shape
+`(N, 3072)`, finite float32 `global_embedding` with shape `(3072,)`, and unique Unicode `node_ids`
+with shape `(N,)`. Node and global modes preserve their frozen residue and structure granularities
+without running a different scientific forward. Save/load preserves arrays, dtypes, shapes,
+counts, parameters, provenance, model identity, and empty `feature_keys`.
+
+A second request with identical scientific content and precision but a different source locator
+hits the artifact cache before availability, factory construction, execution resolution,
+checkpoint resolution, preprocessing, model loading, or inference. Only `input.source` is
+refreshed. Separate empty artifact and checkpoint caches produce bitwise-equal node embeddings,
+global embeddings, and node IDs, demonstrating independent generation determinism rather than
+cache reuse. A retained canonical residue without CA fails with an actionable preprocessing error
+before model load/forward and leaves no artifact-cache entry.
+
+The real-stack smoke is offline and reads the official checkpoint from an explicit local path
+(conventionally `ERIS_GEARNET_CHECKPOINT`); normal tests do not require the checkpoint or network.
+On Windows, the first forward may materialize PyTorch's `torch_ext` JIT extension and therefore
+requires discoverable MSVC x64 and Ninja. That first run can be considerably slower; the JIT cache
+is reused, but its path and timings are not Eris API, provenance, or cache identity.
 
 ## Licensing
 

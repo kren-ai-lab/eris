@@ -6,14 +6,20 @@ import pickle
 from collections.abc import Mapping
 from typing import Any
 
+from eris.core.learned.backends.gearnet.metadata import (
+    GEARNET_EDGE_ARCHITECTURE,
+    GEARNET_EDGE_CHECKPOINT_IDENTIFIER,
+    GEARNET_EDGE_CHECKPOINT_SHA256,
+    GEARNET_EDGE_EDGE_INPUT_DIM,
+    GEARNET_EDGE_HIDDEN_DIMS,
+    GEARNET_EDGE_NODE_INPUT_DIM,
+    GEARNET_EDGE_NUM_ANGLE_BIN,
+    GEARNET_EDGE_NUM_RELATION,
+    GEARNET_EDGE_OUTPUT_DIM,
+)
 from eris.core.learned.checkpoints import VerifiedCheckpoint
 from eris.core.learned.execution import ResolvedExecution
 from eris.exceptions import ExecutionError
-
-GEARNET_EDGE_ARCHITECTURE = "GearNet-Edge"
-GEARNET_EDGE_CHECKPOINT_IDENTIFIER = "mc_gearnet_edge.pth"
-GEARNET_EDGE_CHECKPOINT_SHA256 = "6dc11e2db6eff3c90f90672af227c647125adb7476de18a2bb860457bdb598ec"
-GEARNET_EDGE_OUTPUT_DIM = 3072
 
 
 def _import_frameworks() -> tuple[Any, Any]:
@@ -66,11 +72,11 @@ def _validate_model_identity(model: Any, models: Any) -> None:
 
 def _construct_model(models: Any) -> Any:
     model = models.GearNet(
-        input_dim=21,
-        hidden_dims=[512, 512, 512, 512, 512, 512],
-        num_relation=7,
-        edge_input_dim=59,
-        num_angle_bin=8,
+        input_dim=GEARNET_EDGE_NODE_INPUT_DIM,
+        hidden_dims=list(GEARNET_EDGE_HIDDEN_DIMS),
+        num_relation=GEARNET_EDGE_NUM_RELATION,
+        edge_input_dim=GEARNET_EDGE_EDGE_INPUT_DIM,
+        num_angle_bin=GEARNET_EDGE_NUM_ANGLE_BIN,
         short_cut=True,
         batch_norm=True,
         concat_hidden=True,

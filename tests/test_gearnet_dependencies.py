@@ -186,7 +186,7 @@ import eris.core.learned
 import eris.core.learned.backends.gearnet.dependencies
 from eris.core.learned.registry import learned_registry
 
-assert learned_registry.names() == []
+assert learned_registry.names() == ['gearnet_edge']
 blocked = {'torch', 'torchdrug', 'torch_scatter', 'torch_cluster', 'rdkit'}
 loaded = sorted(blocked.intersection(sys.modules))
 if loaded:
