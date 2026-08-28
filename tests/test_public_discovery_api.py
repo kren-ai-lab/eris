@@ -75,6 +75,7 @@ def test_root_exports_public_m6_surface_without_learned_execution():
         "RepresentationNotFoundError",
         "__version__",
         "encode",
+        "embed",
         "get_embedder_info",
         "get_representation_info",
         "list_embedders",
@@ -82,7 +83,7 @@ def test_root_exports_public_m6_surface_without_learned_execution():
     ]
     assert eris.RepresentationNotFoundError is RepresentationNotFoundError
     assert callable(eris.encode)
-    assert not hasattr(eris, "embed")
+    assert hasattr(eris, "embed")
 
 
 def test_public_listings_are_exact_deterministic_and_registry_backed():

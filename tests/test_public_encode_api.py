@@ -32,7 +32,7 @@ def _assert_equivalent(left: StructureArtifact, right: StructureArtifact) -> Non
 def test_root_exports_typed_public_encode_signature():
     assert eris.encode is api_module.encode
     assert "encode" in eris.__all__
-    assert not hasattr(eris, "embed")
+    assert hasattr(eris, "embed")
 
     signature = inspect.signature(eris.encode)
     assert signature.parameters["representation"].default is inspect.Parameter.empty
@@ -331,7 +331,7 @@ artifact = eris.encode(
     use_cache=False,
 )
 assert artifact.meta['representation_name'] == 'residue_contact_map'
-assert not hasattr(eris, 'embed')
+assert hasattr(eris, 'embed')
 blocked = {'torch', 'torchdrug', 'torch_scatter', 'torch_cluster', 'rdkit'}
 loaded = sorted(blocked.intersection(sys.modules))
 if loaded:

@@ -8,7 +8,7 @@ from eris.core.config import CanonicalRepresentationConfig
 from eris.core.registry import get_encoder
 from eris.core.types import StructureInput
 from eris.discovery import _get_explicit_registration
-from eris.exceptions import ConfigError
+from eris.exceptions import ConfigError, ExecutionError, RepresentationNotFoundError
 
 
 class _NoOverride:
@@ -135,4 +135,63 @@ def encode(
     return artifact
 
 
-__all__ = ["encode"]
+def embed(
+    input: str | Path | StructureInput,
+    *,
+    representation: str,
+    chain_id: str | None | _NoOverride = _NO_OVERRIDE,
+    model_index: int | _NoOverride = _NO_OVERRIDE,
+    output_mode: str = "both",
+    checkpoint_path: str | Path | None = None,
+    device: str = "auto",
+    precision: str = "fp32",
+    output: str | Path | None = None,
+    use_cache: bool = True,
+) -> StructureArtifact:
+    """Embed one structure with a registered learned representation."""
+
+    from eris.core.learned import StructuralEmbedderRunner, StructuralExecutionConfig
+    from eris.core.learned.registry import learned_registry
+
+    try:
+        info = learned_registry.get_info(representation)
+    except KeyError as error:
+        raise RepresentationNotFoundError(f"Unknown embedder {representation!r}") from error
+
+    if type(use_cache) is not bool:
+        raise ConfigError("use_cache must be a bool")
+    if output is not None and not isinstance(output, (str, Path)):
+        raise TypeError("output must be a string, pathlib.Path, or None")
+    if checkpoint_path is not None and not isinstance(checkpoint_path, (str, Path)):
+        raise TypeError("checkpoint_path must be a string, pathlib.Path, or None")
+
+    structure_input = _coerce_structure_input(
+        input,
+        chain_id=chain_id,
+        model_index=model_index,
+    )
+    config = learned_registry.create_config(
+        info.representation_name,
+        output_mode=output_mode,
+    )
+    execution = StructuralExecutionConfig(device=device, precision=precision)
+
+    if info.model_descriptor is None:
+        raise ExecutionError(
+            f"Embedder '{representation}' has no registered structural model descriptor"
+        )
+
+    artifact = StructuralEmbedderRunner().run(
+        structure_input,
+        config=config,
+        model=info.model_descriptor,
+        checkpoint_path=checkpoint_path,
+        execution=execution,
+        use_artifact_cache=use_cache,
+    )
+    if output is not None:
+        artifact.save(Path(output))
+    return artifact
+
+
+__all__ = ["embed", "encode"]

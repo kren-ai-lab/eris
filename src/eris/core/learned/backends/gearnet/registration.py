@@ -7,6 +7,7 @@ from eris.core.learned.backends.gearnet.metadata import (
     GEARNET_EDGE_BACKEND_ID,
     GEARNET_EDGE_ENCODER_VERSION,
     GEARNET_EDGE_IMPLEMENTATION,
+    GEARNET_EDGE_MODEL_DESCRIPTOR,
     GEARNET_EDGE_REPRESENTATION_NAME,
 )
 from eris.core.learned.registry import BackendAvailability, EmbedderInfo, EmbedderRegistry
@@ -35,6 +36,7 @@ def register_gearnet_edge(registry: EmbedderRegistry) -> EmbedderInfo:
         implementation=GEARNET_EDGE_IMPLEMENTATION,
         encoder_version=GEARNET_EDGE_ENCODER_VERSION,
         config_type=GearNetEdgeConfig,
+        model_descriptor=GEARNET_EDGE_MODEL_DESCRIPTOR,
         backend_factory=_backend_factory,
         availability_probe=_availability_probe,
     )

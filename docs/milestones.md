@@ -425,7 +425,7 @@ is not required.
   - **Scope:** Execute canonical explicit representations with typed config and v2 output.
   - **Acceptance:** All ten names produce strict-valid round-trippable artifacts.
   - **Depends on:** M3.8 and M2.8.
-- [ ] **M6.3 — Implement `eris.embed()`**
+- [x] **M6.3 — Implement `eris.embed()`**
   - **Scope:** Execute learned backend/checkpoint/device/precision with v2 output.
   - **Acceptance:** Official-backend behavior/provenance matches M5; unavailable backends fail clearly.
   - **Depends on:** M5.5.

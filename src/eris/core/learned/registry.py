@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from eris.core.learned.checkpoints import StructuralModelDescriptor
 from eris.core.learned.config import StructuralEmbedderConfig
 from eris.core.learned.protocol import StructuralEmbedderBackend
 from eris.exceptions import ConfigError, ExecutionError
@@ -48,6 +49,7 @@ class EmbedderInfo:
     config_type: type[StructuralEmbedderConfig]
     backend_factory: BackendFactory = field(repr=False)
     availability_probe: AvailabilityProbe = field(repr=False)
+    model_descriptor: StructuralModelDescriptor | None = None
 
 
 def _implementation_path(instance: object) -> str:
@@ -69,6 +71,7 @@ class EmbedderRegistry:
         implementation: str,
         encoder_version: str,
         config_type: type[StructuralEmbedderConfig],
+        model_descriptor: StructuralModelDescriptor | None = None,
         backend_factory: BackendFactory,
         availability_probe: AvailabilityProbe,
     ) -> EmbedderInfo:
@@ -78,6 +81,10 @@ class EmbedderRegistry:
             config_type, StructuralEmbedderConfig
         ):
             raise TypeError("config_type must be StructuralEmbedderConfig or a subclass")
+        if model_descriptor is not None and not isinstance(
+            model_descriptor, StructuralModelDescriptor
+        ):
+            raise TypeError("model_descriptor must be a StructuralModelDescriptor or None")
 
         default_config = config_type(representation_name=representation_name)
         canonical_name = default_config.representation_name
@@ -108,6 +115,7 @@ class EmbedderRegistry:
             implementation=implementation,
             encoder_version=encoder_version,
             config_type=config_type,
+            model_descriptor=model_descriptor,
             backend_factory=backend_factory,
             availability_probe=availability_probe,
         )

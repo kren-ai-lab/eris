@@ -563,7 +563,7 @@ blocked = {'torch', 'torchdrug', 'torch_geometric', 'transformers'}
 loaded = sorted(blocked.intersection(sys.modules))
 if loaded:
     raise SystemExit(f'optional frameworks loaded: {loaded}')
-assert not hasattr(eris, 'embed')
+assert hasattr(eris, 'embed')
 assert not hasattr(eris, 'StructuralEmbedderRunner')
 """
 
