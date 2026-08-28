@@ -5,6 +5,7 @@ import typer
 import eris
 from eris.cli.cache import app as cache_app
 from eris.cli.discovery import app as discovery_app
+from eris.cli.embed import embed as embed_command
 from eris.cli.encode import encode as encode_command
 from eris.cli.export import app as torch_app
 
@@ -36,6 +37,7 @@ def main(
 # register subcommands
 app.add_typer(cache_app, name="cache")
 app.command("encode")(encode_command)
+app.command("embed")(embed_command)
 # app.add_typer(pack_app, name="pack")
 app.add_typer(info_app, name="info")
 app.add_typer(discovery_app)

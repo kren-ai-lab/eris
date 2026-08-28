@@ -439,7 +439,7 @@ is not required.
   - **Scope:** Implement `eris encode ...` from the Python API and canonical help/config.
   - **Acceptance:** CLI/API equivalent requests produce equivalent artifacts.
   - **Depends on:** M6.2 and M6.4.
-- [ ] **M6.6 — Implement CLI learned embedding**
+- [x] **M6.6 — Implement CLI learned embedding**
   - **Scope:** Implement `eris embed ...` with availability/checkpoint/device/precision.
   - **Acceptance:** Behavior matches `eris.embed()` and provenance is complete.
   - **Depends on:** M6.3 and M6.4.
