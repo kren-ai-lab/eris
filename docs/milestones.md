@@ -429,13 +429,13 @@ is not required.
   - **Scope:** Execute learned backend/checkpoint/device/precision with v2 output.
   - **Acceptance:** Official-backend behavior/provenance matches M5; unavailable backends fail clearly.
   - **Depends on:** M5.5.
-- [ ] **M6.4 — Implement CLI version and discovery hierarchy**
+- [x] **M6.4 — Implement CLI version and discovery hierarchy**
   - **Scope:** Implement exactly `eris --version`, `eris representations list`,
     `eris representations info <name>`, `eris embedders list`, and
     `eris embedders info <name>`.
   - **Acceptance:** Version/discovery match public APIs; no generic `eris list` is introduced.
   - **Depends on:** M6.1 and M1.2.
-- [ ] **M6.5 — Implement CLI explicit encoding**
+- [x] **M6.5 — Implement CLI explicit encoding**
   - **Scope:** Implement `eris encode ...` from the Python API and canonical help/config.
   - **Acceptance:** CLI/API equivalent requests produce equivalent artifacts.
   - **Depends on:** M6.2 and M6.4.
