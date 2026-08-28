@@ -11,6 +11,7 @@ from eris.cli.export import app as torch_app
 
 # from eris.cli.pack import app as pack_app
 from eris.cli.info_cmd import app as info_app
+from eris.cli.models import app as models_app
 
 app = typer.Typer(add_completion=False)
 
@@ -40,5 +41,6 @@ app.command("encode")(encode_command)
 app.command("embed")(embed_command)
 # app.add_typer(pack_app, name="pack")
 app.add_typer(info_app, name="info")
+app.add_typer(models_app, name="models")
 app.add_typer(discovery_app)
 app.add_typer(torch_app, name="export")

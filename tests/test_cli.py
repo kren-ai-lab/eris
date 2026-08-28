@@ -43,8 +43,14 @@ def test_cli_encode_uses_canonical_default_representation(tmp_path):
 
     info = runner.invoke(app, ["info", "show", str(tmp_path)])
     assert info.exit_code == 0
-    assert "representation: residue_distogram" in info.output
-    assert "type=matrix granularity=residue coordinate_source=ca" in info.output
+    assert "representation_name" in info.output
+    assert "residue_distogram" in info.output
+    assert "representation_type" in info.output
+    assert "matrix" in info.output
+    assert "granularity" in info.output
+    assert "residue" in info.output
+    assert "coordinate_source" in info.output
+    assert "ca" in info.output
 
 
 def test_cli_encode_help_no_longer_exposes_pre_release_options():

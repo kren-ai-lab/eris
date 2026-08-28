@@ -1,39 +1,124 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Annotated, Any, NoReturn
 
 import typer
+from rich.console import Console
+from rich.syntax import Syntax
+from rich.table import Table
+
+from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 
 app = typer.Typer(add_completion=False, help="Artifact inspection utilities.")
+console = Console(width=240)
+
+
+def _usage_error(message: str) -> NoReturn:
+    typer.echo(message, err=True)
+    raise typer.Exit(code=2)
+
+
+def _load_artifact(artifact_dir: Path) -> StructureArtifact:
+    try:
+        return StructureArtifact.load(artifact_dir, strict=True)
+    except ArtifactValidationError as error:
+        _usage_error(str(error))
+
+
+def _json(value: Any) -> Syntax:
+    return Syntax(
+        json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False),
+        "json",
+        word_wrap=True,
+    )
+
+
+def _section(title: str, rows: list[tuple[str, Any]]) -> None:
+    table = Table(title=title, show_header=False)
+    table.add_column("Field", style="bold cyan")
+    table.add_column("Value", no_wrap=True)
+    for key, value in rows:
+        if isinstance(value, (dict, list)):
+            table.add_row(key, _json(value))
+        else:
+            table.add_row(key, "" if value is None else str(value))
+    console.print(table)
+
+
+def _model_rows(model: dict[str, Any]) -> list[tuple[str, Any]]:
+    checkpoint = model.get("checkpoint")
+    rows: list[tuple[str, Any]] = [("architecture", model.get("architecture"))]
+    if isinstance(checkpoint, dict):
+        rows.extend(
+            [
+                ("checkpoint identifier", checkpoint.get("identifier")),
+                ("checkpoint revision", checkpoint.get("revision")),
+                ("checkpoint source", checkpoint.get("source")),
+                ("checkpoint sha256", checkpoint.get("sha256")),
+            ]
+        )
+    return rows
 
 
 @app.command()
 def show(
-    artifact_dir: Path = typer.Argument(..., exists=True, readable=True),
-    strict: bool = typer.Option(False, "--strict", help="Strictly enforce shapes/dtypes match data.npz"),
+    artifact_dir: Annotated[Path, typer.Argument(...)],
 ) -> None:
     """
-    Print artifact meta and validate schema.
+    Print canonical Artifact Schema v2 metadata after strict validation.
     """
-    from eris.core.artifacts import StructureArtifact
 
-    art = StructureArtifact.load(artifact_dir, validate=True, strict=strict)
+    artifact = _load_artifact(artifact_dir)
+    meta = artifact.meta
+    encoder = meta.get("encoder")
 
-    meta = art.meta
-    encoder = meta["encoder"]
-    typer.echo(f"OK | schema_version={meta.get('schema_version')}")
-    typer.echo(f"representation: {meta['representation_name']}")
-    typer.echo(
-        f"encoder: {encoder['implementation']} | version={encoder['version']}"
+    _section(
+        "Artifact",
+        [
+            ("schema_version", meta.get("schema_version")),
+            ("representation_name", meta.get("representation_name")),
+            ("representation_family", meta.get("representation_family")),
+            ("representation_type", meta.get("representation_type")),
+            ("granularity", meta.get("granularity")),
+            ("coordinate_source", meta.get("coordinate_source")),
+        ],
     )
-    typer.echo(
-        f"type={meta['representation_type']} granularity={meta['granularity']} "
-        f"coordinate_source={meta['coordinate_source']}"
+    _section("Input", [("input", meta.get("input"))])
+    if isinstance(encoder, dict):
+        _section(
+            "Encoder",
+            [
+                ("implementation", encoder.get("implementation")),
+                ("version", encoder.get("version")),
+            ],
+        )
+    model = meta.get("model")
+    if isinstance(model, dict):
+        _section("Model", _model_rows(model))
+    _section(
+        "Metadata",
+        [
+            ("parameters", meta.get("parameters")),
+            ("outputs", meta.get("outputs")),
+            ("feature_keys", meta.get("feature_keys")),
+            ("shapes", meta.get("shapes")),
+            ("dtypes", meta.get("dtypes")),
+            ("counts", meta.get("counts")),
+            ("provenance", meta.get("provenance")),
+        ],
     )
-    typer.echo(f"input: {meta.get('input')}")
-    typer.echo(f"counts: {meta.get('counts')}")
-    typer.echo(f"keys: {list(art.data.keys())}")
+    _section("Data", [("keys", list(artifact.data))])
 
-    typer.echo("shapes:")
-    for k, shp in (meta.get('shapes') or {}).items():
-        typer.echo(f"  - {k}: {shp}")
+
+@app.command()
+def validate(
+    artifact_dir: Annotated[Path, typer.Argument(...)],
+) -> None:
+    """
+    Validate a canonical Artifact Schema v2 directory.
+    """
+
+    artifact = _load_artifact(artifact_dir)
+    typer.echo(f"Artifact is valid (Schema v2): {artifact.meta['representation_name']}")
