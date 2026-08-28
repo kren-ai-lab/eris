@@ -436,6 +436,6 @@ def test_registry_has_only_internal_package_exports():
 
     assert learned.EmbedderRegistry is EmbedderRegistry
     assert learned.learned_registry is learned_registry
-    assert not hasattr(eris, "list_embedders")
+    assert hasattr(eris, "list_embedders")
     assert not hasattr(eris, "get_embedder")
-    assert not hasattr(eris, "get_embedder_info")
+    assert hasattr(eris, "get_embedder_info")

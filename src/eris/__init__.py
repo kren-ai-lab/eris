@@ -2,7 +2,24 @@ from __future__ import annotations
 
 from importlib.metadata import version as distribution_version
 
-__all__ = ["__version__"]
+from eris.api import encode
+from eris.discovery import (
+    get_embedder_info,
+    get_representation_info,
+    list_embedders,
+    list_representations,
+)
+from eris.exceptions import RepresentationNotFoundError
+
+__all__ = [
+    "RepresentationNotFoundError",
+    "__version__",
+    "encode",
+    "get_embedder_info",
+    "get_representation_info",
+    "list_embedders",
+    "list_representations",
+]
 
 __version__ = distribution_version("eris")
 

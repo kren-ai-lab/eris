@@ -410,18 +410,18 @@ is not required.
 
 ## M6 — Python API and CLI
 
-**Status:** `NOT STARTED`
+**Status:** `IN PROGRESS`
 
 **Objective:** Expose a coherent public interface over stable explicit and learned contracts.
 
 ### Work units
 
-- [ ] **M6.1 — Implement stable representation/embedder discovery APIs**
+- [x] **M6.1 — Implement stable representation/embedder discovery APIs**
   - **Scope:** Implement `eris.list_representations()`, `eris.get_representation_info()`,
     `eris.list_embedders()`, and `eris.get_embedder_info()`.
   - **Acceptance:** Discovery reports canonical metadata and lazy learned availability.
   - **Depends on:** M5 gate and M2.8.
-- [ ] **M6.2 — Implement `eris.encode()`**
+- [x] **M6.2 — Implement `eris.encode()`**
   - **Scope:** Execute canonical explicit representations with typed config and v2 output.
   - **Acceptance:** All ten names produce strict-valid round-trippable artifacts.
   - **Depends on:** M3.8 and M2.8.
