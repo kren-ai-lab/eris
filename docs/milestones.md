@@ -443,7 +443,7 @@ is not required.
   - **Scope:** Implement `eris embed ...` with availability/checkpoint/device/precision.
   - **Acceptance:** Behavior matches `eris.embed()` and provenance is complete.
   - **Depends on:** M6.3 and M6.4.
-- [ ] **M6.7 — Implement artifact info/validation and auxiliary commands**
+- [x] **M6.7 — Implement artifact info/validation and auxiliary commands**
   - **Scope:** Implement artifact inspection/validation plus `eris models ...`,
     `eris cache ...`, and `eris info`, exposing only implemented operations.
   - **Acceptance:** Commands consume public contracts and validate v2 artifacts.

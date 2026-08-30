@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from enum import Enum
 from pathlib import Path
 from typing import NoReturn
 
@@ -9,13 +10,18 @@ from platformdirs import user_cache_dir
 from rich.console import Console
 from rich.table import Table
 
-from eris.core.cache import default_cache_dir
 from eris.core.learned.backends.gearnet.metadata import GEARNET_EDGE_CHECKPOINT_DESCRIPTOR
 from eris.core.learned.checkpoint_cache import CheckpointCache
 from eris.exceptions import CacheError
 
 app = typer.Typer(add_completion=False, help="Cache utilities.")
 console = Console()
+
+
+class CacheClearTarget(str, Enum):
+    ARTIFACTS = "artifacts"
+    CHECKPOINTS = "checkpoints"
+    ALL = "all"
 
 
 def _usage_error(message: str) -> NoReturn:
@@ -47,17 +53,105 @@ def _official_checkpoint_cached(cache_root: Path) -> bool:
     return checkpoint is not None
 
 
+def _ensure_cache_child(cache_root: Path, target: Path) -> None:
+    cache_root_resolved = cache_root.resolve(strict=False)
+    target_resolved = target.resolve(strict=False)
+    if not target_resolved.is_relative_to(cache_root_resolved):
+        raise CacheError(f"Refusing to clear cache namespace outside Eris cache root: {target}")
+
+
+def _remove_cache_namespace(cache_root: Path, target: Path, label: str) -> bool:
+    if not target.exists():
+        return False
+    if not target.is_dir():
+        raise CacheError(f"Expected Eris {label} cache namespace to be a directory: {target}")
+    _ensure_cache_child(cache_root, target)
+    try:
+        shutil.rmtree(target)
+    except OSError as error:
+        raise CacheError(f"Unable to clear Eris {label} cache at {target}: {error}") from error
+    return True
+
+
+def _target_namespaces(cache_root: Path, target: CacheClearTarget) -> list[tuple[str, Path]]:
+    artifact_namespace = ("artifact", cache_root / "v2")
+    checkpoint_namespace = ("checkpoint", cache_root / "checkpoints")
+    if target is CacheClearTarget.ARTIFACTS:
+        return [artifact_namespace]
+    if target is CacheClearTarget.CHECKPOINTS:
+        return [checkpoint_namespace]
+    return [artifact_namespace, checkpoint_namespace]
+
+
+def _remove_empty_cache_root(cache_root: Path) -> bool:
+    if not cache_root.is_dir():
+        return False
+    try:
+        next(cache_root.iterdir())
+    except StopIteration:
+        try:
+            cache_root.rmdir()
+        except OSError as error:
+            raise CacheError(
+                f"Unable to remove empty Eris cache root at {cache_root}: {error}"
+            ) from error
+        return True
+    return False
+
+
 @app.command("clear")
-def clear_cache() -> None:
+def clear_cache(
+    target: CacheClearTarget = typer.Option(  # noqa: B008
+        ...,
+        "--target",
+        help=(
+            "Cache namespace to clear: artifacts=cached representation results; "
+            "checkpoints=learned model checkpoint assets; all=both known namespaces."
+        ),
+    ),
+    yes: bool = typer.Option(  # noqa: B008
+        False,
+        "--yes",
+        "-y",
+        help="Confirm cache deletion without an interactive prompt.",
+    ),
+) -> None:
     """
-    Remove Eris disk cache directory.
+    Clear one known Eris cache namespace.
     """
-    cache_dir = default_cache_dir()
-    if cache_dir.exists():
-        shutil.rmtree(cache_dir)
-        typer.echo(f"Cache cleared: {cache_dir}")
+    cache_root = _cache_root()
+    if not yes and not typer.confirm(
+        f"Clear Eris {target.value} cache? This cannot be undone.",
+        default=False,
+    ):
+        typer.echo("Cache clear cancelled.")
+        return
+
+    if not cache_root.exists():
+        typer.echo(f"No Eris cache root exists; nothing to clear for target '{target.value}'.")
+        return
+    if not cache_root.is_dir():
+        _usage_error(f"Eris cache root is not a directory: {cache_root}")
+
+    try:
+        removed = [
+            label
+            for label, namespace in _target_namespaces(cache_root, target)
+            if _remove_cache_namespace(cache_root, namespace, label)
+        ]
+        if target is CacheClearTarget.ALL:
+            root_removed = _remove_empty_cache_root(cache_root)
+        else:
+            root_removed = False
+    except CacheError as error:
+        _usage_error(str(error))
+
+    if removed:
+        typer.echo(f"Cleared Eris {target.value} cache namespaces: {', '.join(removed)}.")
     else:
-        typer.echo(f"Cache directory does not exist: {cache_dir}")
+        typer.echo(f"No Eris {target.value} cache namespaces were present.")
+    if root_removed:
+        typer.echo("Removed empty Eris cache root.")
 
 
 @app.command("info")
