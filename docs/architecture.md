@@ -195,8 +195,8 @@ refreshing only the current structure locator.
 The production learned Registry contains exactly one v0.1 backend, `gearnet_edge`. Its static
 metadata and configuration are registered during core import, while dependency probing, factory
 construction, and all Torch/TorchDrug imports remain lazy. The M4 fake backend exists only in
-tests. `eris.embed` and the public learned CLI are not yet implemented; those public entrypoints
-belong to M6.
+tests. `eris.embed` and the public learned CLI are implemented public M6 entrypoints over this
+internal runtime.
 
 ### Provenance
 
@@ -207,9 +207,9 @@ provenance, including the checkpoint SHA-256.
 Artifact Schema v2 is implemented and is the canonical active runtime artifact contract. Its
 detailed executable contract is documented in `docs/artifact_schema_v2.md`.
 
-## Target Python API
+## Public Python API
 
-The high-level v0.1 target is:
+The high-level v0.1 M6 public API is:
 
 - `eris.encode(...)`
 - `eris.embed(...)`
@@ -218,12 +218,13 @@ The high-level v0.1 target is:
 - `eris.list_embedders()`
 - `eris.get_embedder_info(...)`
 
-Low-level APIs may coexist. These high-level functions are target contracts and are not all
-implemented today.
+These high-level functions are the public user-facing contract. Low-level APIs may coexist for
+internal implementation and tests, but users should not need Registry classes, encoder classes,
+learned runners, backend descriptors, or cache classes for README-level workflows.
 
-## Target CLI
+## Public CLI
 
-The conceptual v0.1 CLI is:
+The M6 public CLI hierarchy is:
 
 - `eris --version`
 - `eris representations ...`
@@ -236,8 +237,8 @@ The conceptual v0.1 CLI is:
 - `eris cache ...`
 - `eris info`
 
-This target differs from the currently implemented command tree and must not be interpreted as
-current CLI availability.
+The historical `eris export ...` tree may still exist before M7, but export, batch, pack, datasets,
+and downstream format workflows are not part of the M6 gate or README quickstart contract.
 
 ## Batch and pack contract
 

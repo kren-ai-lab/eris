@@ -410,7 +410,7 @@ is not required.
 
 ## M6 — Python API and CLI
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE`
 
 **Objective:** Expose a coherent public interface over stable explicit and learned contracts.
 
@@ -448,15 +448,16 @@ is not required.
     `eris cache ...`, and `eris info`, exposing only implemented operations.
   - **Acceptance:** Commands consume public contracts and validate v2 artifacts.
   - **Depends on:** M6.4, M3.6, and M4.4.
-- [ ] **M6.8 — Add Python API/CLI contract tests**
+- [x] **M6.8 — Add Python API/CLI contract tests**
   - **Scope:** Cover discovery, encode/embed, hierarchy, version, validation, and optional failures.
   - **Acceptance:** README-level operations execute and API/CLI outputs agree.
   - **Depends on:** M6.5, M6.6, and M6.7.
 
 ### M6 gate
 
-README-level Python and CLI operations work over explicit and learned representations without
-internal implementation knowledge and use exactly the frozen command hierarchy.
+**Satisfied:** README-level Python and CLI operations work over explicit and learned
+representations without internal implementation knowledge and use exactly the frozen command
+hierarchy.
 
 ## M7 — Batch, pack, datasets and export
 

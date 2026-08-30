@@ -424,7 +424,7 @@ silently satisfy a request.
 
 ## Encode CLI boundary
 
-`eris encode single` saves the strict-valid Schema v2 artifact returned by the encoder. Historical
+`eris encode` saves the strict-valid Schema v2 artifact returned by the public API. Historical
 `--node-emb` and `--node-emb-key` options were removed because they mutated payload arrays after
-schema construction. Learned embeddings belong to the later `eris embed` learned-representation
-path; they are not injected into explicit artifacts.
+schema construction. Learned embeddings use the separate `eris embed` learned-representation path;
+they are not injected into explicit artifacts.
