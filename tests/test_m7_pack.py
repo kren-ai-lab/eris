@@ -43,6 +43,22 @@ def _file_bytes(root: Path) -> dict[str, bytes]:
     }
 
 
+def _resolve_portable(anchor: Path, value: str) -> Path:
+    return (anchor / Path(*value.split("/"))).resolve()
+
+
+def _assert_row_paths_resolve(index_path: Path, row: dict[str, str], artifact_dir: Path) -> None:
+    assert _resolve_portable(index_path.parent, row["artifact_dir"]) == artifact_dir.resolve()
+    assert (
+        _resolve_portable(index_path.parent, row["meta_path"])
+        == (artifact_dir / "meta.json").resolve()
+    )
+    assert not Path(row["artifact_dir"]).is_absolute()
+    assert not Path(row["meta_path"]).is_absolute()
+    assert "\\" not in row["artifact_dir"]
+    assert "\\" not in row["meta_path"]
+
+
 def _save_explicit_artifact(
     target: Path,
     *,
@@ -206,8 +222,8 @@ def test_pack_one_explicit_artifact_uses_relative_portable_paths_and_metadata(
     assert payload == [
         {
             "id": "protein_001",
-            "artifact_dir": "protein_001/residue_point_cloud",
-            "meta_path": "protein_001/residue_point_cloud/meta.json",
+            "artifact_dir": "artifacts/protein_001/residue_point_cloud",
+            "meta_path": "artifacts/protein_001/residue_point_cloud/meta.json",
             "representation_name": "residue_point_cloud",
             "representation_family": "explicit",
             "representation_type": "cloud",
@@ -217,6 +233,7 @@ def test_pack_one_explicit_artifact_uses_relative_portable_paths_and_metadata(
             "shape_summary": '{"pos":[1,3]}',
         }
     ]
+    _assert_row_paths_resolve(out, payload[0], artifact_dir)
 
 
 def test_pack_supports_single_artifact_root_without_source_filename_identity(
@@ -229,8 +246,53 @@ def test_pack_supports_single_artifact_root_without_source_filename_identity(
     rows = pack_artifacts(artifact_dir, out)
 
     assert rows[0].id == "single-artifact"
-    assert rows[0].artifact_dir == "."
-    assert rows[0].meta_path == "meta.json"
+    assert rows[0].artifact_dir == "single-artifact"
+    assert rows[0].meta_path == "single-artifact/meta.json"
+
+
+def test_pack_paths_are_relative_to_index_parent_for_sibling_output(
+    tmp_path: Path,
+) -> None:
+    artifact_dir = tmp_path / "artifacts" / "sample" / "residue_point_cloud"
+    _save_explicit_artifact(artifact_dir)
+    index_path = tmp_path / "index.csv"
+
+    pack_artifacts(tmp_path / "artifacts", index_path)
+
+    row = _read_index(index_path)[0]
+    assert row["artifact_dir"] == "artifacts/sample/residue_point_cloud"
+    assert row["meta_path"] == "artifacts/sample/residue_point_cloud/meta.json"
+    _assert_row_paths_resolve(index_path, row, artifact_dir)
+
+
+def test_pack_paths_are_relative_to_index_parent_when_output_is_inside_root(
+    tmp_path: Path,
+) -> None:
+    artifact_dir = tmp_path / "artifacts" / "sample" / "residue_point_cloud"
+    _save_explicit_artifact(artifact_dir)
+    index_path = tmp_path / "artifacts" / "index.csv"
+
+    pack_artifacts(tmp_path / "artifacts", index_path)
+
+    row = _read_index(index_path)[0]
+    assert row["artifact_dir"] == "sample/residue_point_cloud"
+    assert row["meta_path"] == "sample/residue_point_cloud/meta.json"
+    _assert_row_paths_resolve(index_path, row, artifact_dir)
+
+
+def test_pack_paths_are_relative_to_index_parent_when_output_is_elsewhere(
+    tmp_path: Path,
+) -> None:
+    artifact_dir = tmp_path / "artifacts" / "sample" / "residue_point_cloud"
+    _save_explicit_artifact(artifact_dir)
+    index_path = tmp_path / "collections" / "index.csv"
+
+    pack_artifacts(tmp_path / "artifacts", index_path)
+
+    row = _read_index(index_path)[0]
+    assert row["artifact_dir"] == "../artifacts/sample/residue_point_cloud"
+    assert row["meta_path"] == "../artifacts/sample/residue_point_cloud/meta.json"
+    _assert_row_paths_resolve(index_path, row, artifact_dir)
 
 
 def test_pack_multiple_artifacts_recursive_discovery_and_deterministic_order(
@@ -245,9 +307,9 @@ def test_pack_multiple_artifacts_recursive_discovery_and_deterministic_order(
     rows = pack_artifacts(root, out)
 
     assert [row.artifact_dir for row in rows] == [
-        "a/residue_point_cloud",
-        "b/residue_point_cloud",
-        "nested/c/residue_point_cloud",
+        "artifacts/a/residue_point_cloud",
+        "artifacts/b/residue_point_cloud",
+        "artifacts/nested/c/residue_point_cloud",
     ]
     assert [row.id for row in rows] == ["a", "b", "nested/c"]
 
@@ -480,7 +542,7 @@ def test_cli_pack_execution_and_clean_error(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert "Packed 1 artifacts" in result.output
-    assert _read_index(out)[0]["artifact_dir"] == "sample/residue_point_cloud"
+    assert _read_index(out)[0]["artifact_dir"] == "artifacts/sample/residue_point_cloud"
 
     missing = runner.invoke(app, ["pack", str(tmp_path / "missing"), "--out", str(out)])
     assert missing.exit_code == 2
@@ -536,3 +598,4 @@ def test_m7_2_batch_output_can_be_packed_without_batch_results_manifest(
     assert [(row.id, row.representation_name) for row in rows] == [
         ("protein", "residue_contact_map")
     ]
+    assert rows[0].artifact_dir == "artifacts/protein/residue_contact_map"

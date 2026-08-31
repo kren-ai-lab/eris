@@ -72,6 +72,14 @@ def _posix_relative(path: Path, root: Path) -> str:
     return relative.as_posix()
 
 
+def _posix_locator(path: Path, anchor: Path) -> str:
+    relative = os.path.relpath(
+        path.resolve(strict=False),
+        start=anchor.resolve(strict=False),
+    )
+    return Path(relative).as_posix()
+
+
 def _meta_path_for(relative_artifact_dir: str) -> str:
     if relative_artifact_dir == ".":
         return "meta.json"
@@ -136,7 +144,7 @@ def _candidate_artifact_dirs(root: Path) -> list[Path]:
     return sorted(candidates, key=lambda item: _posix_relative(item, root))
 
 
-def _row_from_artifact(root: Path, artifact_dir: Path) -> PackedIndexRow:
+def _row_from_artifact(root: Path, locator_root: Path, artifact_dir: Path) -> PackedIndexRow:
     try:
         artifact = StructureArtifact.load(artifact_dir, strict=True)
     except ArtifactValidationError as error:
@@ -146,7 +154,7 @@ def _row_from_artifact(root: Path, artifact_dir: Path) -> PackedIndexRow:
 
     meta = artifact.meta
     representation_name = meta["representation_name"]
-    relative_artifact_dir = _posix_relative(artifact_dir, root)
+    relative_artifact_dir = _posix_locator(artifact_dir, locator_root)
     return PackedIndexRow(
         id=_artifact_id(
             artifact_dir,
@@ -229,10 +237,12 @@ def pack_artifacts(
     serialization succeed.
     """
     root = _ensure_root(artifact_root)
+    output = Path(output_path)
+    locator_root = output.parent
     candidates = _candidate_artifact_dirs(root)
-    rows = [_row_from_artifact(root, candidate) for candidate in candidates]
-    _validate_index_rows(rows, root)
-    _write_index_safely(Path(output_path), rows)
+    rows = [_row_from_artifact(root, locator_root, candidate) for candidate in candidates]
+    _validate_index_rows(rows, locator_root)
+    _write_index_safely(output, rows)
     return rows
 
 

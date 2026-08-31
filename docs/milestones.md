@@ -491,6 +491,9 @@ hierarchy.
   - **Acceptance:** Index is deterministic; `pack` never rewrites `data.npz`, stacks arrays,
     creates aggregate payloads, or pads/truncates data.
   - **Depends on:** M7.3 and M3.6.
+  - **Completion:** `artifact_dir` and `meta_path` are serialized as portable POSIX paths
+    relative to the `index.csv` parent so downstream consumers can resolve the index without
+    hidden artifact-root state.
 - [ ] **M7.5 — Align `ErisFolderDataset` with the canonical packed index**
   - **Scope:** Load samples from M7.4 while preserving paths, IDs, metadata, and learned mappings.
   - **Acceptance:** Indexing is stable; duplicate/missing IDs fail; samples remain traceable.
