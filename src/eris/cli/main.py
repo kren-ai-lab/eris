@@ -3,6 +3,7 @@ from __future__ import annotations
 import typer
 
 import eris
+from eris.cli.batch import app as batch_app
 from eris.cli.cache import app as cache_app
 from eris.cli.discovery import app as discovery_app
 from eris.cli.embed import embed as embed_command
@@ -36,6 +37,7 @@ def main(
 
 # register subcommands
 app.add_typer(cache_app, name="cache")
+app.add_typer(batch_app, name="batch")
 app.command("encode")(encode_command)
 app.command("embed")(embed_command)
 app.command("pack")(pack_command)

@@ -513,7 +513,7 @@ hierarchy.
   - **Acceptance:** Topology/attributes align; missing PyG is optional; matrix/grid are never
     converted artificially into graphs.
   - **Depends on:** M7.5 and M7.6.
-- [ ] **M7.9 — Complete batch/pack/export CLI workflow**
+- [x] **M7.9 — Complete batch/pack/export CLI workflow**
   - **Scope:** Connect batch, canonical `eris pack`, and `eris export ...` to public APIs/CLI.
   - **Acceptance:** Workflow needs no manual metadata edits and never hides failed tasks.
   - **Depends on:** M7.2, M7.4, M7.7, M7.8, and M6.8.

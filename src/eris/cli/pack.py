@@ -5,7 +5,8 @@ from typing import Annotated, NoReturn
 
 import typer
 
-from eris.pipelines.pack import PackIndexError, pack_artifacts
+import eris
+from eris.pipelines.pack import PackIndexError
 
 
 def _usage_error(message: str) -> NoReturn:
@@ -22,7 +23,7 @@ def pack(
     """
 
     try:
-        rows = pack_artifacts(artifact_root, out)
+        rows = eris.pack_artifacts(artifact_root, out)
     except (PackIndexError, OSError) as error:
         _usage_error(str(error))
 
