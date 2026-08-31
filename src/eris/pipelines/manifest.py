@@ -307,48 +307,6 @@ class BatchResultRow(BaseManifestRow):
         }
 
 
-@dataclass
-class ArtifactManifestRow(BaseManifestRow):
-    """Legacy internal artifact manifest row retained until M7.3 migration."""
-
-    artifact_dir: str
-
-    field_order: ClassVar[tuple[str, ...]] = ("id", "artifact_dir")
-
-    def __post_init__(self) -> None:
-        self.id = _required_string(self.id, field="id")
-        self.artifact_dir = _required_text_path(self.artifact_dir, field="artifact_dir")
-
-    @classmethod
-    def from_dict(
-        cls, d: Mapping[str, Any], *, row_index: int | None = None
-    ) -> ArtifactManifestRow:
-        sid = _raw_field(
-            d,
-            "id",
-            aliases=("sample_id",),
-            row_index=row_index,
-            normalizer=_required_string,
-        )
-        artifact_dir = _raw_field(
-            d,
-            "artifact_dir",
-            aliases=("path", "input"),
-            row_index=row_index,
-            normalizer=_required_text_path,
-        )
-        if sid is None:
-            location = _row_location(row_index)
-            raise ManifestValidationError(f"{location}: field 'id' is required")
-        if artifact_dir is None:
-            location = _row_location(row_index)
-            raise ManifestValidationError(f"{location}: field 'artifact_dir' is required")
-        return cls(id=sid, artifact_dir=artifact_dir)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"id": self.id, "artifact_dir": self.artifact_dir}
-
-
 T = TypeVar("T", bound=BaseManifestRow)
 
 
@@ -465,7 +423,6 @@ def write_manifest(path: Path, rows: list[BaseManifestRow]) -> None:
 
 
 __all__ = [
-    "ArtifactManifestRow",
     "BaseManifestRow",
     "BatchResultRow",
     "ManifestValidationError",

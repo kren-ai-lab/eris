@@ -478,7 +478,7 @@ hierarchy.
     completed tasks.
   - **Acceptance:** Failures do not corrupt outputs and config changes prevent invalid reuse.
   - **Depends on:** M7.1, M6.2, and M6.3.
-- [ ] **M7.3 — Reconcile historical batch/index consumers with v2**
+- [x] **M7.3 — Reconcile historical batch/index consumers with v2**
   - **Scope:** Move internal readers/writers to canonical manifest/v2 contracts; reject ambiguity.
   - **Acceptance:** Consumers share one contract without public pre-release compatibility promises.
   - **Depends on:** M7.1 and M3.7.

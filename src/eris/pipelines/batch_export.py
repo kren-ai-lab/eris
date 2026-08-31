@@ -1,179 +1,164 @@
 from __future__ import annotations
 
 import logging
-logger = logging.getLogger(__name__)
-
-import csv
-import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from eris.core.registry import get_encoder
-from eris.core.types import StructureInput
+from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.export import save_artifact_to_pyg, save_artifact_to_torch
-from eris.pipelines.manifest import read_manifest, ArtifactManifestRow
+from eris.pipelines.manifest import BatchResultRow, ManifestValidationError, read_manifest
 
-def batch_encode(
-    manifest_path: Path,
-    out: Path,
-    *,
-    format: str = "torch",
-    overwrite: bool = False,
-    fail_fast: bool = False,
-    prefer: str,
-    device: Optional[str],
-    matrix_as_channel: bool,
-) -> Dict[str, int]:
-    """
+logger = logging.getLogger(__name__)
 
-    """
-    rows = read_manifest(manifest_path, ArtifactManifestRow)
-    out.mkdir(parents=True, exist_ok=True)
-    # out_manifest_path = out / "artifact_manifest.csv"
-    # out_manifest_rows = []
 
-    stats = {"tasks": 0, "ok": 0, "failed": 0, "skipped": 0}
+@dataclass(frozen=True)
+class _SuccessfulBatchArtifact:
+    row: BatchResultRow
+    artifact_dir: Path
+    artifact: StructureArtifact
 
-    if format == "torch":
-        exporter = save_artifact_to_torch
-        out_name = "data.pt"
-    elif format.lower() in ["pyg", "pytorchgeometric", "geometric"]:
-        exporter = save_artifact_to_pyg
-        out_name = "data_pyg.pt"
 
-    for row in rows:
-        outdir = out / row.id
-        data_npz = outdir / out_name
+def _exporter_for(format: str):
+    normalized = format.lower()
+    if normalized == "torch":
+        return save_artifact_to_torch, "data.pt"
+    if normalized in {"pyg", "pytorchgeometric", "geometric"}:
+        return save_artifact_to_pyg, "data_pyg.pt"
+    raise ValueError("format must be one of: 'torch', 'pyg'")
 
-        logger.debug("Processing input", 
-                extra={
-                    "artifact_id": row.id,
-                    "source": str(row.artifact_dir)})
 
-        stats["tasks"] += 1
-        
-        if not overwrite and data_npz.exists():
-            stats["skipped"] += 1
+def _row_prefix(index: int) -> str:
+    return f"row {index}"
 
-            logger.debug(
-                "Skipping existing torch/pyg data",
-                extra={
-                    "input_id": row.id,
-                }
+
+def _load_successful_artifacts(
+    rows: list[BatchResultRow],
+) -> tuple[list[_SuccessfulBatchArtifact], int]:
+    successes: list[_SuccessfulBatchArtifact] = []
+    failed_rows = 0
+    seen_results: dict[tuple[str, str], int] = {}
+    seen_artifact_dirs: dict[Path, int] = {}
+
+    for index, row in enumerate(rows, start=1):
+        result_key = (row.id, row.representation_name)
+        if result_key in seen_results:
+            first = seen_results[result_key]
+            raise ManifestValidationError(
+                f"{_row_prefix(index)}: duplicate result for id={row.id!r} "
+                f"and representation_name={row.representation_name!r} "
+                f"first seen at row {first}"
             )
+        seen_results[result_key] = index
 
+        if row.status == "failed":
+            failed_rows += 1
             continue
 
-        try:
-            exporter(row.artifact_dir, out_path=out, prefer=prefer, device=device, matrix_as_channel=matrix_as_channel)
-
-        except Exception:
-            logger.exception(
-                "Encoding failed",
-                extra={
-                    "input_id": row.id,
-                    "source": str(row.artifact_dir)
-                }
+        if row.artifact_dir is None:
+            raise ManifestValidationError(
+                f"{_row_prefix(index)}: success row requires artifact_dir"
             )
 
-            stats["failed"] += 1
-            if fail_fast:
-                raise
+        artifact_dir = Path(row.artifact_dir)
+        artifact_dir_key = artifact_dir.resolve(strict=False)
+        if artifact_dir_key in seen_artifact_dirs:
+            first = seen_artifact_dirs[artifact_dir_key]
+            raise ManifestValidationError(
+                f"{_row_prefix(index)}: duplicate artifact_dir {str(artifact_dir)!r} "
+                f"first seen at row {first}"
+            )
+        seen_artifact_dirs[artifact_dir_key] = index
 
+        try:
+            artifact = StructureArtifact.load(artifact_dir, strict=True)
+        except (ArtifactValidationError, OSError, ValueError) as error:
+            raise ManifestValidationError(
+                f"{_row_prefix(index)}: artifact_dir must contain a strict-valid "
+                f"Artifact Schema v2 artifact: {artifact_dir}"
+            ) from error
+
+        meta = artifact.meta
+        actual_name = meta.get("representation_name")
+        actual_family = meta.get("representation_family")
+        if actual_name != row.representation_name:
+            raise ManifestValidationError(
+                f"{_row_prefix(index)}: result representation_name "
+                f"{row.representation_name!r} does not match artifact "
+                f"{actual_name!r}"
+            )
+        if actual_family != row.representation_family:
+            raise ManifestValidationError(
+                f"{_row_prefix(index)}: result representation_family "
+                f"{row.representation_family!r} does not match artifact "
+                f"{actual_family!r}"
+            )
+
+        successes.append(
+            _SuccessfulBatchArtifact(row=row, artifact_dir=artifact_dir, artifact=artifact)
+        )
+
+    return successes, failed_rows
 
 
 def batch_export(
     manifest_path: Path,
-    out: Optional[Path] = None,
+    out: Path | None = None,
     *,
     format: str = "torch",
     overwrite: bool = False,
     fail_fast: bool = False,
     prefer: str = "grid_or_graph",
-    device: Optional[str] = None,
+    device: str | None = None,
     matrix_as_channel: bool = True,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """
-    Batch export of previously encoded artifacts.
+    Batch export previously encoded successful artifacts from a canonical M7 result manifest.
 
-    Parameters
-    ----------
-    manifest_path
-        Manifest of artifacts (id, artifact_dir).
-    out
-        Optional output root directory. If None, saves next to each artifact.
-    format
-        "torch" or "pyg".
-    overwrite
-        Whether to overwrite existing exported files.
-    fail_fast
-        If True, raise immediately on first failure.
-    prefer, device, matrix_as_channel
-        Forwarded to exporter.
+    ``manifest_path`` must use ``BatchResultRow`` fields. Failed rows are counted explicitly
+    and never treated as artifacts. Successful rows must point to strict-valid Artifact
+    Schema v2 directories whose representation identity matches the result row.
     """
-    rows = read_manifest(manifest_path, ArtifactManifestRow)
-
-    if format.lower() == "torch":
-        exporter = save_artifact_to_torch
-        out_name = "data.pt"
-    elif format.lower() in {"pyg", "pytorchgeometric", "geometric"}:
-        exporter = save_artifact_to_pyg
-        out_name = "data_pyg.pt"
-    else:
-        raise ValueError("format must be one of: 'torch', 'pyg'")
+    exporter, out_name = _exporter_for(format)
+    rows = read_manifest(manifest_path, BatchResultRow)
+    successful_artifacts, failed_rows = _load_successful_artifacts(rows)
 
     if out is not None:
         out.mkdir(parents=True, exist_ok=True)
-        out_manifest_path = out / "export_manifest.csv"
-    else:
-        out_manifest_path = None
 
-    out_manifest_rows = []
-    stats = {"tasks": 0, "ok": 0, "failed": 0, "skipped": 0}
+    stats = {"tasks": len(rows), "ok": 0, "failed": failed_rows, "skipped": 0}
 
-    for row in rows:
-        artifact_dir = Path(row.artifact_dir)
-
-        if out is None:
-            outdir = artifact_dir
-        else:
-            outdir = out / row.id
-
+    for item in successful_artifacts:
+        row = item.row
+        artifact_dir = item.artifact_dir
+        outdir = artifact_dir if out is None else out / row.id / row.representation_name
         out_path = outdir / out_name
 
         logger.debug(
             "Processing artifact export",
             extra={
                 "artifact_id": row.id,
+                "representation_name": row.representation_name,
+                "representation_family": row.representation_family,
                 "artifact_dir": str(artifact_dir),
                 "out_path": str(out_path),
                 "format": format,
             },
         )
 
-        stats["tasks"] += 1
-
         if not overwrite and out_path.exists():
             stats["skipped"] += 1
-
             logger.debug(
                 "Skipping existing exported artifact",
                 extra={
                     "artifact_id": row.id,
+                    "representation_name": row.representation_name,
                     "out_path": str(out_path),
                 },
             )
-
-            out_manifest_rows.append({
-                "id": row.id,
-                "artifact_dir": str(out_path),
-            })
             continue
 
         try:
             outdir.mkdir(parents=True, exist_ok=True)
-
             exporter(
                 artifact_dir,
                 out_path=out_path,
@@ -181,36 +166,23 @@ def batch_export(
                 device=device,
                 matrix_as_channel=matrix_as_channel,
             )
-
             stats["ok"] += 1
-
-            out_manifest_rows.append({
-                "id": row.id,
-                "artifact_dir": str(out_path),
-            })
-
         except Exception:
             logger.exception(
                 "Artifact export failed",
                 extra={
                     "artifact_id": row.id,
+                    "representation_name": row.representation_name,
                     "artifact_dir": str(artifact_dir),
                     "out_path": str(out_path),
                     "format": format,
                 },
             )
-
             stats["failed"] += 1
             if fail_fast:
                 raise
 
-    if out_manifest_path is not None:
-        with open(out_manifest_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["id", "artifact_dir"])
-            writer.writeheader()
-            for row in out_manifest_rows:
-                writer.writerow(row)
-
     return stats
 
 
+__all__ = ["batch_export"]
