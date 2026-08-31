@@ -502,7 +502,7 @@ hierarchy.
   - **Scope:** Define explicit behavior for graph, matrix, cloud, grid, and learned outputs.
   - **Acceptance:** Compatible samples collate deterministically; incompatibilities fail clearly.
   - **Depends on:** M7.5.
-- [ ] **M7.7 — Complete Torch export**
+- [x] **M7.7 — Complete Torch export**
   - **Scope:** Export graph, matrix, cloud, grid, and learned embeddings downstream to Torch while
     canonical storage remains NumPy `data.npz` plus JSON `meta.json`.
   - **Acceptance:** Values, dtypes, feature order, IDs, masks, and mappings are preserved.

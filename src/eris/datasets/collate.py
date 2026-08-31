@@ -56,7 +56,7 @@ def _validate_metadata(
     first = samples[0]
     metadata: dict[str, Any] = {}
 
-    for key in (*_IDENTITY_KEYS, *_TRACE_KEYS):
+    for key in _IDENTITY_KEYS:
         _require_key(first, 0, key)
 
     for key in _IDENTITY_KEYS:
@@ -82,7 +82,13 @@ def _validate_metadata(
         )
 
     for key in _TRACE_KEYS:
-        metadata[key] = [_require_key(sample, index, key) for index, sample in enumerate(samples)]
+        present = [key in sample and sample[key] is not None for sample in samples]
+        if any(present) and not all(present):
+            raise ValueError(f"partial optional metadata presence for key {key!r}")
+        if all(present):
+            metadata[key] = [
+                _require_key(sample, index, key) for index, sample in enumerate(samples)
+            ]
 
     for key in _COMMON_METADATA_KEYS:
         present = [key in sample and sample[key] is not None for sample in samples]
