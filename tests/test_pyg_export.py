@@ -1,106 +1,48 @@
-# tests/test_export_pyg.py
-
 from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+import eris
+from eris.export.pyg import PyGExportError, load_pyg, to_pyg
+from tests.test_m7_pyg_export import _torch_and_data_type
 
-def _find_artifact_dir(pattern: str) -> Path | None:
-    out_root = Path("out")
-    if not out_root.exists():
-        return None
-    hits = list(out_root.glob(pattern))
-    return hits[0] if hits else None
+PDB = Path("tests/data/1AQ2.pdb")
 
 
-def test_export_pyg_graph_ns_auto():
-    """
-    Ensures PyG exporter prefers node_attr/edge_attr when present (auto mode).
-    """
-    pytest.importorskip("torch")
-    pytest.importorskip("torch_geometric")
+def test_export_pyg_graph_v2_auto(tmp_path: Path, monkeypatch) -> None:
+    """Historical PyG smoke test migrated from legacy out/Schema v1 to Schema v2."""
 
-    from eris.export.pyg import load_pyg
-
-    artifact_dir = _find_artifact_dir("**/residue_contact_graph_ns")
-    if artifact_dir is None:
-        pytest.skip(
-            "Artifact not found. Run: eris encode --input tests/data/1AQ2.pdb "
-            "--encoder residue_contact_graph_ns --out out"
-        )
-
-    g = load_pyg(str(artifact_dir))
-
-    assert hasattr(g, "x")
-    assert hasattr(g, "edge_index")
-    assert g.x.ndim == 2
-    assert g.edge_index.shape[0] == 2
-    assert g.x.shape[0] >= 10
-
-    # edge_attr must exist for ns graphs
-    assert getattr(g, "edge_attr", None) is not None
-    assert g.edge_attr.ndim == 2
-    assert g.edge_attr.shape[0] == g.edge_index.shape[1]
-
-    assert hasattr(g, "graph_attr")
-    assert g.graph_attr.ndim == 1
-    assert int(g.graph_attr.numel()) > 0
-
-
-# def test_export_pyg_graph_fallback_rbf():
-#     """
-#     Ensures PyG exporter falls back to RBF(edge_dist) when edge_attr is missing.
-#     """
-#     pytest.importorskip("torch")
-#     pytest.importorskip("torch_geometric")
-
-#     from eris.export.pyg import load_pyg
-
-#     artifact_dir = _find_artifact_dir("**/residue_contact_graph")
-#     if artifact_dir is None:
-#         pytest.skip(
-#             "Artifact not found. Run: eris encode --input tests/data/1AQ2.pdb "
-#             "--encoder residue_contact_graph --out out"
-#         )
-
-#     g = load_pyg(str(artifact_dir))
-
-#     assert getattr(g, "edge_attr", None) is not None
-#     assert g.edge_attr.ndim == 2
-#     assert g.edge_attr.shape[0] == g.edge_index.shape[1]
-#     assert g.edge_attr.shape[1] == 8  # rbf_k
-
-
-
-def test_export_pyg_cloud_allowed():
-    """
-    A cloud artifact should be exportable to PyG (pos-only graph).
-    """
-    pytest.importorskip("torch")
-    pytest.importorskip("torch_geometric")
-
-    from eris.core.artifacts import StructureArtifact
-    from eris.export.pyg import to_pyg
-
-    art = StructureArtifact(
-        data={"pos": [[0.0, 0.0, 0.0]]},
-        meta={
-            "encoder_name": "dummy",
-            "encoder_version": "0.0.0",
-            "encoder_fingerprint": "test",
-            "type": "cloud",     # explicitly not a graph
-            "level": "atom",
-            "params": {},
-            "input": {"source": "memory", "chain_id": None, "model_index": 0, "format": None},
-            "feature_keys": {},
-        },
+    _, Data = _torch_and_data_type(monkeypatch)
+    artifact_dir = tmp_path / "artifact"
+    artifact = eris.encode(
+        PDB,
+        representation="residue_contact_graph",
+        output=artifact_dir,
+        use_cache=False,
     )
-    art.finalize()
 
-    g = to_pyg(art)
+    graph = load_pyg(artifact_dir)
 
-    assert hasattr(g, "pos")
-    assert g.pos.shape[0] == 1
+    assert isinstance(graph, Data)
+    assert graph.representation_name == "residue_contact_graph"
+    assert graph.representation_family == "explicit"
+    assert graph.representation_type == "graph"
+    np.testing.assert_array_equal(graph.x.cpu().numpy(), artifact.data["node_attr"])
+    np.testing.assert_array_equal(graph.edge_index.cpu().numpy(), artifact.data["edge_index"])
+    np.testing.assert_array_equal(graph.edge_attr.cpu().numpy(), artifact.data["edge_attr"])
+    np.testing.assert_array_equal(graph.edge_dist.cpu().numpy(), artifact.data["edge_dist"])
+    np.testing.assert_array_equal(graph.graph_attr.cpu().numpy(), artifact.data["graph_attr"])
+    assert graph.edge_attr.shape[0] == graph.edge_index.shape[1]
+    assert graph.edge_dist.shape[0] == graph.edge_index.shape[1]
 
+
+def test_export_pyg_cloud_is_unsupported() -> None:
+    """Point clouds have coordinates but no public graph topology."""
+
+    artifact = eris.encode(PDB, representation="residue_point_cloud", use_cache=False)
+
+    with pytest.raises(PyGExportError, match="Unsupported representation_type='cloud'"):
+        to_pyg(artifact)

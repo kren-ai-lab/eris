@@ -507,7 +507,7 @@ hierarchy.
     canonical storage remains NumPy `data.npz` plus JSON `meta.json`.
   - **Acceptance:** Values, dtypes, feature order, IDs, masks, and mappings are preserved.
   - **Depends on:** M7.5 and M7.6.
-- [ ] **M7.8 — Complete PyTorch Geometric graph export**
+- [x] **M7.8 — Complete PyTorch Geometric graph export**
   - **Scope:** With optional PyG, map graph `pos`, `node_attr` or learned node representation,
     `edge_index`, `edge_attr`, applicable `graph_attr`, and needed node IDs.
   - **Acceptance:** Topology/attributes align; missing PyG is optional; matrix/grid are never
