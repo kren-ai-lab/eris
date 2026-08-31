@@ -1,126 +1,144 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+from typing import Any
 
-import csv
-import json
-
-from eris.export.torch import load_torch
-
-
-def _read_csv(path: Path) -> List[Dict[str, str]]:
-    rows: List[Dict[str, str]] = []
-    with path.open("r", newline="") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            rows.append(dict(r))
-    if not rows:
-        raise ValueError(f"Empty index file: {path}")
-    return rows
+from eris.core.artifacts import StructureArtifact
+from eris.export.torch import to_torch
+from eris.pipelines.pack import (
+    PackedIndexRow,
+    PackIndexError,
+    parse_shape_summary,
+    read_packed_index,
+    resolve_packed_locator,
+    shape_summary_from_metadata,
+)
 
 
-def _is_compatible(meta: Dict[str, Any], prefer: str) -> bool:
-    shapes = meta.get("shapes", {})
-    if not isinstance(shapes, dict):
-        shapes = {}
+class DatasetIndexError(ValueError):
+    """Raised when a packed index row cannot be consumed safely."""
 
-    has_grid = "grid" in shapes
-    has_graph = "edge_index" in shapes
-    has_cloud = "pos" in shapes
-    has_matrix = any(k in shapes for k in ("dist", "dist_bins", "contact", "contact_bins"))
 
-    if prefer == "grid":
-        return has_grid
-    if prefer == "graph":
-        return has_graph
-    if prefer == "cloud":
-        # clouds “puros”: pos pero no edge_index ni grid
-        return has_cloud and (not has_graph) and (not has_grid)
-    if prefer == "matrix":
-        return has_matrix
-    if prefer == "grid_or_graph":
-        return has_grid or has_graph
-    return True
+def _resolve_row_path(index_path: Path, locator: str) -> Path:
+    return resolve_packed_locator(index_path, locator)
+
+
+def _validate_meta_locator(index_path: Path, row: PackedIndexRow) -> None:
+    artifact_dir = _resolve_row_path(index_path, row.artifact_dir).resolve(strict=False)
+    meta_path = _resolve_row_path(index_path, row.meta_path).resolve(strict=False)
+    expected_meta_path = (artifact_dir / "meta.json").resolve(strict=False)
+    if meta_path != expected_meta_path:
+        raise DatasetIndexError(
+            f"Packed index row {row.id!r}/{row.representation_name!r} has inconsistent "
+            f"meta_path {row.meta_path!r}; expected artifact_dir/meta.json"
+        )
+
+
+def _counts_match(row: PackedIndexRow, artifact: StructureArtifact, field: str) -> bool:
+    expected = getattr(row, field)
+    if expected is None:
+        return True
+    counts = artifact.meta.get("counts")
+    if not isinstance(counts, dict) or field not in counts:
+        return False
+    return counts[field] == expected
+
+
+def _validate_artifact_consistency(row: PackedIndexRow, artifact: StructureArtifact) -> None:
+    meta = artifact.meta
+    checks = (
+        ("representation_name", row.representation_name),
+        ("representation_family", row.representation_family),
+        ("representation_type", row.representation_type),
+        ("granularity", row.granularity),
+    )
+    for field, expected in checks:
+        actual = meta.get(field)
+        if actual != expected:
+            raise DatasetIndexError(
+                f"Packed index row {row.id!r}/{row.representation_name!r} is stale: "
+                f"{field}={expected!r} does not match artifact {actual!r}"
+            )
+
+    for field in ("n_nodes", "n_edges"):
+        if not _counts_match(row, artifact, field):
+            raise DatasetIndexError(
+                f"Packed index row {row.id!r}/{row.representation_name!r} is stale: "
+                f"{field} does not match artifact counts"
+            )
+
+    if parse_shape_summary(row.shape_summary) != json.loads(shape_summary_from_metadata(meta)):
+        raise DatasetIndexError(
+            f"Packed index row {row.id!r}/{row.representation_name!r} is stale: "
+            "shape_summary does not match artifact shapes"
+        )
+
+
+def _learned_sample(artifact: StructureArtifact) -> dict[str, Any]:
+    return dict(artifact.data)
 
 
 @dataclass
 class ErisFolderDataset:
     """
-    Dataset que consume `index.csv` generado por `eris pack`.
-    Carga artifacts con `load_torch(...)`.
+    Dataset consumer for canonical ``eris pack`` indexes.
 
-    Parámetros
-    ----------
-    index_csv:
-        Path al index.csv.
-    prefer:
-        'grid', 'graph', 'cloud', 'matrix', o 'grid_or_graph'
-    encoders:
-        allowlist opcional de encoders.
-    device:
-        'cpu', 'cuda', etc.
-    transform:
-        función opcional que transforma el sample dict.
-    auto_filter:
-        filtra filas incompatibles usando meta.json["shapes"].
-    matrix_as_channel:
-        si True, matrices se entregan como (1,N,N)
+    The packed index is the collection snapshot. Artifact locators are POSIX-style paths
+    relative to the index file parent. Individual artifacts are strict-loaded lazily in
+    ``__getitem__``.
     """
-    index_csv: Union[str, Path]
+
+    index_path: str | Path
     prefer: str = "grid_or_graph"
-    encoders: Optional[Sequence[str]] = None
-    device: Optional[str] = None
-    transform: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
-    auto_filter: bool = True
+    device: str | None = None
+    transform: Callable[[dict[str, Any]], dict[str, Any]] | None = None
     matrix_as_channel: bool = True
 
     def __post_init__(self) -> None:
-        self.index_csv = Path(self.index_csv)
-        self.rows = _read_csv(self.index_csv)
-
-        if self.encoders is not None:
-            allow = set(self.encoders)
-            self.rows = [r for r in self.rows if r.get("encoder") in allow]
-
-        if self.auto_filter:
-            kept = []
-            for r in self.rows:
-                meta_path = Path(r.get("meta_path", ""))
-                if not meta_path.exists():
-                    continue
-                try:
-                    meta = json.loads(meta_path.read_text())
-                except Exception:
-                    continue
-                if _is_compatible(meta, self.prefer):
-                    kept.append(r)
-            self.rows = kept
-
-        if not self.rows:
-            raise ValueError("No rows left after filtering (encoders/compatibility).")
+        self.index_path = Path(self.index_path)
+        try:
+            self.rows = read_packed_index(self.index_path)
+        except PackIndexError as error:
+            raise DatasetIndexError(str(error)) from error
+        for row in self.rows:
+            _validate_meta_locator(self.index_path, row)
 
     def __len__(self) -> int:
         return len(self.rows)
 
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
-        r = self.rows[idx]
-        artifact_dir = Path(r["artifact_dir"])
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        row = self.rows[idx]
+        artifact_dir = _resolve_row_path(self.index_path, row.artifact_dir)
+        artifact = StructureArtifact.load(artifact_dir, strict=True)
+        _validate_artifact_consistency(row, artifact)
 
-        sample = load_torch(
-            artifact_dir, prefer=self.prefer, device=self.device
-        )
+        if row.representation_family == "learned":
+            sample = _learned_sample(artifact)
+        else:
+            try:
+                sample = to_torch(
+                    artifact,
+                    prefer=self.prefer,
+                    device=self.device,
+                    matrix_as_channel=self.matrix_as_channel,
+                )
+            except ImportError as error:
+                raise RuntimeError(
+                    "ErisFolderDataset explicit tensor conversion requires optional "
+                    "dependency 'torch'. Install the Torch/export dependencies to load "
+                    "explicit artifacts as tensors."
+                ) from error
 
-        # attach identifiers
-        sample["id"] = r.get("id")
-        sample["encoder"] = r.get("encoder")
+        sample["id"] = row.id
         sample["artifact_dir"] = str(artifact_dir)
-
-        # optional csv fields
-        for k in ("n_residues", "n_edges", "grid_shape"):
-            if k in r and r[k] != "":
-                sample[k] = r[k]
+        sample["meta_path"] = str(_resolve_row_path(self.index_path, row.meta_path))
+        sample["representation_name"] = row.representation_name
+        sample["representation_family"] = row.representation_family
+        sample["representation_type"] = row.representation_type
+        sample["granularity"] = row.granularity
 
         if self.transform is not None:
             sample = self.transform(sample)
@@ -128,4 +146,4 @@ class ErisFolderDataset:
         return sample
 
 
-__all__ = ["ErisFolderDataset"]
+__all__ = ["DatasetIndexError", "ErisFolderDataset"]

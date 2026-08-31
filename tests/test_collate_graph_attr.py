@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import csv
 from pathlib import Path
 
 import numpy as np
 import pytest
 from graph_artifact_v2_fixture import save_graph_artifact_v2
+
+from eris.pipelines.pack import pack_artifacts
 
 
 def test_collate_graph_includes_graph_attr(tmp_path):
@@ -17,26 +18,17 @@ def test_collate_graph_includes_graph_attr(tmp_path):
     rows = []
     expected = []
     for sample_id, graph_attr in (("sample-a", (2.0, 2.0)), ("sample-b", (3.0, 4.0))):
-        artifact_dir = tmp_path / sample_id / "graph"
+        artifact_dir = tmp_path / "artifacts" / sample_id / "test_graph_fixture"
         artifact = save_graph_artifact_v2(artifact_dir, graph_attr=graph_attr)
         assert artifact.meta["schema_version"] == 2
         expected.append(artifact.data["graph_attr"])
-        rows.append(
-            {
-                "id": sample_id,
-                "encoder": "test_graph_fixture",
-                "artifact_dir": str(artifact_dir),
-                "meta_path": str(artifact_dir / "meta.json"),
-            }
-        )
+        rows.append(sample_id)
 
     index = Path(tmp_path) / "index.csv"
-    with index.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
+    pack_artifacts(tmp_path / "artifacts", index)
 
     dataset = ErisFolderDataset(index, prefer="graph")
+    assert [row.id for row in dataset.rows] == rows
     dl = DataLoader(
         dataset,
         batch_size=2,

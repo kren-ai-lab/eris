@@ -5,7 +5,7 @@ import json
 import os
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
@@ -55,6 +55,53 @@ class PackedIndexRow:
             "shape_summary": self.shape_summary,
         }
 
+    @classmethod
+    def from_dict(
+        cls,
+        row: dict[str, Any],
+        *,
+        row_index: int | None = None,
+    ) -> PackedIndexRow:
+        return cls(
+            id=_required_index_string(row.get("id"), "id", row_index=row_index),
+            artifact_dir=_required_locator(
+                row.get("artifact_dir"),
+                "artifact_dir",
+                row_index=row_index,
+            ),
+            meta_path=_required_locator(row.get("meta_path"), "meta_path", row_index=row_index),
+            representation_name=_required_index_string(
+                row.get("representation_name"),
+                "representation_name",
+                row_index=row_index,
+            ),
+            representation_family=_literal_index_value(
+                row.get("representation_family"),
+                "representation_family",
+                row_index=row_index,
+                choices={"explicit", "learned"},
+            ),
+            representation_type=_literal_index_value(
+                row.get("representation_type"),
+                "representation_type",
+                row_index=row_index,
+                choices={"cloud", "embedding", "graph", "grid", "matrix"},
+            ),
+            granularity=_literal_index_value(
+                row.get("granularity"),
+                "granularity",
+                row_index=row_index,
+                choices={"atom", "mixed", "residue", "structure"},
+            ),
+            n_nodes=_optional_index_count(row.get("n_nodes"), "n_nodes", row_index=row_index),
+            n_edges=_optional_index_count(row.get("n_edges"), "n_edges", row_index=row_index),
+            shape_summary=_required_shape_summary(
+                row.get("shape_summary"),
+                "shape_summary",
+                row_index=row_index,
+            ),
+        )
+
 
 def _ensure_root(path: str | Path) -> Path:
     root = Path(path)
@@ -63,6 +110,86 @@ def _ensure_root(path: str | Path) -> Path:
     if not root.is_dir():
         raise PackIndexError(f"Artifact root is not a directory: {root}")
     return root
+
+
+def _row_location(row_index: int | None) -> str:
+    if row_index is None:
+        return "packed index row"
+    return f"row {row_index}"
+
+
+def _required_index_string(value: Any, field: str, *, row_index: int | None) -> str:
+    if not isinstance(value, str):
+        raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must be a string")
+    text = value.strip()
+    if not text:
+        raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must be non-empty")
+    return text
+
+
+def _is_absolute_locator(value: str) -> bool:
+    return PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()
+
+
+def _required_locator(value: Any, field: str, *, row_index: int | None) -> str:
+    text = _required_index_string(value, field, row_index=row_index)
+    if _is_absolute_locator(text):
+        raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must be relative")
+    if "\\" in text:
+        raise PackIndexError(
+            f"{_row_location(row_index)}: field {field!r} must use POSIX '/' separators"
+        )
+    return text
+
+
+def _literal_index_value(
+    value: Any,
+    field: str,
+    *,
+    row_index: int | None,
+    choices: set[str],
+) -> str:
+    text = _required_index_string(value, field, row_index=row_index)
+    if text not in choices:
+        expected = ", ".join(sorted(choices))
+        raise PackIndexError(
+            f"{_row_location(row_index)}: field {field!r} must be one of: {expected}"
+        )
+    return text
+
+
+def _optional_index_count(value: Any, field: str, *, row_index: int | None) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        if text.isdecimal():
+            return int(text)
+    if type(value) is int and value >= 0:
+        return value
+    raise PackIndexError(
+        f"{_row_location(row_index)}: field {field!r} must be empty or an integer >= 0"
+    )
+
+
+def parse_shape_summary(value: str) -> dict[str, Any]:
+    parsed = json.loads(value)
+    if not isinstance(parsed, dict):
+        raise ValueError("shape_summary must decode to an object")
+    return parsed
+
+
+def _required_shape_summary(value: Any, field: str, *, row_index: int | None) -> str:
+    text = _required_index_string(value, field, row_index=row_index)
+    try:
+        parse_shape_summary(text)
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise PackIndexError(
+            f"{_row_location(row_index)}: field {field!r} must be valid JSON object text"
+        ) from error
+    return text
 
 
 def _posix_relative(path: Path, root: Path) -> str:
@@ -78,6 +205,11 @@ def _posix_locator(path: Path, anchor: Path) -> str:
         start=anchor.resolve(strict=False),
     )
     return Path(relative).as_posix()
+
+
+def resolve_packed_locator(index_path: str | Path, locator: str) -> Path:
+    parts = PurePosixPath(locator).parts
+    return Path(index_path).parent.joinpath(*parts)
 
 
 def _meta_path_for(relative_artifact_dir: str) -> str:
@@ -100,7 +232,7 @@ def _artifact_id(
     return relative.as_posix()
 
 
-def _shape_summary(meta: dict[str, Any]) -> str:
+def shape_summary_from_metadata(meta: dict[str, Any]) -> str:
     shapes = meta.get("shapes")
     if not isinstance(shapes, dict):
         shapes = {}
@@ -169,7 +301,7 @@ def _row_from_artifact(root: Path, locator_root: Path, artifact_dir: Path) -> Pa
         granularity=meta["granularity"],
         n_nodes=_optional_count(meta, "n_nodes"),
         n_edges=_optional_count(meta, "n_edges"),
-        shape_summary=_shape_summary(meta),
+        shape_summary=shape_summary_from_metadata(meta),
     )
 
 
@@ -196,6 +328,12 @@ def _validate_index_rows(rows: list[PackedIndexRow], root: Path) -> None:
                 f"first seen at row {first}"
             )
         seen_artifact_dirs[resolved] = index
+
+
+def validate_packed_index_rows(rows: list[PackedIndexRow], locator_root: Path) -> None:
+    """Validate duplicate/ambiguity constraints for parsed packed index rows."""
+
+    _validate_index_rows(rows, locator_root)
 
 
 def _csv_row(row: PackedIndexRow) -> dict[str, Any]:
@@ -225,6 +363,40 @@ def _write_index_safely(path: Path, rows: list[PackedIndexRow]) -> None:
         staging.unlink(missing_ok=True)
 
 
+def _validate_packed_index_header(fieldnames: list[str] | None) -> None:
+    if fieldnames is None:
+        raise PackIndexError("Packed index CSV is missing a header")
+    missing = [field for field in PACKED_INDEX_FIELDS if field not in fieldnames]
+    if missing:
+        joined = ", ".join(missing)
+        raise PackIndexError(f"Packed index CSV is missing required columns: {joined}")
+    if tuple(fieldnames[: len(PACKED_INDEX_FIELDS)]) != PACKED_INDEX_FIELDS:
+        expected = ",".join(PACKED_INDEX_FIELDS)
+        actual = ",".join(fieldnames)
+        raise PackIndexError(
+            "Packed index CSV canonical columns must appear first in exact order: "
+            f"{expected}; got: {actual}"
+        )
+
+
+def read_packed_index(path: str | Path) -> list[PackedIndexRow]:
+    index_path = Path(path)
+    if not index_path.exists():
+        raise PackIndexError(f"Packed index does not exist: {index_path}")
+    if not index_path.is_file():
+        raise PackIndexError(f"Packed index is not a file: {index_path}")
+
+    with index_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        _validate_packed_index_header(reader.fieldnames)
+        rows = [
+            PackedIndexRow.from_dict(dict(row), row_index=index)
+            for index, row in enumerate(reader, start=1)
+        ]
+    validate_packed_index_rows(rows, index_path.parent)
+    return rows
+
+
 def pack_artifacts(
     artifact_root: str | Path,
     output_path: str | Path,
@@ -251,4 +423,9 @@ __all__ = [
     "PackIndexError",
     "PackedIndexRow",
     "pack_artifacts",
+    "parse_shape_summary",
+    "read_packed_index",
+    "resolve_packed_locator",
+    "shape_summary_from_metadata",
+    "validate_packed_index_rows",
 ]

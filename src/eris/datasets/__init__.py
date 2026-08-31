@@ -1,17 +1,26 @@
-from eris.datasets.torch_dataset import ErisFolderDataset  # noqa: F401
-from eris.datasets.collate import (
-    collate_grid,
-    collate_graph,
-    collate_matrix,
-    collate_grid_pad,
-    collate_cloud_pad,
-)  # noqa: F401
+from eris.datasets.torch_dataset import DatasetIndexError, ErisFolderDataset
 
 __all__ = [
+    "DatasetIndexError",
     "ErisFolderDataset",
+    "collate_cloud_pad",
     "collate_grid",
     "collate_grid_pad",
     "collate_graph",
     "collate_matrix",
-    "collate_cloud_pad",
 ]
+
+
+def __getattr__(name: str):
+    if name in {
+        "collate_cloud_pad",
+        "collate_grid",
+        "collate_grid_pad",
+        "collate_graph",
+        "collate_matrix",
+    }:
+        from importlib import import_module
+
+        collate = import_module("eris.datasets.collate")
+        return getattr(collate, name)
+    raise AttributeError(f"module 'eris.datasets' has no attribute {name!r}")
