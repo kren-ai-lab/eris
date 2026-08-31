@@ -461,7 +461,7 @@ hierarchy.
 
 ## M7 — Batch, pack, datasets and export
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE`
 
 **Objective:** Make multi-sample production, indexing, dataset consumption, and exports reliable.
 
@@ -517,7 +517,7 @@ hierarchy.
   - **Scope:** Connect batch, canonical `eris pack`, and `eris export ...` to public APIs/CLI.
   - **Acceptance:** Workflow needs no manual metadata edits and never hides failed tasks.
   - **Depends on:** M7.2, M7.4, M7.7, M7.8, and M6.8.
-- [ ] **M7.10 — Add end-to-end workflow tests**
+- [x] **M7.10 — Add end-to-end workflow tests**
   - **Scope:** Test manifest → encode/embed → artifacts → pack/index → dataset → Torch/PyG export.
   - **Acceptance:** IDs, metadata, alignment, failures/resume, and learned mappings are preserved
     without generated repository output as a golden corpus.
@@ -525,8 +525,9 @@ hierarchy.
 
 ### M7 gate
 
-The full workflow operates without manual file editing or silently dropped failures. `pack` is
-metadata-index generation only; Torch/PyG are downstream exports from NumPy/JSON artifacts.
+**Satisfied:** The full workflow operates without manual file editing or silently dropped
+failures. `pack` is metadata-index generation only; Torch/PyG are downstream exports from
+NumPy/JSON artifacts.
 
 ## M8 — Packaging, testing, CI, docs and hygiene
 
