@@ -482,7 +482,7 @@ hierarchy.
   - **Scope:** Move internal readers/writers to canonical manifest/v2 contracts; reject ambiguity.
   - **Acceptance:** Consumers share one contract without public pre-release compatibility promises.
   - **Depends on:** M7.1 and M3.7.
-- [ ] **M7.4 — Implement canonical `eris pack`**
+- [x] **M7.4 — Implement canonical `eris pack`**
   - **Scope:** Implement `eris pack <artifact-root> --out index.csv`: recursively discover
     artifact dirs, validate `meta.json`, and emit one row per artifact with `id`,
     `artifact_dir`, `meta_path`, `representation_name`, `representation_family`,

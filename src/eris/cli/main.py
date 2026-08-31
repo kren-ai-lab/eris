@@ -8,10 +8,9 @@ from eris.cli.discovery import app as discovery_app
 from eris.cli.embed import embed as embed_command
 from eris.cli.encode import encode as encode_command
 from eris.cli.export import app as torch_app
-
-# from eris.cli.pack import app as pack_app
 from eris.cli.info_cmd import app as info_app
 from eris.cli.models import app as models_app
+from eris.cli.pack import pack as pack_command
 
 app = typer.Typer(add_completion=False)
 
@@ -39,7 +38,7 @@ def main(
 app.add_typer(cache_app, name="cache")
 app.command("encode")(encode_command)
 app.command("embed")(embed_command)
-# app.add_typer(pack_app, name="pack")
+app.command("pack")(pack_command)
 app.add_typer(info_app, name="info")
 app.add_typer(models_app, name="models")
 app.add_typer(discovery_app)
