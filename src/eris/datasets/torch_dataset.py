@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -139,6 +140,9 @@ class ErisFolderDataset:
         sample["representation_family"] = row.representation_family
         sample["representation_type"] = row.representation_type
         sample["granularity"] = row.granularity
+        for key in ("parameters", "feature_keys", "outputs"):
+            if key in artifact.meta:
+                sample[key] = deepcopy(artifact.meta[key])
 
         if self.transform is not None:
             sample = self.transform(sample)

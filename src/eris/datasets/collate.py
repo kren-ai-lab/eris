@@ -1,599 +1,724 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
 
+import numpy as np
 import torch
 
-def collate_graph(
-    batch: List[Dict[str, Any]],
+_IDENTITY_KEYS = (
+    "representation_name",
+    "representation_family",
+    "representation_type",
+    "granularity",
+)
+_TRACE_KEYS = ("id", "artifact_dir", "meta_path")
+_COMMON_METADATA_KEYS = ("parameters", "feature_keys", "outputs")
+
+
+def _batch_list(batch: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    samples = list(batch)
+    if not samples:
+        raise ValueError("batch must be non-empty")
+    for index, sample in enumerate(samples):
+        if sample is None:
+            raise ValueError(f"batch[{index}] must not be None")
+    return samples
+
+
+def _require_key(sample: Mapping[str, Any], index: int, key: str) -> Any:
+    if key not in sample:
+        raise ValueError(f"batch[{index}] missing required key {key!r}")
+    value = sample[key]
+    if value is None:
+        raise ValueError(f"batch[{index}] key {key!r} must not be None")
+    return value
+
+
+def _normalize_metadata(value: Any) -> Any:
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, Mapping):
+        return {str(key): _normalize_metadata(value[key]) for key in sorted(value)}
+    if isinstance(value, tuple):
+        return [_normalize_metadata(item) for item in value]
+    if isinstance(value, list):
+        return [_normalize_metadata(item) for item in value]
+    return value
+
+
+def _validate_metadata(
+    samples: Sequence[Mapping[str, Any]],
     *,
-    pad_x: bool = True,
-    pad_edge_attr: bool = True,
-    pad_graph_attr: bool = True,
-) -> Dict[str, Any]:
-    """
-    Collate for graphs WITHOUT PyG dependency.
+    family: str,
+    representation_type: str,
+) -> dict[str, Any]:
+    first = samples[0]
+    metadata: dict[str, Any] = {}
 
-    Supports mixed feature dims by padding:
-      - x: pad to Fmax if pad_x=True
-      - edge_attr: pad to Femax if pad_edge_attr=True
-      - graph_attr: pad to Fgmax if pad_graph_attr=True
+    for key in (*_IDENTITY_KEYS, *_TRACE_KEYS):
+        _require_key(first, 0, key)
 
-    Expects each sample has:
-      - x: (N,F)
-      - edge_index: (2,E)
-    Optional:
-      - edge_attr: (E,Fe)
-      - edge_dist: (E,)
-      - pos: (N,3)
-      - graph_attr: (Fg,)
-      - graph_attr_keys: list[str]
-    """
-    xs = []
-    edge_indices = []
-    edge_attrs = []
-    edge_dists = []
-    poss = []
-    batch_vec = []
+    for key in _IDENTITY_KEYS:
+        expected = first[key]
+        metadata[key] = expected
+        for index, sample in enumerate(samples):
+            actual = _require_key(sample, index, key)
+            if actual != expected:
+                raise ValueError(
+                    f"mixed representation metadata for {key!r}: "
+                    f"batch[0]={expected!r}, batch[{index}]={actual!r}"
+                )
 
-    node_offset = 0
-
-    # Max dims (for padding)
-    Fmax = max(int(b["x"].shape[1]) for b in batch)
-
-    has_edge_attr_any = any(("edge_attr" in b and b["edge_attr"] is not None) for b in batch)
-    Femax = 0
-    if has_edge_attr_any:
-        Femax = max(
-            int(b["edge_attr"].shape[1])
-            for b in batch
-            if ("edge_attr" in b and b["edge_attr"] is not None)
+    if metadata["representation_family"] != family:
+        raise ValueError(
+            f"collate expected representation_family={family!r}, "
+            f"got {metadata['representation_family']!r}"
+        )
+    if metadata["representation_type"] != representation_type:
+        raise ValueError(
+            f"collate expected representation_type={representation_type!r}, "
+            f"got {metadata['representation_type']!r}"
         )
 
-    has_graph_attr_any = any(("graph_attr" in b and b["graph_attr"] is not None) for b in batch)
-    Fgmax = 0
-    if has_graph_attr_any:
-        Fgmax = max(
-            int(b["graph_attr"].reshape(-1).shape[0])
-            for b in batch
-            if ("graph_attr" in b and b["graph_attr"] is not None)
+    for key in _TRACE_KEYS:
+        metadata[key] = [_require_key(sample, index, key) for index, sample in enumerate(samples)]
+
+    for key in _COMMON_METADATA_KEYS:
+        present = [key in sample and sample[key] is not None for sample in samples]
+        if any(present) and not all(present):
+            raise ValueError(f"partial optional metadata presence for key {key!r}")
+        if not all(present):
+            continue
+        expected = _normalize_metadata(first[key])
+        for index, sample in enumerate(samples[1:], start=1):
+            actual = _normalize_metadata(sample[key])
+            if actual != expected:
+                raise ValueError(
+                    f"incompatible metadata for {key!r}: batch[0] does not match batch[{index}]"
+                )
+        metadata[key] = first[key]
+
+    return metadata
+
+
+def _tensor(value: Any, *, key: str, index: int) -> torch.Tensor:
+    try:
+        tensor = torch.as_tensor(value)
+    except Exception as error:
+        raise ValueError(f"batch[{index}] key {key!r} cannot be converted to a tensor") from error
+    return tensor
+
+
+def _require_tensor(
+    sample: Mapping[str, Any],
+    index: int,
+    key: str,
+    *,
+    ndim: int | None = None,
+) -> torch.Tensor:
+    tensor = _tensor(_require_key(sample, index, key), key=key, index=index)
+    if ndim is not None and tensor.ndim != ndim:
+        raise ValueError(
+            f"batch[{index}] key {key!r} must be {ndim}D, got shape {tuple(tensor.shape)}"
         )
-
-    for i, b in enumerate(batch):
-        x = b["x"]
-        ei = b["edge_index"]
-        n = int(x.shape[0])
-
-        # --- pad x
-        if pad_x and int(x.shape[1]) != Fmax:
-            pad = torch.zeros((n, Fmax), dtype=x.dtype, device=x.device)
-            pad[:, : int(x.shape[1])] = x
-            x = pad
-        xs.append(x)
-
-        edge_indices.append(ei + node_offset)
-
-        # --- edge_attr (optional + pad)
-        if has_edge_attr_any:
-            if "edge_attr" in b and b["edge_attr"] is not None:
-                ea = b["edge_attr"]
-                e = int(ea.shape[0])
-                if pad_edge_attr and int(ea.shape[1]) != Femax:
-                    pad_ea = torch.zeros((e, Femax), dtype=ea.dtype, device=ea.device)
-                    pad_ea[:, : int(ea.shape[1])] = ea
-                    ea = pad_ea
-            else:
-                # missing -> zeros
-                e = int(ei.shape[1])
-                ea = torch.zeros((e, Femax), dtype=x.dtype, device=x.device)
-            edge_attrs.append(ea)
-
-        if "edge_dist" in b and b["edge_dist"] is not None:
-            edge_dists.append(b["edge_dist"])
-        if "pos" in b and b["pos"] is not None:
-            poss.append(b["pos"])
-
-        batch_vec.append(torch.full((n,), i, dtype=torch.long, device=x.device))
-        node_offset += n
-
-    out: Dict[str, Any] = {
-        "x": torch.cat(xs, dim=0),
-        "edge_index": torch.cat(edge_indices, dim=1),
-        "batch": torch.cat(batch_vec, dim=0),
-    }
-
-    if has_edge_attr_any:
-        out["edge_attr"] = torch.cat(edge_attrs, dim=0)
-
-    if edge_dists:
-        out["edge_dist"] = torch.cat(edge_dists, dim=0)
-
-    if poss:
-        out["pos"] = torch.cat(poss, dim=0)
-
-    # --- graph_attr (optional + pad)
-    if has_graph_attr_any:
-        gas = []
-        for b in batch:
-            if "graph_attr" in b and b["graph_attr"] is not None:
-                ga = b["graph_attr"].reshape(-1)
-                if pad_graph_attr and int(ga.numel()) != Fgmax:
-                    pad_ga = torch.zeros((Fgmax,), dtype=ga.dtype, device=ga.device)
-                    pad_ga[: int(ga.numel())] = ga
-                    ga = pad_ga
-            else:
-                ga = torch.zeros((Fgmax,), dtype=out["x"].dtype, device=out["x"].device)
-            gas.append(ga.reshape(1, -1))
-        out["graph_attr"] = torch.cat(gas, dim=0)
-
-        if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
-            out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
-
-    if "id" in batch[0]:
-        out["id"] = [b.get("id") for b in batch]
-    if "encoder" in batch[0]:
-        out["encoder"] = [b.get("encoder") for b in batch]
-
-    return out
+    return tensor
 
 
-def collate_graph_strict(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Strict collate: requires identical feature dimensions across samples.
-    Useful for training where you want a fixed schema and no padding.
-    """
-    # x dim check
-    F0 = int(batch[0]["x"].shape[1])
-    for j, b in enumerate(batch[1:], start=1):
-        Fj = int(b["x"].shape[1])
-        if Fj != F0:
-            raise RuntimeError(f"collate_graph_strict: x feature dim mismatch: batch[0]={F0}, batch[{j}]={Fj}")
+def _optional_tensors(
+    samples: Sequence[Mapping[str, Any]],
+    key: str,
+    *,
+    ndim: int | None = None,
+) -> list[torch.Tensor] | None:
+    present = [key in sample and sample[key] is not None for sample in samples]
+    if any(present) and not all(present):
+        raise ValueError(f"partial optional-field presence for key {key!r}")
+    if not all(present):
+        return None
+    return [_require_tensor(sample, index, key, ndim=ndim) for index, sample in enumerate(samples)]
 
-    # edge_attr dim check (only if present in any)
-    has_ea_any = any(("edge_attr" in b and b["edge_attr"] is not None) for b in batch)
-    if has_ea_any:
-        # require all to have it and same Fe
-        if not all(("edge_attr" in b and b["edge_attr"] is not None) for b in batch):
-            raise RuntimeError("collate_graph_strict: some samples missing edge_attr while others have it.")
-        Fe0 = int(batch[0]["edge_attr"].shape[1])
-        for j, b in enumerate(batch[1:], start=1):
-            Fej = int(b["edge_attr"].shape[1])
-            if Fej != Fe0:
-                raise RuntimeError(f"collate_graph_strict: edge_attr dim mismatch: batch[0]={Fe0}, batch[{j}]={Fej}")
 
-    # graph_attr dim check (only if present in any)
-    has_ga_any = any(("graph_attr" in b and b["graph_attr"] is not None) for b in batch)
-    if has_ga_any:
-        if not all(("graph_attr" in b and b["graph_attr"] is not None) for b in batch):
-            raise RuntimeError("collate_graph_strict: some samples missing graph_attr while others have it.")
-        G0 = int(batch[0]["graph_attr"].reshape(-1).numel())
-        for j, b in enumerate(batch[1:], start=1):
-            Gj = int(b["graph_attr"].reshape(-1).numel())
-            if Gj != G0:
-                raise RuntimeError(f"collate_graph_strict: graph_attr dim mismatch: batch[0]={G0}, batch[{j}]={Gj}")
-
-    # If all ok, just call padded collate with padding disabled
-    return collate_graph(batch, pad_x=False, pad_edge_attr=False, pad_graph_attr=False)
-
-def collate_grid(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Collate for voxel grids.
-    Expects each sample has:
-      - x: (C,G,G,G)
-    Optional:
-      - graph_attr: (Fg,)
-      - graph_attr_keys: list[str]
-    """
-
-    x0 = batch[0]["x"]
-    for j, b in enumerate(batch[1:], start=1):
-        if tuple(b["x"].shape) != tuple(x0.shape):
-            raise RuntimeError(
-                f"collate_grid: grid shape mismatch at batch[{j}]: "
-                f"{tuple(x0.shape)} vs {tuple(b['x'].shape)}. "
-                "Use collate_grid_pad for mixed grid shapes/channels."
+def _validate_same_dtype_device(tensors: Sequence[torch.Tensor], key: str) -> None:
+    first = tensors[0]
+    for index, tensor in enumerate(tensors[1:], start=1):
+        if tensor.dtype != first.dtype:
+            raise ValueError(
+                f"dtype mismatch for {key!r}: batch[0]={first.dtype}, batch[{index}]={tensor.dtype}"
             )
-        
-    x = torch.stack([b["x"] for b in batch], dim=0)  # (B,C,G,G,G)
-    out: Dict[str, Any] = {"x": x}
+        if tensor.device != first.device:
+            raise ValueError(
+                f"device mismatch for {key!r}: batch[0]={first.device}, "
+                f"batch[{index}]={tensor.device}"
+            )
 
-    # graph-level features (stack)
-    if "graph_attr" in batch[0] and batch[0]["graph_attr"] is not None:
-        if all(("graph_attr" in b and b["graph_attr"] is not None) for b in batch):
-            out["graph_attr"] = torch.cat([b["graph_attr"].reshape(1, -1) for b in batch], dim=0)
-            if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
-                out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
 
-    # keep ids if present
-    if "id" in batch[0]:
-        out["id"] = [b.get("id") for b in batch]
-    if "encoder" in batch[0]:
-        out["encoder"] = [b.get("encoder") for b in batch]
+def _validate_same_shape(tensors: Sequence[torch.Tensor], key: str) -> None:
+    first_shape = tuple(tensors[0].shape)
+    for index, tensor in enumerate(tensors[1:], start=1):
+        shape = tuple(tensor.shape)
+        if shape != first_shape:
+            raise ValueError(
+                f"shape mismatch for {key!r}: batch[0]={first_shape}, batch[{index}]={shape}"
+            )
 
-    # optional: carry spatial meta (assumes consistent per-batch)
-    for k in ("voxel_size", "origin", "centroid"):
-        if k in batch[0]:
-            out[k] = batch[0][k]
 
+def _validate_width(tensors: Sequence[torch.Tensor], key: str) -> int:
+    width = int(tensors[0].shape[1])
+    for index, tensor in enumerate(tensors[1:], start=1):
+        actual = int(tensor.shape[1])
+        if actual != width:
+            raise ValueError(
+                f"feature width mismatch for {key!r}: batch[0]={width}, batch[{index}]={actual}"
+            )
+    return width
+
+
+def _validate_optional_rows(
+    tensors: Sequence[torch.Tensor] | None,
+    reference_lengths: Sequence[int],
+    key: str,
+) -> None:
+    if tensors is None:
+        return
+    for index, (tensor, expected) in enumerate(zip(tensors, reference_lengths, strict=True)):
+        if int(tensor.shape[0]) != expected:
+            raise ValueError(
+                f"batch[{index}] key {key!r} row count {int(tensor.shape[0])} "
+                f"does not match expected {expected}"
+            )
+
+
+def _stack_optional(
+    tensors: Sequence[torch.Tensor] | None,
+    key: str,
+) -> torch.Tensor | None:
+    if tensors is None:
+        return None
+    _validate_same_dtype_device(tensors, key)
+    _validate_same_shape(tensors, key)
+    return torch.stack(list(tensors), dim=0)
+
+
+def _metadata_output(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    return dict(metadata)
+
+
+def _ptr(lengths: Iterable[int], *, device: torch.device | None = None) -> torch.Tensor:
+    values = [0]
+    total = 0
+    for length in lengths:
+        total += int(length)
+        values.append(total)
+    return torch.tensor(values, dtype=torch.long, device=device)
+
+
+def _validate_edge_index(edge_index: torch.Tensor, n_nodes: int, index: int) -> None:
+    if edge_index.ndim != 2 or tuple(edge_index.shape[:1]) != (2,):
+        raise ValueError(
+            f"batch[{index}] key 'edge_index' must have shape (2, E), got {tuple(edge_index.shape)}"
+        )
+    integer_dtypes = {
+        torch.uint8,
+        torch.int8,
+        torch.int16,
+        torch.int32,
+        torch.int64,
+    }
+    if edge_index.dtype not in integer_dtypes:
+        raise ValueError(f"batch[{index}] key 'edge_index' must use an integer dtype")
+    if edge_index.numel() == 0:
+        return
+    min_index = int(edge_index.min().item())
+    max_index = int(edge_index.max().item())
+    if min_index < 0 or max_index >= n_nodes:
+        raise ValueError(
+            f"batch[{index}] key 'edge_index' contains node index outside [0, {n_nodes})"
+        )
+
+
+def collate_graph(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """
+    Canonical strict graph collate without PyG.
+
+    Compatible graph samples are concatenated in input order. Feature-width,
+    dtype, optional-field, and representation incompatibilities raise
+    ``ValueError``; no padding, truncation, or topology invention is performed.
+    """
+    samples = _batch_list(batch)
+    metadata = _validate_metadata(samples, family="explicit", representation_type="graph")
+
+    xs = [_require_tensor(sample, index, "x", ndim=2) for index, sample in enumerate(samples)]
+    edge_indices = [
+        _require_tensor(sample, index, "edge_index") for index, sample in enumerate(samples)
+    ]
+    node_counts = [int(x.shape[0]) for x in xs]
+    edge_counts = [int(edge_index.shape[1]) for edge_index in edge_indices]
+
+    _validate_same_dtype_device(xs, "x")
+    _validate_width(xs, "x")
+    _validate_same_dtype_device(edge_indices, "edge_index")
+    for index, (edge_index, n_nodes) in enumerate(zip(edge_indices, node_counts, strict=True)):
+        _validate_edge_index(edge_index, n_nodes, index)
+
+    edge_attrs = _optional_tensors(samples, "edge_attr", ndim=2)
+    if edge_attrs is not None:
+        _validate_same_dtype_device(edge_attrs, "edge_attr")
+        _validate_width(edge_attrs, "edge_attr")
+        _validate_optional_rows(edge_attrs, edge_counts, "edge_attr")
+
+    edge_dists = _optional_tensors(samples, "edge_dist")
+    if edge_dists is not None:
+        _validate_same_dtype_device(edge_dists, "edge_dist")
+        for index, (edge_dist, expected) in enumerate(zip(edge_dists, edge_counts, strict=True)):
+            if edge_dist.ndim not in {1, 2}:
+                raise ValueError(
+                    f"batch[{index}] key 'edge_dist' must be 1D or 2D, "
+                    f"got shape {tuple(edge_dist.shape)}"
+                )
+            if int(edge_dist.shape[0]) != expected:
+                raise ValueError(
+                    f"batch[{index}] key 'edge_dist' length {int(edge_dist.shape[0])} "
+                    f"does not match edge count {expected}"
+                )
+
+    positions = _optional_tensors(samples, "pos", ndim=2)
+    if positions is not None:
+        _validate_same_dtype_device(positions, "pos")
+        for index, (pos, expected) in enumerate(zip(positions, node_counts, strict=True)):
+            if tuple(pos.shape) != (expected, 3):
+                raise ValueError(
+                    f"batch[{index}] key 'pos' must have shape ({expected}, 3), "
+                    f"got {tuple(pos.shape)}"
+                )
+
+    graph_attrs = _optional_tensors(samples, "graph_attr")
+    if graph_attrs is not None:
+        graph_attrs = [graph_attr.reshape(-1) for graph_attr in graph_attrs]
+        _validate_same_dtype_device(graph_attrs, "graph_attr")
+        _validate_same_shape(graph_attrs, "graph_attr")
+
+    offsets = _ptr(node_counts, device=xs[0].device)
+    shifted_edges = [edge_index + offsets[index] for index, edge_index in enumerate(edge_indices)]
+
+    out = _metadata_output(metadata)
+    out.update(
+        {
+            "x": torch.cat(xs, dim=0),
+            "edge_index": torch.cat(shifted_edges, dim=1),
+            "batch": torch.cat(
+                [
+                    torch.full((count,), index, dtype=torch.long, device=xs[0].device)
+                    for index, count in enumerate(node_counts)
+                ],
+                dim=0,
+            ),
+            "ptr": offsets,
+        }
+    )
+    if edge_attrs is not None:
+        out["edge_attr"] = torch.cat(edge_attrs, dim=0)
+    if edge_dists is not None:
+        out["edge_dist"] = torch.cat(edge_dists, dim=0)
+    if positions is not None:
+        out["pos"] = torch.cat(positions, dim=0)
+    if graph_attrs is not None:
+        out["graph_attr"] = torch.stack(graph_attrs, dim=0)
     return out
 
 
-def collate_matrix(
-    batch: List[Dict[str, Any]],
-    *,
-    pad_value: float = 0.0,
-) -> Dict[str, Any]:
-    """
-    Collate for matrix representations.
+def collate_graph_strict(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Compatibility wrapper for the canonical strict graph collate."""
+    return collate_graph(batch)
 
-    Expects each sample has:
-      - x: (1,N,N) if matrix_as_channel=True, else (N,N)
 
-    Returns:
-      - x: (B,1,Nmax,Nmax) (always with channel dim)
-      - n: list[int] original sizes
-      - matrix_key: list[str] if present
-    Optional:
-      - graph_attr: (Fg,) stacked to (B,Fg)
-      - graph_attr_keys: list[str]
-    """
-    xs = []
-    ns = []
-    keys = []
+def collate_cloud(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Canonical point-cloud collate using concatenation plus sample boundaries."""
+    samples = _batch_list(batch)
+    metadata = _validate_metadata(samples, family="explicit", representation_type="cloud")
 
-    # Determine max N
-    for b in batch:
-        x = b["x"]
-        if x.ndim == 2:
-            n = int(x.shape[0])
-        elif x.ndim == 3:
-            n = int(x.shape[-1])
-        else:
-            raise ValueError(f"Expected x to be 2D or 3D, got shape {tuple(x.shape)}")
-        ns.append(n)
-        keys.append(b.get("matrix_key"))
-        xs.append(x)
+    positions = [
+        _require_tensor(sample, index, "pos", ndim=2) for index, sample in enumerate(samples)
+    ]
+    node_counts = [int(pos.shape[0]) for pos in positions]
+    _validate_same_dtype_device(positions, "pos")
+    for index, pos in enumerate(positions):
+        if int(pos.shape[1]) != 3:
+            raise ValueError(
+                f"batch[{index}] key 'pos' must have shape (N, 3), got {tuple(pos.shape)}"
+            )
 
-    nmax = max(ns)
-    device = xs[0].device
-    dtype = xs[0].dtype
+    xs = _optional_tensors(samples, "x", ndim=2)
+    if xs is not None:
+        _validate_same_dtype_device(xs, "x")
+        _validate_width(xs, "x")
+        _validate_optional_rows(xs, node_counts, "x")
 
-    out_x = torch.full((len(batch), 1, nmax, nmax), float(pad_value), dtype=dtype, device=device)
+    centroids = _optional_tensors(samples, "centroid")
+    stacked_centroid = _stack_optional(centroids, "centroid")
 
-    for i, x in enumerate(xs):
-        x2 = x if x.ndim == 2 else x[0]
-        n = ns[i]
-        out_x[i, 0, :n, :n] = x2
+    boundaries = _ptr(node_counts, device=positions[0].device)
+    out = _metadata_output(metadata)
+    out.update(
+        {
+            "pos": torch.cat(positions, dim=0),
+            "batch": torch.cat(
+                [
+                    torch.full((count,), index, dtype=torch.long, device=positions[0].device)
+                    for index, count in enumerate(node_counts)
+                ],
+                dim=0,
+            ),
+            "ptr": boundaries,
+        }
+    )
+    if xs is not None:
+        out["x"] = torch.cat(xs, dim=0)
+    if stacked_centroid is not None:
+        out["centroid"] = stacked_centroid
+    return out
 
-    out: Dict[str, Any] = {
-        "x": out_x,
-        "n": ns,
-        "matrix_key": keys,
+
+def collate_matrix(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Canonical matrix collate: stack only identical shapes, never pad."""
+    samples = _batch_list(batch)
+    metadata = _validate_metadata(samples, family="explicit", representation_type="matrix")
+
+    matrices = [_require_tensor(sample, index, "x") for index, sample in enumerate(samples)]
+    for index, matrix in enumerate(matrices):
+        if matrix.ndim not in {2, 3}:
+            raise ValueError(
+                f"batch[{index}] key 'x' must be 2D or 3D, got shape {tuple(matrix.shape)}"
+            )
+    _validate_same_dtype_device(matrices, "x")
+    _validate_same_shape(matrices, "x")
+
+    matrix_key = _require_key(samples[0], 0, "matrix_key")
+    for index, sample in enumerate(samples[1:], start=1):
+        actual = _require_key(sample, index, "matrix_key")
+        if actual != matrix_key:
+            raise ValueError(
+                f"matrix_key mismatch: batch[0]={matrix_key!r}, batch[{index}]={actual!r}"
+            )
+
+    ns = [int(_require_key(sample, index, "n")) for index, sample in enumerate(samples)]
+
+    bin_edges = _optional_tensors(samples, "bin_edges")
+    if bin_edges is not None:
+        _validate_same_dtype_device(bin_edges, "bin_edges")
+        _validate_same_shape(bin_edges, "bin_edges")
+        reference = bin_edges[0]
+        for index, current in enumerate(bin_edges[1:], start=1):
+            if not torch.equal(current, reference):
+                raise ValueError(f"bin_edges mismatch: batch[0] does not match batch[{index}]")
+
+    positions = _optional_tensors(samples, "pos", ndim=2)
+    if positions is not None:
+        _validate_same_dtype_device(positions, "pos")
+        _validate_same_shape(positions, "pos")
+
+    centroids = _optional_tensors(samples, "centroid")
+    stacked_centroid = _stack_optional(centroids, "centroid")
+
+    out = _metadata_output(metadata)
+    out.update({"x": torch.stack(matrices, dim=0), "matrix_key": matrix_key, "n": ns})
+    if bin_edges is not None:
+        out["bin_edges"] = bin_edges[0]
+    if positions is not None:
+        out["pos"] = torch.stack(positions, dim=0)
+    if stacked_centroid is not None:
+        out["centroid"] = stacked_centroid
+    return out
+
+
+def collate_grid(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Canonical voxel-grid collate: stack exact-compatible grids only."""
+    samples = _batch_list(batch)
+    metadata = _validate_metadata(samples, family="explicit", representation_type="grid")
+
+    grids = [_require_tensor(sample, index, "x", ndim=4) for index, sample in enumerate(samples)]
+    _validate_same_dtype_device(grids, "x")
+    _validate_same_shape(grids, "x")
+
+    grid_sizes = _optional_tensors(samples, "grid_size")
+    if grid_sizes is not None:
+        _validate_same_dtype_device(grid_sizes, "grid_size")
+        _validate_same_shape(grid_sizes, "grid_size")
+        expected_size = int(grids[0].shape[-1])
+        for index, grid_size in enumerate(grid_sizes):
+            values = grid_size.reshape(-1)
+            if values.numel() != 1 or int(values[0].item()) != expected_size:
+                raise ValueError(
+                    f"batch[{index}] key 'grid_size' is inconsistent with grid shape "
+                    f"{tuple(grids[index].shape)}"
+                )
+
+    stacked_optional: dict[str, torch.Tensor] = {}
+    for key in ("voxel_size", "origin", "centroid"):
+        stacked = _stack_optional(_optional_tensors(samples, key), key)
+        if stacked is not None:
+            stacked_optional[key] = stacked
+
+    out = _metadata_output(metadata)
+    out["x"] = torch.stack(grids, dim=0)
+    if grid_sizes is not None:
+        out["grid_size"] = torch.stack(grid_sizes, dim=0)
+    out.update(stacked_optional)
+    return out
+
+
+def _learned_output_names(sample: Mapping[str, Any]) -> set[str]:
+    outputs = sample.get("outputs")
+    if isinstance(outputs, Sequence) and not isinstance(outputs, (str, bytes)):
+        names = {
+            item.get("name")
+            for item in outputs
+            if isinstance(item, Mapping) and isinstance(item.get("name"), str)
+        }
+        if names:
+            return names
+    return {
+        name
+        for name in ("node_embedding", "global_embedding", "node_ids", "valid_mask")
+        if name in sample and sample[name] is not None
     }
 
-    # graph-level features (stack)
-    if "graph_attr" in batch[0] and batch[0]["graph_attr"] is not None:
-        if all(("graph_attr" in b and b["graph_attr"] is not None) for b in batch):
-            out["graph_attr"] = torch.cat([b["graph_attr"].reshape(1, -1) for b in batch], dim=0)
-            if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
-                out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
 
-    # keep ids if present
-    if "id" in batch[0]:
-        out["id"] = [b.get("id") for b in batch]
-    if "encoder" in batch[0]:
-        out["encoder"] = [b.get("encoder") for b in batch]
+def _learned_layout(sample: Mapping[str, Any], index: int) -> str:
+    names = _learned_output_names(sample)
+    has_node = "node_embedding" in names
+    has_node_ids = "node_ids" in names
+    has_global = "global_embedding" in names
+    has_valid_mask = "valid_mask" in names
 
-    # optional bin edges: only safe to include if all are identical
-    if "bin_edges" in batch[0]:
-        same = True
-        ref = batch[0].get("bin_edges")
-        if torch.is_tensor(ref):
-            for b in batch[1:]:
-                be = b.get("bin_edges")
-                if (be is None) or (not torch.is_tensor(be)) or (be.shape != ref.shape) or (not torch.equal(be, ref)):
-                    same = False
-                    break
-        else:
-            same = False
+    if has_node != has_node_ids:
+        raise ValueError(
+            f"batch[{index}] learned node output requires both 'node_embedding' and 'node_ids'"
+        )
+    if has_valid_mask and not has_node:
+        raise ValueError(f"batch[{index}] key 'valid_mask' requires node embeddings")
+    if has_node and has_global:
+        return "both"
+    if has_node:
+        return "node"
+    if has_global:
+        return "global"
+    raise ValueError(f"batch[{index}] learned sample has no recognized embedding outputs")
 
-        if same:
-            out["bin_edges"] = ref
+
+def _node_ids(value: Any, *, expected: int, index: int) -> list[Any]:
+    if isinstance(value, np.ndarray):
+        ids = value.reshape(-1).tolist()
+    elif isinstance(value, (str, bytes)):
+        ids = [value]
+    else:
+        ids = list(value)
+    if len(ids) != expected:
+        raise ValueError(
+            f"batch[{index}] key 'node_ids' length {len(ids)} does not match node count {expected}"
+        )
+    return ids
+
+
+def collate_learned(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Canonical learned embedding collate for node, global, and both outputs."""
+    samples = _batch_list(batch)
+    metadata = _validate_metadata(samples, family="learned", representation_type="embedding")
+
+    layout = _learned_layout(samples[0], 0)
+    for index, sample in enumerate(samples[1:], start=1):
+        actual = _learned_layout(sample, index)
+        if actual != layout:
+            raise ValueError(
+                f"learned output layout mismatch: batch[0]={layout!r}, batch[{index}]={actual!r}"
+            )
+
+    out = _metadata_output(metadata)
+
+    if layout in {"node", "both"}:
+        embeddings = [
+            _require_tensor(sample, index, "node_embedding", ndim=2)
+            for index, sample in enumerate(samples)
+        ]
+        node_counts = [int(embedding.shape[0]) for embedding in embeddings]
+        _validate_same_dtype_device(embeddings, "node_embedding")
+        _validate_width(embeddings, "node_embedding")
+        node_ids = [
+            node_id
+            for index, sample in enumerate(samples)
+            for node_id in _node_ids(
+                _require_key(sample, index, "node_ids"),
+                expected=node_counts[index],
+                index=index,
+            )
+        ]
+        valid_masks = _optional_tensors(samples, "valid_mask", ndim=1)
+        if valid_masks is not None:
+            _validate_same_dtype_device(valid_masks, "valid_mask")
+            for index, mask in enumerate(valid_masks):
+                if mask.dtype != torch.bool:
+                    raise ValueError(
+                        f"batch[{index}] key 'valid_mask' must use bool dtype, got {mask.dtype}"
+                    )
+            _validate_optional_rows(valid_masks, node_counts, "valid_mask")
+
+        out.update(
+            {
+                "node_embedding": torch.cat(embeddings, dim=0),
+                "node_ids": node_ids,
+                "batch": torch.cat(
+                    [
+                        torch.full(
+                            (count,),
+                            index,
+                            dtype=torch.long,
+                            device=embeddings[0].device,
+                        )
+                        for index, count in enumerate(node_counts)
+                    ],
+                    dim=0,
+                ),
+                "ptr": _ptr(node_counts, device=embeddings[0].device),
+            }
+        )
+        if valid_masks is not None:
+            out["valid_mask"] = torch.cat(valid_masks, dim=0)
+
+    if layout in {"global", "both"}:
+        global_embeddings = [
+            _require_tensor(sample, index, "global_embedding", ndim=1)
+            for index, sample in enumerate(samples)
+        ]
+        _validate_same_dtype_device(global_embeddings, "global_embedding")
+        _validate_same_shape(global_embeddings, "global_embedding")
+        out["global_embedding"] = torch.stack(global_embeddings, dim=0)
 
     return out
 
 
 def collate_grid_pad(
-    batch: List[Dict[str, Any]],
+    batch: Sequence[Mapping[str, Any]],
     *,
     pad_value: float = 0.0,
     return_mask: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
-    Collate for voxel grids with padding over grid size and channels.
+    Explicit opt-in padding utility for voxel grids.
 
-    Expects each sample has:
-      - x: (C,G,G,G)
-
-    Returns:
-      - x: (B,Cmax,Gmax,Gmax,Gmax)
-      - c: list[int] original channels
-      - g: list[int] original grid sizes
-      - mask (optional): (B,1,Gmax,Gmax,Gmax) valid voxels mask per sample
-    Optional:
-      - graph_attr: (Fg,) stacked to (B,Fg)
-      - graph_attr_keys: list[str]
+    This helper is intentionally not the canonical grid collate. It remains available for
+    callers that knowingly request padded grid tensors and masks.
     """
-    xs = [b["x"] for b in batch]
+    samples = _batch_list(batch)
+    xs = [_require_tensor(sample, index, "x", ndim=4) for index, sample in enumerate(samples)]
     device = xs[0].device
     dtype = xs[0].dtype
 
-    Cs = [int(x.shape[0]) for x in xs]
-    Gs = [int(x.shape[-1]) for x in xs]
+    cs = [int(x.shape[0]) for x in xs]
+    gs = [int(x.shape[-1]) for x in xs]
 
-    Cmax = max(Cs)
-    Gmax = max(Gs)
+    cmax = max(cs)
+    gmax = max(gs)
 
-    out_x = torch.full((len(batch), Cmax, Gmax, Gmax, Gmax), float(pad_value), dtype=dtype, device=device)
+    out_x = torch.full(
+        (len(samples), cmax, gmax, gmax, gmax), pad_value, dtype=dtype, device=device
+    )
 
-    for i, x in enumerate(xs):
-        c, g = Cs[i], Gs[i]
-        out_x[i, :c, :g, :g, :g] = x
+    for index, x in enumerate(xs):
+        channels, grid = cs[index], gs[index]
+        out_x[index, :channels, :grid, :grid, :grid] = x
 
-    out: Dict[str, Any] = {"x": out_x, "c": Cs, "g": Gs}
+    out: dict[str, Any] = {"x": out_x, "c": cs, "g": gs}
 
-    # graph-level features (stack)
-    if "graph_attr" in batch[0] and batch[0]["graph_attr"] is not None:
-        if all(("graph_attr" in b and b["graph_attr"] is not None) for b in batch):
-            out["graph_attr"] = torch.cat([b["graph_attr"].reshape(1, -1) for b in batch], dim=0)
-            if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
-                out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
+    if "id" in samples[0]:
+        out["id"] = [sample.get("id") for sample in samples]
+    if "channels" in samples[0]:
+        out["channels"] = [sample.get("channels") for sample in samples]
 
-    if "id" in batch[0]:
-        out["id"] = [b.get("id") for b in batch]
-    if "encoder" in batch[0]:
-        out["encoder"] = [b.get("encoder") for b in batch]
-
-    # keep per-sample channels list if present (often stored as list/np array)
-    if "channels" in batch[0]:
-        out["channels"] = [b.get("channels") for b in batch]
-
-    # keep per-sample spatial metadata if present (cannot stack safely)
-    for k in ("voxel_size", "origin", "centroid"):
-        if k in batch[0]:
-            out[k] = [b.get(k) for b in batch]
+    for key in ("voxel_size", "origin", "centroid"):
+        if key in samples[0]:
+            out[key] = [sample.get(key) for sample in samples]
 
     if return_mask:
-        mask = torch.zeros((len(batch), 1, Gmax, Gmax, Gmax), dtype=torch.bool, device=device)
-        for i, g in enumerate(Gs):
-            mask[i, 0, :g, :g, :g] = True
+        mask = torch.zeros((len(samples), 1, gmax, gmax, gmax), dtype=torch.bool, device=device)
+        for index, grid in enumerate(gs):
+            mask[index, 0, :grid, :grid, :grid] = True
         out["mask"] = mask
 
     return out
 
 
 def collate_cloud_pad(
-    batch: List[Dict[str, Any]],
+    batch: Sequence[Mapping[str, Any]],
     *,
     pad_value_pos: float = 0.0,
     pad_value_x: float = 0.0,
     return_mask: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
-    Collate for point clouds with padding over number of points.
+    Explicit opt-in padding utility for point clouds.
 
-    Expects each sample has:
-      - pos: (N,3)
-    Optional:
-      - x: (N,F)
-      - graph_attr: (Fg,) stacked to (B,Fg)
-      - graph_attr_keys: list[str]
-
-    Returns:
-      - pos: (B,Nmax,3)
-      - x: (B,Nmax,F) if present
-      - n: list[int]
-      - mask: (B,Nmax) boolean (True for valid points) if return_mask=True
+    Canonical cloud batching is handled by ``collate_cloud`` using concatenation.
     """
-    poss = [b["pos"] for b in batch]
-    device = poss[0].device
-    dtype_pos = poss[0].dtype
+    samples = _batch_list(batch)
+    positions = [
+        _require_tensor(sample, index, "pos", ndim=2) for index, sample in enumerate(samples)
+    ]
+    device = positions[0].device
+    dtype_pos = positions[0].dtype
 
-    ns = [int(p.shape[0]) for p in poss]
+    ns = [int(pos.shape[0]) for pos in positions]
     nmax = max(ns)
 
-    out_pos = torch.full((len(batch), nmax, 3), float(pad_value_pos), dtype=dtype_pos, device=device)
+    out_pos = torch.full(
+        (len(samples), nmax, 3),
+        pad_value_pos,
+        dtype=dtype_pos,
+        device=device,
+    )
 
-    has_x = ("x" in batch[0]) and (batch[0]["x"] is not None)
+    has_x = ("x" in samples[0]) and (samples[0]["x"] is not None)
     out_x = None
     if has_x:
-        xs = [b["x"] for b in batch]
-        F = int(xs[0].shape[1])
+        xs = [_require_tensor(sample, index, "x", ndim=2) for index, sample in enumerate(samples)]
+        feature_width = int(xs[0].shape[1])
         dtype_x = xs[0].dtype
-        out_x = torch.full((len(batch), nmax, F), float(pad_value_x), dtype=dtype_x, device=device)
+        out_x = torch.full(
+            (len(samples), nmax, feature_width),
+            pad_value_x,
+            dtype=dtype_x,
+            device=device,
+        )
 
-    for i, b in enumerate(batch):
-        n = ns[i]
-        out_pos[i, :n, :] = b["pos"]
+    for index, sample in enumerate(samples):
+        count = ns[index]
+        out_pos[index, :count, :] = positions[index]
         if has_x and out_x is not None:
-            out_x[i, :n, :] = b["x"]
+            out_x[index, :count, :] = _require_tensor(sample, index, "x", ndim=2)
 
-    out: Dict[str, Any] = {"pos": out_pos, "n": ns}
+    out: dict[str, Any] = {"pos": out_pos, "n": ns}
 
     if has_x and out_x is not None:
         out["x"] = out_x
 
     if return_mask:
-        mask = torch.zeros((len(batch), nmax), dtype=torch.bool, device=device)
-        for i, n in enumerate(ns):
-            mask[i, :n] = True
+        mask = torch.zeros((len(samples), nmax), dtype=torch.bool, device=device)
+        for index, count in enumerate(ns):
+            mask[index, :count] = True
         out["mask"] = mask
 
-    # graph-level features (stack)
-    if "graph_attr" in batch[0] and batch[0]["graph_attr"] is not None:
-        if all(("graph_attr" in b and b["graph_attr"] is not None) for b in batch):
-            out["graph_attr"] = torch.cat([b["graph_attr"].reshape(1, -1) for b in batch], dim=0)
-            if "graph_attr_keys" in batch[0] and batch[0]["graph_attr_keys"] is not None:
-                out["graph_attr_keys"] = batch[0]["graph_attr_keys"]
-
-    if "id" in batch[0]:
-        out["id"] = [b.get("id") for b in batch]
-    if "encoder" in batch[0]:
-        out["encoder"] = [b.get("encoder") for b in batch]
+    if "id" in samples[0]:
+        out["id"] = [sample.get("id") for sample in samples]
 
     return out
 
-def collate_graph_pad_features(
-    batch: List[Dict[str, Any]],
-    *,
-    pad_value: float = 0.0,
-    pad_to: Optional[int] = None,  # if set, force F = pad_to
-    return_feat_mask: bool = False,
-) -> Dict[str, Any]:
-    """
-    Collate graphs WITHOUT PyG dependency, padding node feature dimension F.
 
-    Expects each sample has:
-      - x: (N,F)
-      - edge_index: (2,E)
-
-    Optional:
-      - edge_attr: (E,Fe)  (will NOT be padded; must match across batch if present)
-      - edge_dist: (E,)
-      - pos: (N,3)
-      - graph_attr: (G,)
-      - graph_attr_keys: list[str] (kept as python list if present)
-      - id, encoder
-
-    Returns:
-      - x: (sumN, Fmax) padded on feature dim
-      - edge_index: (2, sumE) with node offsets applied
-      - batch: (sumN,) graph id per node
-      - feat_dim: int (Fmax)
-      - feat_mask (optional): (sumN, Fmax) True where original features existed
-    """
-    xs = []
-    edge_indices = []
-    edge_dists = []
-    edge_attrs = []
-    poss = []
-    batch_vec = []
-
-    graph_attrs = []
-    graph_attr_keys = None  # keep first, assume same schema
-
-    node_offset = 0
-
-    # Determine Fmax
-    Fs = [int(b["x"].shape[1]) for b in batch]
-    Fmax = int(max(Fs)) if pad_to is None else int(pad_to)
-
-    # Edge_attr dimension must match if present across all samples
-    has_edge_attr = any("edge_attr" in b for b in batch)
-    edge_attr_dim = None
-    if has_edge_attr:
-        dims = []
-        for b in batch:
-            if "edge_attr" in b:
-                dims.append(int(b["edge_attr"].shape[1]))
-        if dims:
-            edge_attr_dim = dims[0]
-            if any(d != edge_attr_dim for d in dims):
-                raise RuntimeError(
-                    f"edge_attr dim mismatch across batch: {dims}. "
-                    "Use a separate collate or disable edge_attr mixing."
-                )
-
-    # graph_attr dim must match if present
-    has_graph_attr = any("graph_attr" in b for b in batch)
-    graph_attr_dim = None
-    if has_graph_attr:
-        dims = []
-        for b in batch:
-            if "graph_attr" in b and torch.is_tensor(b["graph_attr"]):
-                dims.append(int(b["graph_attr"].numel()))
-        if dims:
-            graph_attr_dim = dims[0]
-            if any(d != graph_attr_dim for d in dims):
-                raise RuntimeError(f"graph_attr dim mismatch across batch: {dims}")
-
-    feat_masks = [] if return_feat_mask else None
-
-    for i, b in enumerate(batch):
-        x = b["x"]
-        ei = b["edge_index"]
-
-        n = int(x.shape[0])
-        f = int(x.shape[1])
-
-        # pad x to Fmax
-        if f == Fmax:
-            xpad = x
-            if return_feat_mask:
-                feat_masks.append(torch.ones((n, Fmax), dtype=torch.bool, device=x.device))
-        elif f < Fmax:
-            xpad = torch.full((n, Fmax), float(pad_value), dtype=x.dtype, device=x.device)
-            xpad[:, :f] = x
-            if return_feat_mask:
-                m = torch.zeros((n, Fmax), dtype=torch.bool, device=x.device)
-                m[:, :f] = True
-                feat_masks.append(m)
-        else:
-            # If someone has more than pad_to/Fmax, truncate to keep deterministic
-            xpad = x[:, :Fmax]
-            if return_feat_mask:
-                feat_masks.append(torch.ones((n, Fmax), dtype=torch.bool, device=x.device))
-
-        xs.append(xpad)
-        edge_indices.append(ei + node_offset)
-
-        if "edge_dist" in b:
-            edge_dists.append(b["edge_dist"])
-
-        if has_edge_attr and ("edge_attr" in b):
-            edge_attrs.append(b["edge_attr"])
-
-        if "pos" in b:
-            poss.append(b["pos"])
-
-        batch_vec.append(torch.full((n,), i, dtype=torch.long, device=x.device))
-        node_offset += n
-
-        if "graph_attr" in b and torch.is_tensor(b["graph_attr"]):
-            graph_attrs.append(b["graph_attr"].reshape(-1))
-
-        if graph_attr_keys is None and ("graph_attr_keys" in b):
-            graph_attr_keys = b.get("graph_attr_keys")
-
-    out: Dict[str, Any] = {
-        "x": torch.cat(xs, dim=0),
-        "edge_index": torch.cat(edge_indices, dim=1),
-        "batch": torch.cat(batch_vec, dim=0),
-        "feat_dim": Fmax,
-    }
-
-    if return_feat_mask and feat_masks is not None:
-        out["feat_mask"] = torch.cat(feat_masks, dim=0)
-
-    if edge_dists:
-        out["edge_dist"] = torch.cat(edge_dists, dim=0)
-
-    if edge_attrs:
-        # concatenation requires same edge_attr_dim (checked above)
-        out["edge_attr"] = torch.cat(edge_attrs, dim=0)
-
-    if poss:
-        out["pos"] = torch.cat(poss, dim=0)
-
-    if graph_attrs:
-        out["graph_attr"] = torch.stack(graph_attrs, dim=0)  # (B,G)
-
-    if graph_attr_keys is not None:
-        out["graph_attr_keys"] = graph_attr_keys
-
-    if "id" in batch[0]:
-        out["id"] = [b.get("id") for b in batch]
-    if "encoder" in batch[0]:
-        out["encoder"] = [b.get("encoder") for b in batch]
-
-    return out
+__all__ = [
+    "collate_cloud",
+    "collate_cloud_pad",
+    "collate_graph",
+    "collate_graph_strict",
+    "collate_grid",
+    "collate_grid_pad",
+    "collate_learned",
+    "collate_matrix",
+]

@@ -3,7 +3,26 @@ from __future__ import annotations
 import pytest
 
 
-def test_collate_graph_pads_mixed_x_and_edge_attr():
+def _metadata(sample_id: str, name: str = "residue_knn_graph"):
+    return {
+        "id": sample_id,
+        "artifact_dir": f"artifacts/{sample_id}/{name}",
+        "meta_path": f"artifacts/{sample_id}/{name}/meta.json",
+        "representation_name": name,
+        "representation_family": "explicit",
+        "representation_type": "graph",
+        "granularity": "residue",
+        "parameters": {"k": 8},
+        "feature_keys": {
+            "node_attr_keys": ["feature"],
+            "edge_attr_keys": ["edge_feature"],
+            "graph_attr_keys": ["graph_feature"],
+        },
+        "outputs": [{"name": "node_attr"}, {"name": "edge_index"}],
+    }
+
+
+def test_collate_graph_rejects_mixed_x_and_edge_attr_dimensions():
     torch = pytest.importorskip("torch")
     from eris.datasets.collate import collate_graph
 
@@ -12,16 +31,13 @@ def test_collate_graph_pads_mixed_x_and_edge_attr():
     ei1 = torch.tensor([[0, 1, 2], [1, 2, 3]], dtype=torch.int64)  # E=3
     ea1 = torch.zeros((3, 8), dtype=torch.float32)
     ga1 = torch.zeros((10,), dtype=torch.float32)
-    keys = [f"k{i}" for i in range(10)]
 
     s1 = {
+        **_metadata("a"),
         "x": x1,
         "edge_index": ei1,
         "edge_attr": ea1,
         "graph_attr": ga1,
-        "graph_attr_keys": keys,
-        "id": "a",
-        "encoder": "residue_contact_graph_ns",
     }
 
     # sample 2: N=7, x F=30, E=2, edge_attr Fe=16
@@ -31,56 +47,15 @@ def test_collate_graph_pads_mixed_x_and_edge_attr():
     ga2 = torch.ones((10,), dtype=torch.float32)
 
     s2 = {
+        **_metadata("b"),
         "x": x2,
         "edge_index": ei2,
         "edge_attr": ea2,
         "graph_attr": ga2,
-        "graph_attr_keys": keys,  # enforce same keys -> stable behavior
-        "id": "b",
-        "encoder": "residue_knn_graph_ns",
     }
 
-    out = collate_graph([s1, s2])
-
-    # total nodes = 12, pad x to Fmax=30
-    assert out["x"].dtype == torch.float32
-    assert out["x"].shape == (12, 30)
-
-    # first sample padding (22->30) must be zeros
-    assert torch.allclose(out["x"][:5, 22:], torch.zeros((5, 8), dtype=torch.float32))
-
-    # edge_attr padded to Femax=16, total edges = 5
-    assert "edge_attr" in out
-    assert out["edge_attr"].dtype == torch.float32
-    assert out["edge_attr"].shape == (5, 16)
-
-    # first sample edge_attr padding (8->16) must be zeros
-    assert torch.allclose(out["edge_attr"][:3, 8:], torch.zeros((3, 8), dtype=torch.float32))
-
-    # graph_attr stacked to (B, Fg)
-    assert "graph_attr" in out
-    assert out["graph_attr"].dtype == torch.float32
-    assert out["graph_attr"].shape == (2, 10)
-
-    # keys preserved when equal across samples
-    assert out.get("graph_attr_keys") is not None
-    assert list(out["graph_attr_keys"]) == keys
-
-    # batch vector length equals total nodes
-    assert out["batch"].shape == (12,)
-    assert int(out["batch"].min()) == 0
-    assert int(out["batch"].max()) == 1
-
-    # edge_index should be offset for second sample by N1=5
-    assert out["edge_index"].dtype == torch.int64
-    assert out["edge_index"].shape == (2, 5)
-
-    # First 3 edges: same as ei1
-    assert torch.equal(out["edge_index"][:, :3], ei1)
-
-    # Next 2 edges: ei2 + offset(5)
-    expected_ei2 = ei2 + 5
-    assert torch.equal(out["edge_index"][:, 3:], expected_ei2)
+    with pytest.raises(ValueError, match="feature width mismatch"):
+        collate_graph([s1, s2])
 
 
 def test_collate_graph_strict_raises_on_mixed_dims():
@@ -92,8 +67,8 @@ def test_collate_graph_strict_raises_on_mixed_dims():
     ei1 = torch.zeros((2, 1), dtype=torch.int64)
     ei2 = torch.zeros((2, 1), dtype=torch.int64)
 
-    s1 = {"x": x1, "edge_index": ei1}
-    s2 = {"x": x2, "edge_index": ei2}
+    s1 = {**_metadata("a"), "x": x1, "edge_index": ei1}
+    s2 = {**_metadata("b"), "x": x2, "edge_index": ei2}
 
     with pytest.raises((RuntimeError, ValueError)):
         collate_graph_strict([s1, s2])

@@ -498,7 +498,7 @@ hierarchy.
   - **Scope:** Load samples from M7.4 while preserving paths, IDs, metadata, and learned mappings.
   - **Acceptance:** Indexing is stable; duplicate/missing IDs fail; samples remain traceable.
   - **Depends on:** M7.4.
-- [ ] **M7.6 — Stabilize dataset/collate behavior**
+- [x] **M7.6 — Stabilize dataset/collate behavior**
   - **Scope:** Define explicit behavior for graph, matrix, cloud, grid, and learned outputs.
   - **Acceptance:** Compatible samples collate deterministically; incompatibilities fail clearly.
   - **Depends on:** M7.5.
