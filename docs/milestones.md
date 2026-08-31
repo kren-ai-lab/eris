@@ -461,19 +461,19 @@ hierarchy.
 
 ## M7 — Batch, pack, datasets and export
 
-**Status:** `NOT STARTED`
+**Status:** `IN PROGRESS`
 
 **Objective:** Make multi-sample production, indexing, dataset consumption, and exports reliable.
 
 ### Work units
 
-- [ ] **M7.1 — Standardize structure/batch manifests**
+- [x] **M7.1 — Standardize structure/batch manifests**
   - **Scope:** Structure fields: `id`, `path`, `chain`, `model`. Batch result fields:
     `id`, `representation_name`, `representation_family`, `artifact_dir`, `status`,
     `error_type`, `error_message`.
   - **Acceptance:** Every input has one auditable deterministic result with explicit status.
   - **Depends on:** M6 gate.
-- [ ] **M7.2 — Implement batch encode/embed and deterministic resume**
+- [x] **M7.2 — Implement batch encode/embed and deterministic resume**
   - **Scope:** Run manifests, preserve partial failures, write safely, and resume only equivalent
     completed tasks.
   - **Acceptance:** Failures do not corrupt outputs and config changes prevent invalid reuse.
