@@ -147,6 +147,24 @@ def test_pyg_export_reports_missing_optional_dependencies_actionably(monkeypatch
     real_import = builtins.__import__
 
     def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "torch" or name.startswith("torch."):
+            raise ImportError("blocked torch")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+    with pytest.raises(
+        ImportError,
+        match="optional dependency 'torch'",
+    ):
+        to_pyg(eris.encode(PDB, representation="residue_contact_graph", use_cache=False))
+
+
+def test_pyg_export_reports_missing_pyg_after_torch_is_available(monkeypatch) -> None:
+    pytest.importorskip("torch")
+    real_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
         if name == "torch_geometric" or name.startswith("torch_geometric."):
             raise ImportError("blocked torch_geometric")
         return real_import(name, globals, locals, fromlist, level)
@@ -316,6 +334,7 @@ def test_learned_embedding_artifacts_do_not_leak_internal_graph_topology(
 
 
 def test_torch_mapping_compatibility_helper_is_graph_only(monkeypatch) -> None:
+    pytest.importorskip("torch")
     from eris.export.pyg import torch_dict_to_pyg
 
     graph_mapping = to_torch(

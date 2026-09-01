@@ -163,8 +163,8 @@ features, coordinates, edges, relations, and edge features.
 ## Optional dependency boundary
 
 The Eris core remains independent of Torch, TorchDrug, compiled PyG extensions, and RDKit and
-continues to support Python `>=3.10,<3.13`. The GearNet backend has a deliberately narrower Eris
-v0.1 runtime contract:
+supports Python 3.10–3.13 (`>=3.10,<3.14`). The optional GearNet-Edge backend has a deliberately
+narrower Eris v0.1 runtime contract and currently requires Python 3.10:
 
 | dependency | frozen requirement |
 | --- | --- |

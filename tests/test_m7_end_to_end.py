@@ -21,7 +21,6 @@ from eris.core.learned import (
     build_learned_artifact,
 )
 from eris.datasets import ErisFolderDataset
-from eris.datasets.collate import collate_graph
 from eris.pipelines.manifest import BatchResultRow, read_manifest
 
 PDB = Path("tests/data/1AQ2.pdb")
@@ -143,23 +142,6 @@ def test_m7_explicit_public_workflow_preserves_identity_failures_and_resume(
     assert [row.id for row in packed_rows] == ["first", "second"]
     assert _artifact_bytes(artifact_root) == before_pack
 
-    dataset = ErisFolderDataset(index_path, prefer="graph")
-    samples = [dataset[index] for index in range(len(dataset))]
-    assert [sample["id"] for sample in samples] == ["first", "second"]
-    assert {sample["representation_name"] for sample in samples} == {"residue_contact_graph"}
-    collated = collate_graph(samples)
-    assert collated["id"] == ["first", "second"]
-
-    artifact = StructureArtifact.load(
-        artifact_root / "first" / "residue_contact_graph", strict=True
-    )
-    torch_mapping = eris.to_torch(artifact, prefer="graph")
-    assert torch_mapping["representation_name"] == "residue_contact_graph"
-    _install_fake_pyg(monkeypatch)
-    pyg_data = eris.to_pyg(artifact, prefer="graph")
-    assert pyg_data.representation_name == "residue_contact_graph"
-    assert pyg_data.edge_index.shape[1] == artifact.data["edge_index"].shape[1]
-
     resume_manifest = tmp_path / "resume.csv"
     _write_structure_manifest(resume_manifest, [("first", PDB), ("second", PDB)])
 
@@ -178,6 +160,38 @@ def test_m7_explicit_public_workflow_preserves_identity_failures_and_resume(
         ("first", "success"),
         ("second", "success"),
     ]
+
+
+def test_m7_explicit_tensor_and_pyg_workflow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pytest.importorskip("torch")
+    from eris.datasets.collate import collate_graph
+
+    manifest = tmp_path / "structures.csv"
+    _write_structure_manifest(manifest, [("sample", PDB)])
+    artifact_root = tmp_path / "artifacts"
+    eris.batch_encode(
+        manifest_path=manifest,
+        representation="residue_contact_graph",
+        artifact_root=artifact_root,
+        use_cache=False,
+    )
+    index_path = tmp_path / "index.csv"
+    eris.pack(artifact_root, index_path)
+
+    dataset = ErisFolderDataset(index_path, prefer="graph")
+    samples = [dataset[index] for index in range(len(dataset))]
+    assert [sample["id"] for sample in samples] == ["sample"]
+    assert collate_graph(samples)["id"] == ["sample"]
+
+    artifact = StructureArtifact.load(
+        artifact_root / "sample" / "residue_contact_graph", strict=True
+    )
+    assert eris.to_torch(artifact, prefer="graph")["representation_name"] == "residue_contact_graph"
+    _install_fake_pyg(monkeypatch)
+    pyg_data = eris.to_pyg(artifact, prefer="graph")
+    assert pyg_data.edge_index.shape[1] == artifact.data["edge_index"].shape[1]
 
 
 def test_m7_learned_public_workflow_uses_canonical_artifacts_and_torch(
@@ -214,6 +228,12 @@ def test_m7_learned_public_workflow_uses_canonical_artifacts_and_torch(
     eris.pack(artifact_root, index_path)
     sample = ErisFolderDataset(index_path)[0]
     np.testing.assert_array_equal(sample["node_ids"], artifact.data["node_ids"])
+
+
+def test_m7_learned_torch_export_preserves_canonical_artifact() -> None:
+    pytest.importorskip("torch")
+    artifact = _synthetic_learned_artifact(PDB)
+
     torch_mapping = eris.to_torch(artifact)
     assert torch_mapping["node_ids"] == artifact.data["node_ids"].tolist()
     assert tuple(torch_mapping["node_embedding"].shape) == (2, 2)
@@ -248,23 +268,6 @@ def test_m7_cli_workflow_uses_the_same_public_boundaries(
     assert result.exit_code == 0, result.output
     assert index_path.is_file()
 
-    torch_path = tmp_path / "graph.pt"
-    result = runner.invoke(
-        app,
-        ["export", "to-torch", "--artifact-dir", str(artifact_dir), "--out", str(torch_path)],
-    )
-    assert result.exit_code == 0, result.output
-    assert torch_path.is_file()
-
-    _install_fake_pyg(monkeypatch)
-    pyg_path = tmp_path / "graph-pyg.pt"
-    result = runner.invoke(
-        app,
-        ["export", "to-pyg", "--artifact-dir", str(artifact_dir), "--out", str(pyg_path)],
-    )
-    assert result.exit_code == 0, result.output
-    assert pyg_path.is_file()
-
     monkeypatch.setattr(
         eris,
         "embed",
@@ -293,3 +296,42 @@ def test_m7_cli_workflow_uses_the_same_public_boundaries(
 
     assert runner.invoke(app, ["encode", "batch"]).exit_code == 2
     assert runner.invoke(app, ["embed", "batch"]).exit_code == 2
+
+
+def test_m7_cli_export_workflow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("torch")
+    manifest = tmp_path / "structures.csv"
+    _write_structure_manifest(manifest, [("cli", PDB)])
+    artifact_root = tmp_path / "artifacts"
+    result = runner.invoke(
+        app,
+        [
+            "batch",
+            "encode",
+            str(manifest),
+            "--representation",
+            "residue_contact_graph",
+            "--out",
+            str(artifact_root),
+            "--no-cache",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    artifact_dir = artifact_root / "cli" / "residue_contact_graph"
+
+    torch_path = tmp_path / "graph.pt"
+    result = runner.invoke(
+        app,
+        ["export", "to-torch", "--artifact-dir", str(artifact_dir), "--out", str(torch_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert torch_path.is_file()
+
+    _install_fake_pyg(monkeypatch)
+    pyg_path = tmp_path / "graph-pyg.pt"
+    result = runner.invoke(
+        app,
+        ["export", "to-pyg", "--artifact-dir", str(artifact_dir), "--out", str(pyg_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert pyg_path.is_file()

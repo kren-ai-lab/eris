@@ -12,7 +12,8 @@ is an optional environment with a separately supplied checkpoint.
 
 ## Installation
 
-Core Eris targets Python `>=3.10,<3.13`.
+Eris core supports Python 3.10-3.13 (`>=3.10,<3.14`). The optional GearNet-Edge backend
+currently requires Python 3.10.
 
 From a checkout or source distribution:
 

@@ -23,7 +23,7 @@
 ## Frozen project contracts
 
 - Package/import/CLI name: `eris`.
-- Core Python: `>=3.10,<3.13`.
+- Core Python: `>=3.10,<3.14`.
 - Preserve optional-dependency isolation.
 - `import eris` must not eagerly import Torch, TorchDrug, PyG, RDKit, or GearNet runtime.
 - Artifact persistence is `StructureArtifact` Schema v2 with `meta.json` + `data.npz`.

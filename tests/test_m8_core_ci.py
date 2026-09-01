@@ -9,11 +9,14 @@ WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 def test_core_ci_matrix_enforces_the_frozen_core_contract() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    normalized = workflow.casefold()
+    core = workflow.split("  test:\n", maxsplit=1)[1].split("  distribution-build:\n", maxsplit=1)[
+        0
+    ]
+    normalized = core.casefold()
 
-    assert 'python-version: ["3.10", "3.11", "3.12"]' in workflow
+    assert 'python-version: ["3.10", "3.11", "3.12", "3.13"]' in core
     assert "permissions:\n  contents: read" in workflow
-    assert 'python -m pip install -e ".[dev]"' in workflow
+    assert 'python -m pip install -e ".[dev]"' in core
     assert "python -m ruff check ." in workflow
     assert "python -m ruff format --check ." in workflow
     assert "python -m pytest -q" in workflow

@@ -16,6 +16,8 @@ def test_distribution_and_optional_ci_keep_their_frozen_boundaries() -> None:
     learned = workflow.split("  learned-gearnet:\n", maxsplit=1)[1]
 
     assert "python -m build --outdir dist" in distribution
+    assert 'python-version: ["3.12", "3.13"]' in distribution
+    assert "python-version: ${{ matrix.python-version }}" in distribution
     assert "tests/test_m8_release_boundaries.py" in distribution
     assert "python -m venv /tmp/eris-wheel-env" in distribution
     assert "pip install dist/*.whl" in distribution

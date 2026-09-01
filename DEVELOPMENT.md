@@ -34,11 +34,12 @@ The official Eris core target is:
 - Python 3.10
 - Python 3.11
 - Python 3.12
+- Python 3.13
 
 The conceptual packaging constraint is:
 
 ```text
->=3.10,<3.13
+>=3.10,<3.14
 ```
 
 The package metadata enforces this range. Learned backends may support a narrower Python range
@@ -82,7 +83,7 @@ Use the validation ladder in increasing scope:
    consistency, package import, and CLI entry points.
 
 The repository declares `python -m pytest -q`, `python -m build`, the `eris` entry point, and
-Ruff pre-commit hooks. The core CI matrix covers Python 3.10–3.12; a separate Python 3.10 lane
+Ruff pre-commit hooks. The core CI matrix covers Python 3.10–3.13; a separate Python 3.10 lane
 validates the optional GearNet environment and wheel/sdist installation. There is no project-wide
 mypy gate.
 
@@ -94,8 +95,8 @@ python -m ruff format --check .
 ```
 
 Use focused tests during ordinary development. Run the full Python 3.10 suite for broad or
-gate-level changes; Python 3.12 core checks and `pip check` are expected at milestone/packaging
-boundaries. The learned GearNet environment is intentionally Python 3.10-only.
+gate-level changes; Python 3.12 and 3.13 core checks and `pip check` are expected at
+milestone/packaging boundaries. The learned GearNet environment is intentionally Python 3.10-only.
 
 ## Git workflow
 

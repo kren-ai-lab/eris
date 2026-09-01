@@ -3,10 +3,17 @@ from __future__ import annotations
 import copy
 import subprocess
 import sys
+from importlib.util import find_spec
 from pathlib import Path
 
 import numpy as np
 import pytest
+
+
+requires_torch = pytest.mark.skipif(
+    find_spec("torch") is None,
+    reason="requires optional dependency 'torch'",
+)
 
 import eris
 from eris.core.artifact_schema_v2 import build_input_metadata
@@ -128,6 +135,7 @@ def test_torch_export_rejects_schema_v1_boundary() -> None:
         to_torch(artifact)
 
 
+@requires_torch
 def test_torch_export_preserves_metadata_and_does_not_mutate_artifact() -> None:
     artifact = eris.encode(PDB, representation="residue_knn_graph", use_cache=False)
     data_before = {name: array.copy() for name, array in artifact.data.items()}
@@ -148,6 +156,7 @@ def test_torch_export_preserves_metadata_and_does_not_mutate_artifact() -> None:
     assert artifact.meta == meta_before
 
 
+@requires_torch
 def test_graph_export_maps_node_attr_to_x_without_reordering_or_padding() -> None:
     artifact = eris.encode(PDB, representation="residue_contact_graph", use_cache=False)
 
@@ -164,6 +173,7 @@ def test_graph_export_maps_node_attr_to_x_without_reordering_or_padding() -> Non
     assert out["edge_index"].shape[1] == out["edge_dist"].shape[0]
 
 
+@requires_torch
 def test_cloud_export_maps_positions_and_features_and_preserves_auxiliary_ids() -> None:
     artifact = eris.encode(PDB, representation="residue_point_cloud", use_cache=False)
 
@@ -176,6 +186,7 @@ def test_cloud_export_maps_positions_and_features_and_preserves_auxiliary_ids() 
     _assert_tensor_equal(out["extra"]["aa_index"], artifact.data["aa_index"])
 
 
+@requires_torch
 @pytest.mark.parametrize(
     ("representation", "matrix_key"),
     [
@@ -203,6 +214,7 @@ def test_matrix_export_preserves_main_matrix_and_historical_channel_option(
         _assert_tensor_equal(default["bin_edges"], artifact.data["bin_edges"])
 
 
+@requires_torch
 def test_grid_export_preserves_grid_shape_and_spatial_metadata() -> None:
     artifact = eris.encode(PDB, representation="residue_voxel_grid", use_cache=False)
 
@@ -276,6 +288,7 @@ def test_learned_global_export_preserves_single_artifact_shape() -> None:
     assert "node_ids" not in out
 
 
+@requires_torch
 def test_learned_both_export_preserves_all_outputs_and_collate_compatibility() -> None:
     from eris.datasets import collate_learned
 

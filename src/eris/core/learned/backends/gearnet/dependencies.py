@@ -132,7 +132,7 @@ def probe_gearnet_availability() -> BackendAvailability:
             available=False,
             reason=(
                 f"GearNet backend requires Python {GEARNET_PYTHON_REQUIREMENT}; "
-                f"running Python {actual}. Eris core remains supported on Python 3.10-3.12."
+                f"running Python {actual}. Eris core remains supported on Python 3.10-3.13."
             ),
         )
 

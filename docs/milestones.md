@@ -585,6 +585,9 @@ clean.
 CI is green; core passes on Python 3.10–3.12; learned passes in its compatible environment;
 clean wheel install passes; docs/examples execute; no generated execution output is tracked.
 
+**Post-M8 compatibility note:** Eris core also supports Python 3.13 (`>=3.10,<3.14`). The optional
+GearNet-Edge backend remains restricted to Python 3.10 (`>=3.10,<3.11`).
+
 ## M9 — Release candidate and PyPI
 
 **Status:** `NOT STARTED`

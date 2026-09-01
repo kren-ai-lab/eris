@@ -292,7 +292,7 @@ def test_dataset_allows_extra_columns_after_canonical_header_but_ignores_them(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "artifacts"
-    _save_artifact(root / "sample" / "residue_point_cloud")
+    _save_learned_artifact(root / "sample" / "synthetic_learned_embedding")
     index = tmp_path / "index.csv"
     row = _pack(root, index)[0]
     row["encoder"] = "legacy"
@@ -300,10 +300,10 @@ def test_dataset_allows_extra_columns_after_canonical_header_but_ignores_them(
     row["grid_shape"] = "legacy"
     _write_index(index, [row], extra=["encoder", "n_residues", "grid_shape"])
 
-    dataset = ErisFolderDataset(index, prefer="cloud")
+    dataset = ErisFolderDataset(index)
     item = dataset[0]
 
-    assert item["representation_name"] == "residue_point_cloud"
+    assert item["representation_name"] == "synthetic_learned_embedding"
     assert "encoder" not in item
     assert "n_residues" not in item
     assert "grid_shape" not in item
@@ -348,7 +348,7 @@ def test_dataset_resolves_posix_locators_from_index_parent(
 ) -> None:
     root = tmp_path / "artifacts"
     artifact_dir = root / "sample" / "residue_point_cloud"
-    _save_artifact(artifact_dir)
+    _save_learned_artifact(artifact_dir)
     index = index_factory(tmp_path, root)
     rows = _pack(root, index)
 
@@ -361,10 +361,10 @@ def test_dataset_resolves_posix_locators_from_index_parent(
 
 def test_dataset_does_not_rescan_after_index_creation(tmp_path: Path) -> None:
     root = tmp_path / "artifacts"
-    _save_artifact(root / "indexed" / "residue_point_cloud")
+    _save_learned_artifact(root / "indexed" / "synthetic_learned_embedding")
     index = tmp_path / "index.csv"
     _pack(root, index)
-    _save_artifact(root / "not-indexed" / "residue_point_cloud")
+    _save_learned_artifact(root / "not-indexed" / "synthetic_learned_embedding")
 
     dataset = ErisFolderDataset(index, prefer="cloud")
 
@@ -536,8 +536,8 @@ def test_dataset_pack_to_dataset_gate_for_index_locations(tmp_path: Path) -> Non
         root = tmp_path / name / "artifacts"
         if name == "inside":
             root = tmp_path / "inside" / "artifacts"
-        artifact_dir = root / "sample" / "residue_point_cloud"
-        _save_artifact(artifact_dir)
+        artifact_dir = root / "sample" / "synthetic_learned_embedding"
+        _save_learned_artifact(artifact_dir)
         pack_artifacts(root, index)
 
         item = ErisFolderDataset(index, prefer="cloud")[0]
@@ -558,11 +558,11 @@ def test_dataset_batch_pack_dataset_gate(tmp_path: Path) -> None:
     index = tmp_path / "index.csv"
     pack_artifacts(root, index)
 
-    item = ErisFolderDataset(index, prefer="matrix")[0]
+    dataset = ErisFolderDataset(index, prefer="matrix")
 
-    assert item["id"] == "protein"
-    assert item["representation_name"] == "residue_contact_map"
-    assert "x" in item
+    assert len(dataset) == 1
+    assert dataset.rows[0].id == "protein"
+    assert dataset.rows[0].representation_name == "residue_contact_map"
 
 
 def test_dataset_reports_actionable_error_when_torch_conversion_unavailable(

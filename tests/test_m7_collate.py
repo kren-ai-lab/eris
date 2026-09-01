@@ -3,9 +3,16 @@ from __future__ import annotations
 import subprocess
 import sys
 from copy import deepcopy
+from importlib.util import find_spec
 
 import numpy as np
 import pytest
+
+
+requires_torch = pytest.mark.skipif(
+    find_spec("torch") is None,
+    reason="requires optional dependency 'torch'",
+)
 
 
 def _torch():
@@ -134,6 +141,7 @@ def _learned_sample(
     return sample
 
 
+@requires_torch
 def test_collate_graph_offsets_edges_and_preserves_metadata() -> None:
     torch = _torch()
     from eris.datasets import collate_graph
@@ -153,6 +161,7 @@ def test_collate_graph_offsets_edges_and_preserves_metadata() -> None:
     assert out["parameters"] == {"representation": "residue_knn_graph", "k": 8}
 
 
+@requires_torch
 @pytest.mark.parametrize(
     ("mutator", "match"),
     [
@@ -182,6 +191,7 @@ def test_collate_graph_rejects_incompatible_samples(mutator, match: str) -> None
         collate_graph([first, second])
 
 
+@requires_torch
 def test_collate_graph_rejects_empty_batch_none_and_dtype_mismatch() -> None:
     torch = _torch()
     from eris.datasets import collate_graph
@@ -198,6 +208,7 @@ def test_collate_graph_rejects_empty_batch_none_and_dtype_mismatch() -> None:
         collate_graph([first, second])
 
 
+@requires_torch
 def test_collate_graph_strict_is_thin_alias() -> None:
     from eris.datasets.collate import collate_graph_strict
 
@@ -206,6 +217,7 @@ def test_collate_graph_strict_is_thin_alias() -> None:
     assert out["ptr"].tolist() == [0, 2, 4]
 
 
+@requires_torch
 def test_collate_cloud_concatenates_variable_n_without_padding() -> None:
     torch = _torch()
     from eris.datasets import collate_cloud
@@ -219,6 +231,7 @@ def test_collate_cloud_concatenates_variable_n_without_padding() -> None:
     assert out["centroid"].shape == (2, 3)
 
 
+@requires_torch
 def test_collate_cloud_rejects_partial_x_and_width_mismatch() -> None:
     from eris.datasets import collate_cloud
 
@@ -233,6 +246,7 @@ def test_collate_cloud_rejects_partial_x_and_width_mismatch() -> None:
         collate_cloud([_cloud_sample("a", 1), sample])
 
 
+@requires_torch
 def test_collate_matrix_stacks_identical_shapes_without_padding() -> None:
     from eris.datasets import collate_matrix
 
@@ -243,6 +257,7 @@ def test_collate_matrix_stacks_identical_shapes_without_padding() -> None:
     assert out["n"] == [2, 2]
 
 
+@requires_torch
 def test_collate_matrix_rejects_shape_matrix_key_and_bin_edge_mismatch() -> None:
     torch = _torch()
     from eris.datasets import collate_matrix
@@ -261,6 +276,7 @@ def test_collate_matrix_rejects_shape_matrix_key_and_bin_edge_mismatch() -> None
         collate_matrix([_matrix_sample("a"), sample])
 
 
+@requires_torch
 def test_collate_grid_stacks_identical_shapes_and_spatial_metadata() -> None:
     from eris.datasets import collate_grid
 
@@ -272,6 +288,7 @@ def test_collate_grid_stacks_identical_shapes_and_spatial_metadata() -> None:
     assert out["centroid"].shape == (2, 3)
 
 
+@requires_torch
 def test_collate_grid_rejects_shape_and_grid_size_mismatch() -> None:
     from eris.datasets import collate_grid
 
@@ -284,6 +301,7 @@ def test_collate_grid_rejects_shape_and_grid_size_mismatch() -> None:
         collate_grid([_grid_sample("a"), sample])
 
 
+@requires_torch
 def test_collate_learned_node_preserves_node_ids_mask_and_order() -> None:
     torch = _torch()
     from eris.datasets import collate_learned
@@ -303,6 +321,7 @@ def test_collate_learned_node_preserves_node_ids_mask_and_order() -> None:
     assert torch.equal(out["ptr"], torch.tensor([0, 1, 3]))
 
 
+@requires_torch
 def test_collate_learned_global_stacks_embeddings() -> None:
     from eris.datasets import collate_learned
 
@@ -317,6 +336,7 @@ def test_collate_learned_global_stacks_embeddings() -> None:
     assert out["id"] == ["a", "b"]
 
 
+@requires_torch
 def test_collate_learned_both_preserves_node_global_association() -> None:
     from eris.datasets import collate_learned
 
@@ -333,6 +353,7 @@ def test_collate_learned_both_preserves_node_global_association() -> None:
     assert out["ptr"].tolist() == [0, 1, 3]
 
 
+@requires_torch
 @pytest.mark.parametrize(
     ("mutator", "match"),
     [
@@ -363,6 +384,7 @@ def test_collate_learned_rejects_incompatible_node_outputs(mutator, match: str) 
         collate_learned([first, second])
 
 
+@requires_torch
 def test_collate_rejects_explicit_learned_mixed_batch() -> None:
     from eris.datasets import collate_graph
 
@@ -372,6 +394,7 @@ def test_collate_rejects_explicit_learned_mixed_batch() -> None:
         collate_graph([_graph_sample("a"), learned])
 
 
+@requires_torch
 def test_padding_helpers_remain_explicit_opt_in() -> None:
     from eris.datasets import collate_cloud_pad, collate_grid_pad
 
@@ -395,6 +418,7 @@ if loaded:
     subprocess.run([sys.executable, "-c", script], check=True)
 
 
+@requires_torch
 def test_common_metadata_is_compared_after_normalization() -> None:
     from eris.datasets import collate_graph
 
@@ -408,6 +432,7 @@ def test_common_metadata_is_compared_after_normalization() -> None:
     assert out["parameters"] == {"nested": {"b": 2, "a": [1]}}
 
 
+@requires_torch
 def test_samples_are_not_mutated_by_collate() -> None:
     from eris.datasets import collate_graph
 
