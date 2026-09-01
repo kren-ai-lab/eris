@@ -1,9 +1,8 @@
 # Eris v0.1 Architecture
 
-This document records the frozen conceptual architecture for Eris v0.1. It distinguishes the
-target public contract from the partially implemented historical codebase. Unless explicitly
-stated otherwise, target APIs, CLI commands, and learned backends described here are not claims
-about current implementation status.
+This document records the frozen conceptual architecture and implemented public boundaries for
+Eris v0.1. Historical rationale is identified where it remains useful; the API, CLI, artifact,
+and learned-backend sections below describe current behavior unless noted otherwise.
 
 ## Purpose and framework boundaries
 
@@ -24,8 +23,8 @@ Eris must not become a duplicate of Sylphy, Roxy, or Rudeus.
 
 ## v0.1 scope
 
-The explicit representations already present in the codebase must be stabilized before new
-explicit representation families are added.
+The ten explicit representations already present in the codebase are the complete v0.1 explicit
+surface; no new representation family is part of this release.
 
 GearNet-Edge pretrained with Multiview Contrast is the selected and registered learned backend for
 v0.1. Its scientific architecture, checkpoint, preprocessing, output contract, and validated
@@ -108,8 +107,8 @@ definition as the single source of truth. The same definition must drive:
 - fingerprints;
 - documentation.
 
-The existing manually duplicated Registry schemas are not the target authority. Consolidation
-is future implementation work.
+The canonical typed configuration is the implemented authority; Registry metadata, defaults,
+help, artifact parameters, and fingerprints derive from it.
 
 ## Artifact Schema v2 conceptual contract
 
@@ -231,14 +230,16 @@ The M6 public CLI hierarchy is:
 - `eris embedders ...`
 - `eris encode ...`
 - `eris embed ...`
+- `eris batch encode ...`
+- `eris batch embed ...`
 - `eris pack ...`
-- `eris export ...`
+- `eris export to-torch ...`
+- `eris export to-pyg ...`
 - `eris models ...`
 - `eris cache ...`
 - `eris info`
 
-The historical `eris export ...` tree may still exist before M7, but export, batch, pack, datasets,
-and downstream format workflows are not part of the M6 gate or README quickstart contract.
+Batch, pack, dataset, and downstream export workflows are implemented M7 public boundaries.
 
 ## Batch and pack contract
 
@@ -274,19 +275,25 @@ The minimum packed index fields are:
 
 Learned-specific fields may extend the index where applicable.
 
+`ErisFolderDataset` consumes the packed index without rescanning the artifact root. Family-specific
+collates (`collate_graph`, `collate_cloud`, `collate_matrix`, `collate_grid`, and
+`collate_learned`) reject incompatible mixed tensor batches rather than padding, truncating, or
+inventing topology. `to_torch(...)` supports graph, cloud, matrix, grid, and learned artifacts;
+`to_pyg(...)` accepts only artifacts with public graph topology.
+
 ## Output policy
 
 `out/` is generated execution output. It is not canonical test data, a golden reference, a
-supported artifact corpus, or the source of truth for v0.1 schemas. Removing or untracking it is
-separate future work.
+supported artifact corpus, or the source of truth for v0.1 schemas. It is ignored and excluded
+from normal source/package content.
 
 ## Version authority
 
-Eris must ultimately have one package-version authority derived from distribution metadata and
+Eris has one package-version authority derived from distribution metadata and
 exposed through `eris.__version__`. Artifacts record the resulting Eris version in provenance.
 Model and checkpoint identity remains separate from the Eris package version.
 
-Version handling is not changed by this document.
+Version handling is implemented by the distribution metadata authority described above.
 
 ## PyPI naming
 
@@ -296,6 +303,6 @@ The project identity is:
 - Python package/import: `eris`;
 - CLI command: `eris`.
 
-The desired PyPI distribution name is also `eris`, but external namespace availability and
-ownership remain unresolved. The project must not be renamed to `eris-structure`. Distribution
-metadata is not changed by this document.
+The desired and configured PyPI distribution name is also `eris`, but external namespace
+availability and ownership remain a release condition for M9. The project must not be renamed to
+`eris-structure`.

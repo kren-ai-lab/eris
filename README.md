@@ -81,6 +81,37 @@ artifact.validate(strict=True)
 artifact.save("artifact_knn")
 ```
 
+## Batch, pack, dataset, and export workflow
+
+For multiple structures, provide a CSV manifest with `id,path,chain,model` and run one
+representation per batch invocation:
+
+```console
+eris batch encode structures.csv \
+  --representation residue_knn_graph \
+  --out artifacts
+eris batch embed structures.csv \
+  --representation gearnet_edge \
+  --checkpoint path/to/mc_gearnet_edge.pth \
+  --out learned-artifacts
+eris pack artifacts --out index.csv
+```
+
+Batch results are recorded with an explicit `success` or `failed` status; failures are not
+silently removed. `pack` creates a deterministic metadata-only index and does not rewrite or
+archive artifact arrays. `ErisFolderDataset` consumes that index directly.
+
+Downstream exports operate on one strict Artifact v2 directory:
+
+```console
+eris export to-torch --artifact-dir artifacts/1/residue_knn_graph --out graph.pt
+eris export to-pyg --artifact-dir artifacts/1/residue_knn_graph --out graph_pyg.pt
+```
+
+Torch export supports graph, cloud, matrix, grid, and learned outputs. PyG export is limited to
+artifacts that already contain public graph topology; matrices, grids, clouds, and learned
+embeddings are never converted into artificial graphs.
+
 ## Artifact format
 
 Eris public operations write Artifact Schema v2 directories:
@@ -211,6 +242,11 @@ eris.list_embedders()
 eris.get_embedder_info("gearnet_edge")
 eris.encode(...)
 eris.embed(...)
+eris.batch_encode(...)
+eris.batch_embed(...)
+eris.pack(...)
+eris.to_torch(...)
+eris.to_pyg(...)
 eris.RepresentationNotFoundError
 ```
 

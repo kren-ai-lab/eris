@@ -41,9 +41,8 @@ The conceptual packaging constraint is:
 >=3.10,<3.13
 ```
 
-The current package metadata does not yet express the upper bound; aligning it is future work.
-Learned backends may support a narrower Python range when their frameworks require it, but
-that must not narrow the supported Python range of Eris core.
+The package metadata enforces this range. Learned backends may support a narrower Python range
+when their frameworks require it, but that does not narrow the supported Python range of Eris core.
 
 ## Expected core dependency boundary
 
@@ -66,8 +65,8 @@ Known intended core runtime dependencies include:
 - `gemmi`;
 - `platformdirs`.
 
-This is the target dependency contract. The current package metadata has not yet been aligned
-with it, and dependency changes must be handled in a separate authorized task.
+These dependencies form the declared core runtime contract. GearNet/TorchDrug/PyG remain optional
+and are isolated from core imports.
 
 ## Validation workflow
 
@@ -82,10 +81,21 @@ Use the validation ladder in increasing scope:
 5. **Distribution/release:** when applicable, validate build, installation, dependency
    consistency, package import, and CLI entry points.
 
-The repository currently declares `python -m pytest -q`, `python -m build`, the `eris` entry
-point, and pre-commit Ruff/mypy hooks. A complete clean environment and release validation
-procedure is still pending; do not report those checks as working until the repository provides
-and passes them.
+The repository declares `python -m pytest -q`, `python -m build`, the `eris` entry point, and
+Ruff pre-commit hooks. The core CI matrix covers Python 3.10–3.12; a separate Python 3.10 lane
+validates the optional GearNet environment and wheel/sdist installation. There is no project-wide
+mypy gate.
+
+The canonical local static checks are:
+
+```console
+python -m ruff check .
+python -m ruff format --check .
+```
+
+Use focused tests during ordinary development. Run the full Python 3.10 suite for broad or
+gate-level changes; Python 3.12 core checks and `pip check` are expected at milestone/packaging
+boundaries. The learned GearNet environment is intentionally Python 3.10-only.
 
 ## Git workflow
 

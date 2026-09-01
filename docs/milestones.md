@@ -569,7 +569,7 @@ clean.
   - **Scope:** Validate learned optional install, fake backend, controlled real smoke, built wheels.
   - **Acceptance:** Optional failures are isolated and compatible learned environment documented.
   - **Depends on:** M8.2, M8.6, and M5.6.
-- [ ] **M8.8 — Complete README and reference/development documentation**
+- [x] **M8.8 — Complete README and reference/development documentation**
   - **Scope:** Document only implemented installation, names, API/CLI, v2, backend, workflows,
     architecture, and contribution.
   - **Acceptance:** Public examples/text match executable contracts; v1 remains pre-release.

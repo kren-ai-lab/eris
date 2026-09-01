@@ -31,7 +31,8 @@ The file is a modern `torch.save` ZIP archive containing an `OrderedDict` state 
 which saves `model.state_dict()`.
 
 Eris v0.1 must not bundle this approximately 80 MB checkpoint in the source repository, wheel,
-or sdist. Checkpoint acquisition and loading policy is implemented in later M5 work.
+or sdist. Checkpoint acquisition remains an explicit caller responsibility; the runtime verifies
+and loads only a supplied local checkpoint.
 
 ## Frozen architecture
 

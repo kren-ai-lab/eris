@@ -129,7 +129,7 @@ Their values are strings. Assembly identity and parsed-content hashes are not pa
 
 ## Parameters: requested versus effective values
 
-`parameters` is a JSON-compatible mapping. The producer contract for later M3 work is:
+`parameters` is a JSON-compatible mapping. The producer contract is:
 
 ```text
 parameters == encoder.config.to_dict()

@@ -4,7 +4,7 @@ This document is the approved M2.1 contract for the default configuration of the
 Eris v0.1 representations. It is the reference for M2.2–M2.8. Where earlier Registry metadata,
 runtime behavior, or documentation differs, the values below are the canonical v0.1 decision.
 
-M2.2 must encode these values in typed canonical configuration. M2.3 must make the Registry derive
+M2.2 encodes these values in typed canonical configuration, and M2.3 makes the Registry derive
 its defaults and parameter metadata from that authority. This document is not Artifact Schema v2.
 
 ## Global rules
@@ -21,8 +21,7 @@ its defaults and parameter metadata from that authority. This document is not Ar
 - Centering semantics correspond to one effective centering operation.
 - The default residue coordinate source is `ca`.
 
-The current voxel implementation must be audited in M2.7 to ensure that `center=True` is applied
-exactly once. This document does not claim that the implementation has already been corrected.
+The implemented voxel path applies `center=True` exactly once, as established by M2.7.
 
 ### Residue extraction
 
@@ -32,8 +31,8 @@ The residue extraction defaults are:
 - alternate-location policy: `"first"`;
 - missing residue-center policy: `"skip"`.
 
-These may currently be internal loader policies. M2.2 will decide how they are represented
-explicitly in typed configuration without changing the frozen values.
+These policies are represented explicitly in the typed canonical configuration without changing
+the frozen values.
 
 ### Atom extraction
 
@@ -315,16 +314,15 @@ defaults:
 - an unsupported atom `include_self_loops` option;
 - historical representation identifiers instead of canonical public names.
 
-M2.3 must remove these independently maintained Registry values.
+M2.3 removed these independently maintained Registry values; this list records historical drift only.
 
 ## Known implementation follow-ups
 
 ### Voxel centering
 
-M2.7 must verify that canonical `center=True` produces exactly one effective centering operation.
-No correction is claimed by this documentation freeze.
+M2.7 verified that canonical `center=True` produces exactly one effective centering operation.
 
 ### Requested versus effective `voxel_size`
 
-M2 must distinguish configured `voxel_size=None` from the effective spacing derived when
-`fit=True`. The canonical default remains `None`.
+The implementation distinguishes configured `voxel_size=None` from the effective spacing derived
+when `fit=True`. The canonical default remains `None`.
