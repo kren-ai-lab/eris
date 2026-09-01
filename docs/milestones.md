@@ -531,14 +531,14 @@ NumPy/JSON artifacts.
 
 ## M8 — Packaging, testing, CI, docs and hygiene
 
-**Status:** `NOT STARTED`
+**Status:** `IN PROGRESS`
 
 **Objective:** Make the implemented project reproducibly installable, testable, documented, and
 clean.
 
 ### Work units
 
-- [ ] **M8.1 — Audit final dependency boundaries**
+- [x] **M8.1 — Audit final dependency boundaries**
   - **Scope:** Audit final real imports and core/optional installs; this is not the first
     declaration of `gemmi`/`platformdirs`.
   - **Acceptance:** Fresh core/learned installs have no missing/accidental mandatory deps and pass
