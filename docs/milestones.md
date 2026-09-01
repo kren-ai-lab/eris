@@ -561,7 +561,7 @@ clean.
   - **Scope:** Finalize reproducible Ruff, formatting, diff, and justified static checks.
   - **Acceptance:** Checks pass locally/CI with narrow justified exclusions.
   - **Depends on:** M8.4.
-- [ ] **M8.6 — Add core CI matrix for Python 3.10–3.12**
+- [x] **M8.6 — Add core CI matrix for Python 3.10–3.12**
   - **Scope:** Clean install, import, `pip check`, core/API/CLI tests, and build smoke.
   - **Acceptance:** Python 3.10, 3.11, and 3.12 pass without learned deps.
   - **Depends on:** M8.1, M8.4, and M8.5.
