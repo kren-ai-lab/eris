@@ -154,6 +154,11 @@ No public `include_self_loops` option exists for `atom_knn_graph` in v0.1.
 
 The canonical option name is `symmetric`, never `symmetrize`.
 
+For residue graphs, `seq_sep` is the absolute difference between chain-relative biological
+sequence positions. Numeric residue-number gaps are retained; insertion-code residues advance in
+their source order. Each explicit residue graph selects one chain, so no cross-chain sequence
+separation is represented.
+
 ### `residue_contact_graph`
 
 | parameter | canonical default |

@@ -246,6 +246,23 @@ def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
     raise ValueError(f"Invalid residue_center: {mode!r}. Use 'ca', 'mean' or 'com'.")
 
 
+def _next_biological_sequence_position(
+    previous_residue_number: int | None,
+    previous_position: int | None,
+    residue_number: int,
+) -> int:
+    """Return a chain-relative position that preserves source residue semantics.
+
+    Increasing residue numbers retain their numeric gap.  Residues with the same
+    number (insertion-code variants) retain their source-order adjacency.
+    """
+    if previous_residue_number is None or previous_position is None:
+        return 0
+    if residue_number > previous_residue_number:
+        return previous_position + residue_number - previous_residue_number
+    return previous_position + 1
+
+
 def extract_residue_bundle(
     chain: gemmi.Chain,
     amino_acids_only: bool = True,
@@ -303,6 +320,9 @@ def extract_residue_bundle(
     plddt_list: List[float] = []
     bfac_list: List[float] = []
     missing_ids: List[str] = []
+    biological_sequence_positions: List[int] = []
+    previous_residue_number: int | None = None
+    previous_sequence_position: int | None = None
 
     for res in chain:
         r3 = res.name.upper()
@@ -313,6 +333,13 @@ def extract_residue_bundle(
         rid = _residue_id(chain, res)
         aa1 = AA3_TO_AA1.get(r3, "X")
         aa_index = AA1_TO_INDEX.get(aa1, UNKNOWN_INDEX)
+        sequence_position = _next_biological_sequence_position(
+            previous_residue_number,
+            previous_sequence_position,
+            int(res.seqid.num),
+        )
+        previous_residue_number = int(res.seqid.num)
+        previous_sequence_position = sequence_position
 
         center, bfactor_ca, plddt_ca = _compute_residue_center(res, mode=mode, altloc=altloc)
 
@@ -331,6 +358,7 @@ def extract_residue_bundle(
             aa_idx.append(aa_index)
             plddt_list.append(float("nan"))
             bfac_list.append(float("nan"))
+            biological_sequence_positions.append(sequence_position)
             continue
 
         coords.append(center.tolist())
@@ -339,6 +367,7 @@ def extract_residue_bundle(
         aa_idx.append(aa_index)
         plddt_list.append(plddt_ca)
         bfac_list.append(bfactor_ca)
+        biological_sequence_positions.append(sequence_position)
 
     if missing_policy == "error" and missing_ids:
         preview = ", ".join(missing_ids[:10])
@@ -358,6 +387,7 @@ def extract_residue_bundle(
         "plddt": np.asarray(plddt_list, dtype=np.float32),
         "bfactor_ca": np.asarray(bfac_list, dtype=np.float32),
         "omitted_residue_ids": np.asarray(missing_ids, dtype=np.str_),
+        "biological_sequence_positions": np.asarray(biological_sequence_positions, dtype=np.int64),
     }
 
 

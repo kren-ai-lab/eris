@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 class ResidueContactGraph(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_contact_graph"
-    version: ClassVar[str] = "0.1.1"
+    version: ClassVar[str] = "0.1.2"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_GRAPH_OUTPUTS
 
@@ -129,7 +129,7 @@ class ResidueContactGraph(BaseResidueEncoder):
             cutoff=self.config.cutoff,
         )
 
-        seq_pos = np.arange(n, dtype=np.int64)
+        seq_pos = np.asarray(strc["biological_sequence_positions"], dtype=np.int64)
 
         node_attr, node_attr_keys = build_node_attr(
             strc["aa_index"],

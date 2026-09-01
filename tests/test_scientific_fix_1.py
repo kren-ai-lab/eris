@@ -76,6 +76,11 @@ RESIDUE_ENCODERS = (
     (ResidueVoxelGridConfig, VoxelGridCA),
 )
 
+CORRECTION_1_ENCODER_VERSIONS = {
+    ResidueKNNGraph: "0.1.2",
+    ResidueContactGraph: "0.1.2",
+}
+
 
 @pytest.mark.parametrize(("config_type", "_encoder_type"), RESIDUE_ENCODERS)
 def test_all_residue_configs_expose_only_skip_and_error(
@@ -97,7 +102,7 @@ def test_all_residue_encoders_trace_skipped_residues(
     structure_input = _write_missing_ca_structure(tmp_path / "missing-ca.pdb")
     artifact = encoder_type(missing_residue_center="skip", use_cache=False).encode(structure_input)
 
-    assert encoder_type.version == "0.1.1"
+    assert encoder_type.version == CORRECTION_1_ENCODER_VERSIONS.get(encoder_type, "0.1.1")
     assert artifact.meta["parameters"]["missing_residue_center"] == "skip"
     assert artifact.data["residue_ids"].tolist() == ["A:15::ALA", "A:20:A:SER"]
     assert artifact.data["omitted_residue_ids"].tolist() == ["A:16::GLY"]

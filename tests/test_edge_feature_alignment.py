@@ -34,6 +34,7 @@ def _residue_context(positions: np.ndarray) -> EncodingContext:
             dtype=np.str_,
         ),
         "resname": np.asarray(["ALA"] * node_count, dtype=np.str_),
+        "biological_sequence_positions": np.arange(node_count, dtype=np.int64),
     }
     return EncodingContext(
         inp=StructureInput(source="synthetic.pdb"),
