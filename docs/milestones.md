@@ -549,11 +549,11 @@ clean.
     use the distribution name `eris` frozen by M0.X.
   - **Acceptance:** Wheel/sdist describes Eris accurately and uses distribution name `eris`.
   - **Depends on:** M8.1 and the completed M0.X naming contract.
-- [ ] **M8.3 — Remove tracked generated outputs and enforce repository hygiene**
+- [x] **M8.3 — Remove tracked generated outputs and enforce repository hygiene**
   - **Scope:** Untrack generated `out/`, preserve fixtures, enforce ignores/clean worktree.
   - **Acceptance:** Tests/examples do not leave expected output tracked or dirty the repository.
   - **Depends on:** M7.10.
-- [ ] **M8.4 — Harden unit/integration/regression suite**
+- [x] **M8.4 — Harden unit/integration/regression suite**
   - **Scope:** Close contract coverage gaps across M1–M7.
   - **Acceptance:** Public contracts/regressions have proportionate positive/negative coverage.
   - **Depends on:** M7 gate.
