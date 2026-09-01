@@ -565,7 +565,7 @@ clean.
   - **Scope:** Clean install, import, `pip check`, core/API/CLI tests, and build smoke.
   - **Acceptance:** Python 3.10, 3.11, and 3.12 pass without learned deps.
   - **Depends on:** M8.1, M8.4, and M8.5.
-- [ ] **M8.7 — Add learned/backend and wheel/sdist CI lanes**
+- [x] **M8.7 — Add learned/backend and wheel/sdist CI lanes**
   - **Scope:** Validate learned optional install, fake backend, controlled real smoke, built wheels.
   - **Acceptance:** Optional failures are isolated and compatible learned environment documented.
   - **Depends on:** M8.2, M8.6, and M5.6.
