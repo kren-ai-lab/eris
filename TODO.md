@@ -1,4 +1,9 @@
-# MORPHEO Full Definitive Checklist
+# Historical post-v0.1 backlog and reference checklist
+
+> This document preserves historical design ideas and post-v0.1 possibilities. It is not the
+> Eris v0.1 roadmap or a statement of implemented behavior: `docs/milestones.md` is authoritative.
+> M0–M8 are complete. Historical names, Schema v1 fields, mesh/new-family ambitions, and optional
+> PLM ideas below are deferred unless a future milestone explicitly adopts them.
 
 ## 0) Release hygiene, packaging y repo publicable
 
@@ -181,7 +186,7 @@
 * ejemplo con 1 PLM (ESM2 o el que ya usas en Sylphy) pero como **extra**
 * **DoD**
 
-  * `pip install eris[plm]` habilita demo
+  * A future PLM extra could enable a demo; current v0.1 does not provide `eris[plm]`.
   * sin extra, no rompe nada
 
 ### 6.3 Atom embeddings (realista)

@@ -531,7 +531,7 @@ NumPy/JSON artifacts.
 
 ## M8 — Packaging, testing, CI, docs and hygiene
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE`
 
 **Objective:** Make the implemented project reproducibly installable, testable, documented, and
 clean.
@@ -574,7 +574,7 @@ clean.
     architecture, and contribution.
   - **Acceptance:** Public examples/text match executable contracts; v1 remains pre-release.
   - **Depends on:** M6.8, M7.10, and M8.2.
-- [ ] **M8.9 — Audit/rebuild examples and notebooks against public API**
+- [x] **M8.9 — Audit/rebuild examples and notebooks against public API**
   - **Scope:** Align explicit, v2, batch, and optional backend examples with API/output policy.
   - **Acceptance:** Examples validate reproducibly, avoid internals/history, and create no tracked
     output.
