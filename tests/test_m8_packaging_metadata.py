@@ -21,10 +21,11 @@ def test_project_metadata_describes_eris_v0_1() -> None:
 
     assert project["name"] == "eris"
     assert project["version"] == "0.1.0"
-    assert project["requires-python"] == ">=3.10,<3.13"
+    assert project["requires-python"] == ">=3.10,<3.14"
     assert project["readme"] == "README.md"
     assert project["license"] == {"file": "LICENSE"}
     assert "Development Status :: 3 - Alpha" in project["classifiers"]
+    assert "Programming Language :: Python :: 3.13" in project["classifiers"]
     assert all("MORPHEO" not in url for url in project["urls"].values())
     assert project["urls"] == {
         "Homepage": "https://github.com/kren-ai-lab/Eris",

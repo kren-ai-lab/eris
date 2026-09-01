@@ -120,7 +120,7 @@ def test_release_build_contains_eris_and_excludes_local_outputs(tmp_path: Path) 
         metadata = BytesParser(policy=default).parsebytes(archive.read(metadata_name))
     assert metadata["Name"] == "eris"
     assert metadata["Version"] == eris.__version__
-    assert set(metadata["Requires-Python"].split(",")) == {">=3.10", "<3.13"}
+    assert set(metadata["Requires-Python"].split(",")) == {">=3.10", "<3.14"}
 
     environment = tmp_path / "wheel-env"
     venv.EnvBuilder(with_pip=True, system_site_packages=True).create(environment)

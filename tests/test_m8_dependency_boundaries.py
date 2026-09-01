@@ -47,7 +47,7 @@ def test_core_declares_direct_runtime_imports_and_python_range() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dependencies = set(pyproject["project"]["dependencies"])
 
-    assert pyproject["project"]["requires-python"] == ">=3.10,<3.13"
+    assert pyproject["project"]["requires-python"] == ">=3.10,<3.14"
     for requirement in ("numpy", "gemmi", "platformdirs", "typer>=0.9", "rich"):
         assert requirement in dependencies
 
