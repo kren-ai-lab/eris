@@ -9,6 +9,7 @@ class UniversalContract(BaseContract):
     """
     This contract validates the data for all encoders.
     """
+
     contract_name: ClassVar[str] = "universal"
 
     def validate(self, data):

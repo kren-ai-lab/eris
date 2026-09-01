@@ -3,9 +3,10 @@ from typing import Any, Dict, ClassVar
 from eris.core.contracts.base_contract import EncoderContract
 from eris.core.contracts.validations import validate_pos, validate_centroid, validate_residue_data
 
+
 class DistogramContract(EncoderContract):
-    """
-    """
+    """ """
+
     contract_name: ClassVar[str] = "distogram"
 
     def validate(self, data: Dict[str, Any]):

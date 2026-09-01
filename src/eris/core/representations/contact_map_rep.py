@@ -5,21 +5,22 @@ from eris.core.base_encoder import EncodingContext
 from eris.core.representations.base_rep import BaseRepresentation
 from eris.core.contracts.conctact_map_contract import ContactMapContract
 
+
 class ContactMapRepresentation(BaseRepresentation):
     representation_type: ClassVar[str] = "matrix"
 
     def contracts(self):
         return [ContactMapContract()]
-    
 
-    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+    def feature_keys(
+        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
+    ) -> Dict[str, Any]:
         keys = {}
 
         keys["matrix_key"] = "contact"
         keys["matrix_attr_keys"] = ["contact"]
 
         return keys
-
 
     def feature_keys_v2(
         self,
@@ -37,9 +38,10 @@ class ContactMapBinsRepresentation(BaseRepresentation):
 
     def contracts(self):
         return [ContactMapContract()]
-    
 
-    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+    def feature_keys(
+        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
+    ) -> Dict[str, Any]:
         keys = {}
 
         keys["matrix_key"] = "contact_bins"

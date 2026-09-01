@@ -9,7 +9,7 @@ from eris.features.node.constants import (
     PHYSCHEM_LOOKUPS,
     PHYSchem_KEYS,
     AAINDEX_BASIC_KEYS,
-    AAINDEX_BASIC_SUBIDX
+    AAINDEX_BASIC_SUBIDX,
 )
 
 from eris.features.utils import parse_mode, onehot, safe_float, ensure_1d
@@ -18,7 +18,6 @@ from eris.features.feature_registry import register_residue_node_feature, Featur
 # --- canonical ordering (NO CAMBIAR en releases)
 _AA_ONEHOT_KEYS = [f"aa_onehot.{aa}" for aa in AA_VOCAB]
 _AA_INDEX_KEY = ["aa_index"]
-
 
 
 def aa_index_to_letters(aa_index: np.ndarray) -> np.ndarray:
@@ -52,7 +51,9 @@ register_residue_node_feature(
         requires={"aa_index"},
         fn=aa_onehot_fn,
         keys_fn=aa_onehot_keys,
-    ))
+    )
+)
+
 
 # -------------------------
 # aa_index
@@ -62,8 +63,10 @@ def aa_index_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any
 
     return aa_index.astype(np.float32)
 
+
 def aa_index_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return _AA_INDEX_KEY
+
 
 register_residue_node_feature(
     FeatureSpec(
@@ -72,7 +75,9 @@ register_residue_node_feature(
         requires={"aa_index"},
         fn=aa_index_fn,
         keys_fn=aa_index_keys,
-    ))
+    )
+)
+
 
 # -------------------------
 # physchem
@@ -96,13 +101,16 @@ register_residue_node_feature(
         requires={"aa_index"},
         fn=physchem_fn,
         keys_fn=physchem_keys,
-    ))
+    )
+)
 
 
 # -------------------------
 # aaindex_basic
 # -------------------------
-def aaindex_basic_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def aaindex_basic_fn(
+    data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]
+) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64)
     feats = [lookup[aa_index] for _, lookup in PHYSCHEM_LOOKUPS]
 
@@ -112,8 +120,9 @@ def aaindex_basic_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str
     return physchem_full[:, subset_idx]
 
 
-
-def aaindex_basic_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def aaindex_basic_keys(
+    data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]
+) -> List[str]:
     return AAINDEX_BASIC_KEYS
 
 
@@ -124,15 +133,17 @@ register_residue_node_feature(
         requires={"aa_index"},
         fn=aaindex_basic_fn,
         keys_fn=aaindex_basic_keys,
-    ))
+    )
+)
 
 # -------------------------
 # plddt_ca
 # -------------------------
 
+
 def plddt_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     n = data["n"]
-    missing=ctx["missing"]
+    missing = ctx["missing"]
 
     if data["plddt_ca"] is None:
         v = np.full((n, 1), np.nan if missing == "nan" else 0.0, dtype=np.float32)
@@ -157,16 +168,18 @@ register_residue_node_feature(
         requires={"n", "plddt_ca"},
         fn=plddt_ca_fn,
         keys_fn=plddt_ca_keys,
-    ))
+    )
+)
 
 
 # -------------------------
 # bfactor_ca
 # -------------------------
 
+
 def bfactor_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     n = data["n"]
-    missing=ctx["missing"]
+    missing = ctx["missing"]
 
     if data["bfactor_ca"] is None:
         v = np.full((n, 1), np.nan if missing == "nan" else 0.0, dtype=np.float32)
@@ -191,12 +204,14 @@ register_residue_node_feature(
         requires={"n", "bfactor_ca", "missing"},
         fn=bfactor_ca_fn,
         keys_fn=bfactor_ca_keys,
-    ))
+    )
+)
 
 
 # -------------------------
 # flags
 # -------------------------
+
 
 def flags_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64).reshape(-1)
@@ -206,7 +221,7 @@ def flags_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) 
     is_pro = (aa_index == int(list(AA_VOCAB).index("P"))).astype(np.float32).reshape(-1, 1)
     is_unk = (aa_index == UNKNOWN_INDEX).astype(np.float32).reshape(-1, 1)
     has_ca_f = has_ca.astype(np.float32).reshape(-1, 1)
-    
+
     return np.concatenate([is_gly, is_pro, is_unk, has_ca_f], axis=1).astype(np.float32)
 
 
@@ -221,8 +236,5 @@ register_residue_node_feature(
         requires={"aa_index", "has_ca"},
         fn=flags_fn,
         keys_fn=flags_keys,
-    ))
-
-
-
-
+    )
+)

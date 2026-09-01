@@ -33,7 +33,7 @@ def build_node_attr(
         "atom_role": atom_role,
         "bfactor": bfactor,
         "occ": occ,
-        "n": n
+        "n": n,
     }
 
     feat_ctx = {
@@ -41,9 +41,10 @@ def build_node_attr(
         "bfactor_norm": bfactor_norm,
     }
 
-    return build_from_registry(data=data,
-                               mode = mode,
-                               registry = ATOM_NODE_REGISTRY,
-                               feat_ctx = feat_ctx,
-                               return_keys = return_keys
-                               )
+    return build_from_registry(
+        data=data,
+        mode=mode,
+        registry=ATOM_NODE_REGISTRY,
+        feat_ctx=feat_ctx,
+        return_keys=return_keys,
+    )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import logging
+
 logger = logging.getLogger(__name__)
 
 from dataclasses import dataclass, field
@@ -36,27 +37,24 @@ def _structure_validation(ctx: EncodingContext):
     strc = ctx.raw_structure
     n = int(strc["pos"].shape[0])
 
-
     if n < 1:
         logger.error(
-                f"Structure: {ctx.inp.source} does not contain residues/atoms.",
-                extra={"n_nodes": n,
-                       "input": ctx.inp.source},
-            )
+            f"Structure: {ctx.inp.source} does not contain residues/atoms.",
+            extra={"n_nodes": n, "input": ctx.inp.source},
+        )
         raise exc.ExecutionError(f"Structure: {ctx.inp.source} does not contain residues/atoms.")
-    
+
     if n < 20:
         logger.warning(
-                "Low node count. Structure loaded.",
-                extra={"n_nodes": n},
-            )
+            "Low node count. Structure loaded.",
+            extra={"n_nodes": n},
+        )
 
     else:
         logger.info(
-                "Structure loaded.",
-                extra={"n_nodes": n},
-            )
-
+            "Structure loaded.",
+            extra={"n_nodes": n},
+        )
 
 
 @dataclass
@@ -76,52 +74,40 @@ class BaseEncoder(ABC):
     Base class for all encoders.
     Defines the contract for each subclass.
     """
-    #Identity 
-    version: ClassVar[str] = "0.1.0" #Extraer desde versión instalada / pyproject
+
+    # Identity
+    version: ClassVar[str] = "0.1.0"  # Extraer desde versión instalada / pyproject
     name: ClassVar[str]
     representation_family: ClassVar[str] = "explicit"
     granularity_contract: ClassVar[GranularityContract]
     representation: ClassVar[BaseRepresentation]
     output_declarations_v2: ClassVar[Any]
 
-    #Instance attr
+    # Instance attr
     use_cache: bool = True
     cache: Optional[DiskCache] = None
-    center: bool = True           # center coordinates around centroid
-    scale: Optional[float] = None # if set, divide coords by this constant
-
+    center: bool = True  # center coordinates around centroid
+    scale: Optional[float] = None  # if set, divide coords by this constant
 
     def __post_init__(self):
-        mandatory = ["name", "granularity_contract", "representation"]        
+        mandatory = ["name", "granularity_contract", "representation"]
         cls = type(self)
 
-        missing = [
-            attr for attr in mandatory
-            if not hasattr(cls, attr)
-        ]
+        missing = [attr for attr in mandatory if not hasattr(cls, attr)]
 
         if missing:
-            raise ValueError(
-                f"Missing mandatory ClassVar in {cls.__name__}: {missing}"
-            )
-        
-    
+            raise ValueError(f"Missing mandatory ClassVar in {cls.__name__}: {missing}")
+
     def contracts(self):
-        return (
-            [UniversalContract(), self.granularity_contract]
-            + self.representation.contracts()
-        )
+        return [UniversalContract(), self.granularity_contract] + self.representation.contracts()
 
     # Add to exclude granularity_contract and representation?
     def get_params(self) -> Dict[str, Any]:
         EXCLUDE = {"cache", "use_cache", "granularity_contract", "representation"}
 
         return {
-            k: v
-            for k, v in self.__dict__.items()
-            if k not in EXCLUDE and not k.startswith("_")
+            k: v for k, v in self.__dict__.items() if k not in EXCLUDE and not k.startswith("_")
         }
-
 
     def fingerprint(self) -> str:
         from eris.core.hashing import sha256_text
@@ -140,13 +126,12 @@ class BaseEncoder(ABC):
     @property
     def encoder_implementation(self) -> str:
         return f"{type(self).__module__}.{type(self).__qualname__}"
-    
 
     def _normalize_structure(self, pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         n = int(pos.shape[0])
         if n == 0:
             raise ValueError("No residues found to encode.")
-        
+
         pos_out = pos.astype(np.float32)
 
         if self.center and n > 0:
@@ -163,14 +148,11 @@ class BaseEncoder(ABC):
 
         return centroid, pos_out
 
-
     def _feature_keys_v2(self, data: dict[str, Any], ctx: EncodingContext):
         return self.representation.feature_keys_v2(data, ctx)
 
-
     def _counts_v2(self, data: dict[str, Any]):
         return self.representation.counts_v2(data)
-
 
     def _build_metadata_v2(
         self,
@@ -293,7 +275,6 @@ class BaseEncoder(ABC):
         refreshed.validate(strict=True)
         return refreshed
 
-
     def encode(self, inp: StructureInput) -> StructureArtifact:
         from eris.core.artifact_schema_v2 import compute_config_fingerprint
         from eris.core.hashing import sha256_file
@@ -334,7 +315,7 @@ class BaseEncoder(ABC):
                     inp=inp,
                     source_sha256=source_sha256,
                 )
-        
+
         ctx = EncodingContext(inp=inp, source_sha256=source_sha256)
         self._prepare_data(ctx=ctx)
         _structure_validation(ctx=ctx)
@@ -354,9 +335,8 @@ class BaseEncoder(ABC):
             cache.set_v2(key, artifact)
 
         return artifact
-    
 
-    def _prepare_data(self, ctx: EncodingContext):  
+    def _prepare_data(self, ctx: EncodingContext):
         logger.info(
             "Loading structure",
             extra={
@@ -378,14 +358,12 @@ class BaseEncoder(ABC):
         ctx.centroid = centroid.astype(np.float32)
         ctx.pos = pos_out.astype(np.float32)
 
-    
     @abstractmethod
     def _load_structure(self, ctx: EncodingContext) -> Dict[str, Any]:
         """
         Implemented in base atom and base residue classes.
         """
         raise NotImplementedError
-
 
     @abstractmethod
     def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
@@ -394,27 +372,25 @@ class BaseEncoder(ABC):
         """
         raise NotImplementedError
 
-
     @abstractmethod
     def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
         """
         Must be implemented in encoder class.
         """
         raise NotImplementedError
-    
 
-    def _update_granularity_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+    def _update_granularity_metadata(
+        self, meta: Dict[str, Any], ctx: EncodingContext
+    ) -> Dict[str, Any]:
         """
         Must be implemented in base granularity (atom/residue) class.
         """
         raise NotImplementedError
 
-    
     def _finalize_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
         if "params" in meta:
             meta["params"] = check_params(**meta["params"])
         return meta
-    
 
     def validate_output(self, artifact: StructureArtifact) -> None:
         artifact.validate(strict=True)

@@ -23,7 +23,7 @@ def build_node_attr(
     missing: str = "zero",
     return_keys: bool = False,
 ) -> Union[np.ndarray, Tuple[np.ndarray, List[str]]]:
-        
+
     aa_index = np.asarray(aa_index, dtype=np.int64).reshape(-1)
     n = int(aa_index.shape[0])
     if n == 0:
@@ -47,18 +47,17 @@ def build_node_attr(
         "plddt_ca": plddt_ca,
         "bfactor_ca": bfactor_ca,
         "has_ca": has_ca,
-        "n": n
+        "n": n,
     }
 
     feat_ctx = {
         "missing": missing,
     }
 
-    return build_from_registry(data=data,
-                               mode = mode,
-                               registry = RESIDUE_NODE_REGISTRY,
-                               feat_ctx = feat_ctx,
-                               return_keys = return_keys
-                               )
-
-
+    return build_from_registry(
+        data=data,
+        mode=mode,
+        registry=RESIDUE_NODE_REGISTRY,
+        feat_ctx=feat_ctx,
+        return_keys=return_keys,
+    )

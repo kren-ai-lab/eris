@@ -14,7 +14,9 @@ class GraphRepresentation(BaseRepresentation):
     def contracts(self):
         return [GraphContract()]
 
-    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+    def feature_keys(
+        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
+    ) -> Dict[str, Any]:
         keys = {}
 
         # Node feature keys
@@ -24,11 +26,10 @@ class GraphRepresentation(BaseRepresentation):
         # Edge feature keys
         if "edge_attr" in data:
             keys["edge_attr_keys"] = ctx.runtime["edge_attr_keys"]
-                
+
         # Graph feature keys
         if "graph_attr" in data:
             keys["graph_attr_keys"] = ctx.runtime["graph_attr_keys"]
-
 
         return keys
 

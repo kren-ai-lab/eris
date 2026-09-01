@@ -42,7 +42,6 @@ def to_torch(
     typer.echo(f"Saved Torch artifact to {out_path}")
 
 
-
 @app.command("to-pyg")
 def to_pyg(
     artifact_dir: Path = typer.Option(..., "--artifact-dir", exists=True, readable=True),
@@ -66,7 +65,7 @@ def to_pyg(
         out_path=out_path,
         prefer=prefer,
         device=device,
-        matrix_as_channel=matrix_as_channel
+        matrix_as_channel=matrix_as_channel,
     )
 
     typer.echo(f"Saved PyG artifact to {out_path}")
@@ -88,7 +87,7 @@ def batch_to_torch(
     """
     torch_format = "torch"
     stats = batch_export(
-        manifest_path = manifest_path,
+        manifest_path=manifest_path,
         out=out,
         format=torch_format,
         overwrite=overwrite,
@@ -116,7 +115,7 @@ def to_pyg(
     """
     pyg_format = "pyg"
     stats = batch_export(
-        manifest_path = manifest_path,
+        manifest_path=manifest_path,
         out=out,
         format=pyg_format,
         overwrite=overwrite,

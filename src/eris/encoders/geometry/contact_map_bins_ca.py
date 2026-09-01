@@ -50,9 +50,7 @@ class ContactMapBinsCA(BaseResidueEncoder):
                 raise TypeError("config must be a ResidueContactMapBinsConfig")
             if representation_kwargs:
                 names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(
-                    f"config cannot be combined with representation kwargs: {names}"
-                )
+                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
             resolved_config = config
         else:
             resolved_config = ResidueContactMapBinsConfig(**representation_kwargs)
@@ -139,9 +137,7 @@ class ContactMapBinsCA(BaseResidueEncoder):
             np.fill_diagonal(dist, np.nan)
 
         if self.config.edges is not None:
-            edges = validate_bin_edges(
-                np.asarray(self.config.edges, dtype=np.float32)
-            )
+            edges = validate_bin_edges(np.asarray(self.config.edges, dtype=np.float32))
         else:
             edges = np.linspace(
                 self.config.dmin,

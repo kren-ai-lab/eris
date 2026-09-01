@@ -83,7 +83,7 @@ def compute_graph_stats(
     deg_min = float(deg_f.min())
 
     # Density of the simple undirected projection, excluding self-loops.
-    denom = (N * (N - 1))
+    denom = N * (N - 1)
     density = float((2.0 * n_unique_pairs) / denom) if denom > 0 else 0.0
 
     stats: dict[str, float] = {

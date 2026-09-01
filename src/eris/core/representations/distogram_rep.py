@@ -11,9 +11,10 @@ class DistogramRepresentation(BaseRepresentation):
 
     def contracts(self):
         return [DistogramContract()]
-    
 
-    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+    def feature_keys(
+        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
+    ) -> Dict[str, Any]:
         keys = {}
 
         keys["matrix_key"] = "dist"
@@ -30,16 +31,17 @@ class DistogramRepresentation(BaseRepresentation):
 
     def counts_v2(self, data: dict[str, Any]) -> dict[str, int]:
         return build_counts({"n_nodes": int(data["dist"].shape[0])})
-    
+
 
 class DistogramBinsRepresentation(BaseRepresentation):
     representation_type: ClassVar[str] = "matrix"
 
     def contracts(self):
         return [DistogramContract()]
-    
 
-    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+    def feature_keys(
+        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
+    ) -> Dict[str, Any]:
         keys = {}
 
         keys["matrix_key"] = "dist_bins"

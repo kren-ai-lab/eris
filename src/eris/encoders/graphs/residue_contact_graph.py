@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 @dataclass(init=False)
 class ResidueContactGraph(BaseResidueEncoder):
-    #Identity
+    # Identity
     name: ClassVar[str] = "residue_contact_graph"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_GRAPH_OUTPUTS
@@ -42,9 +42,7 @@ class ResidueContactGraph(BaseResidueEncoder):
                 raise TypeError("config must be a ResidueContactGraphConfig")
             if representation_kwargs:
                 names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(
-                    f"config cannot be combined with representation kwargs: {names}"
-                )
+                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
             resolved_config = config
         else:
             resolved_config = ResidueContactGraphConfig(**representation_kwargs)
@@ -132,7 +130,6 @@ class ResidueContactGraph(BaseResidueEncoder):
 
         seq_pos = np.arange(n, dtype=np.int64)
 
-        
         node_attr, node_attr_keys = build_node_attr(
             strc["aa_index"],
             plddt=strc["plddt"],
@@ -140,7 +137,6 @@ class ResidueContactGraph(BaseResidueEncoder):
             mode=self.config.node_attr_mode.to_list(),
             return_keys=True,
         )
-
 
         if self.config.include_self_loops:
             loops = np.arange(n, dtype=np.int64)
@@ -163,11 +159,11 @@ class ResidueContactGraph(BaseResidueEncoder):
 
         stats = compute_graph_stats(edge_index=edge_index, edge_dist=edge_dist, n_nodes=n)
         graph_attr, graph_attr_keys = pack_graph_stats(stats)
- 
+
         ctx.runtime["node_attr_keys"] = node_attr_keys
         ctx.runtime["edge_attr_keys"] = edge_attr_keys
         ctx.runtime["graph_attr_keys"] = graph_attr_keys
-        
+
         data: dict[str, Any] = {
             "pos": pos_out.astype(np.float32),
             "centroid": centroid.astype(np.float32),
@@ -187,7 +183,6 @@ class ResidueContactGraph(BaseResidueEncoder):
             data["bfactor_ca"] = strc["bfactor_ca"].astype(np.float32)
 
         return data
-    
 
     def _update_params_metadata(
         self,

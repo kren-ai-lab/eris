@@ -41,8 +41,7 @@ def parse_mode(mode: Any) -> List[Tuple[str, Dict[str, Any]]]:
         return result
 
     raise ValueError(
-        "Mode must be string ('a+b'), list of strings ['a','b'], "
-        "or list of dict [{'a': {...}}]"
+        "Mode must be string ('a+b'), list of strings ['a','b'], or list of dict [{'a': {...}}]"
     )
 
 
@@ -69,6 +68,7 @@ def ensure_1d(x: np.ndarray, n: int, name: str) -> np.ndarray:
     if a.ndim != 1 or a.shape[0] != n:
         raise ValueError(f"{name} must be shape (N,), got {a.shape}")
     return a
+
 
 def validate_bin_edges(edges: Sequence[float]) -> np.ndarray:
     arr = np.asarray(list(edges), dtype=np.float32).reshape(-1)

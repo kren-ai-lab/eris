@@ -6,11 +6,11 @@ import numpy as np
 from eris.features.feature_builders import build_from_registry_voxel
 from eris.features.feature_registry import GRID_VOXEL_REGISTRY
 
+
 def _bbox(pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     mn = pos.min(axis=0)
     mx = pos.max(axis=0)
     return mn, mx
-
 
 
 def build_grid_attr(
@@ -35,11 +35,10 @@ def build_grid_attr(
 
     # if pos_in.shape[0] == 3 and pos_in.shape[1] != 3:
     #     pos_in = pos_in.T
-    
+
     if center:
         centroid = np.asarray(centroid).reshape(-1)
         pos_in = pos_in - centroid
-
 
     # -------- voxel size --------
     if voxel_size is not None:
@@ -58,7 +57,6 @@ def build_grid_attr(
     half = (G - 1) * vs / 2.0
     origin = np.array([-half, -half, -half], dtype=np.float32)
 
-
     # -------- voxel mapping --------
     ijk = np.floor((pos_in - origin[None, :]) / vs).astype(np.int64)
 
@@ -66,9 +64,12 @@ def build_grid_attr(
     #     ijk = ijk.T
 
     valid = (
-        (ijk[:, 0] >= 0) & (ijk[:, 0] < G) &
-        (ijk[:, 1] >= 0) & (ijk[:, 1] < G) &
-        (ijk[:, 2] >= 0) & (ijk[:, 2] < G)
+        (ijk[:, 0] >= 0)
+        & (ijk[:, 0] < G)
+        & (ijk[:, 1] >= 0)
+        & (ijk[:, 1] < G)
+        & (ijk[:, 2] >= 0)
+        & (ijk[:, 2] < G)
     )
 
     ijk = ijk[valid]
@@ -83,7 +84,6 @@ def build_grid_attr(
     feat_ctx = {
         "pool": pool,
         "sigma": sigma,
-
     }
 
     result = build_from_registry_voxel(
@@ -93,7 +93,7 @@ def build_grid_attr(
         feat_ctx=feat_ctx,
         grid_size=G,
         pool=pool,
-        return_keys = return_keys,
+        return_keys=return_keys,
     )
 
     if return_keys:

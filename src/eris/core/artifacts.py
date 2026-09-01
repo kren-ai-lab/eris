@@ -150,9 +150,7 @@ def _v2_output_names(meta: dict[str, Any]) -> list[str]:
     names: list[str] = []
     for index, output in enumerate(outputs):
         if not isinstance(output, dict):
-            raise ArtifactValidationError(
-                f"Schema v2 meta.outputs[{index}] must be an object."
-            )
+            raise ArtifactValidationError(f"Schema v2 meta.outputs[{index}] must be an object.")
         name = output.get("name")
         if not isinstance(name, str) or not name:
             raise ArtifactValidationError(
@@ -199,7 +197,11 @@ def infer_counts(data: Mapping[str, np.ndarray]) -> Dict[str, int]:
     counts: Dict[str, int] = {}
 
     # Graph
-    if "edge_index" in data and isinstance(data["edge_index"], np.ndarray) and data["edge_index"].ndim == 2:
+    if (
+        "edge_index" in data
+        and isinstance(data["edge_index"], np.ndarray)
+        and data["edge_index"].ndim == 2
+    ):
         counts["n_edges"] = int(data["edge_index"].shape[1])
     if "pos" in data and isinstance(data["pos"], np.ndarray) and data["pos"].ndim == 2:
         counts["n_nodes"] = int(data["pos"].shape[0])
@@ -234,6 +236,7 @@ class StructureArtifact:
       - data.npz
       - meta.json (schema-validated)
     """
+
     data: Dict[str, np.ndarray]
     meta: Dict[str, Any]
 
@@ -246,13 +249,12 @@ class StructureArtifact:
             return
         raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
 
-    def validate(self, strict = False):
+    def validate(self, strict=False):
         schema = _detect_artifact_schema(self.meta)
         if schema == "v2":
             _validate_artifact_v2(self.meta, self.data)
             return
         raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
-
 
     def save(self, outdir: Path, *, validate: bool = True) -> None:
         self.finalize()
@@ -285,7 +287,9 @@ class StructureArtifact:
         data_path = indir / "data.npz"
 
         if not meta_path.exists() or not data_path.exists():
-            raise ArtifactValidationError(f"Missing artifact files in {indir} (need meta.json + data.npz)")
+            raise ArtifactValidationError(
+                f"Missing artifact files in {indir} (need meta.json + data.npz)"
+            )
 
         meta = _read_artifact_metadata(meta_path)
         schema = _detect_artifact_schema(meta)

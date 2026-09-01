@@ -14,6 +14,7 @@ from eris.exceptions import ErisError
 
 logger = logging.getLogger(__name__)
 
+
 class StructureLoadError(ErisError):
     pass
 
@@ -145,7 +146,9 @@ def _select_atom_altloc(atoms: Iterable[gemmi.Atom], altloc: str) -> Optional[ge
 
     # explicit letter
     letter = policy.upper()
-    preferred = [a for a in atoms_list if (getattr(a, "altloc", "") or "").strip().upper() == letter]
+    preferred = [
+        a for a in atoms_list if (getattr(a, "altloc", "") or "").strip().upper() == letter
+    ]
     if preferred:
         return preferred[0]
 
@@ -214,13 +217,19 @@ def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
         if ca_atom is None:
             return None, bfactor_ca, plddt_ca
         p = ca_atom.pos
-        return np.asarray([float(p.x), float(p.y), float(p.z)], dtype=np.float32), bfactor_ca, plddt_ca
+        return (
+            np.asarray([float(p.x), float(p.y), float(p.z)], dtype=np.float32),
+            bfactor_ca,
+            plddt_ca,
+        )
 
     atoms = _selected_atoms_from_residue(res, altloc)
     if not atoms:
         return None, bfactor_ca, plddt_ca
 
-    coords = np.asarray([[float(a.pos.x), float(a.pos.y), float(a.pos.z)] for a in atoms], dtype=np.float32)
+    coords = np.asarray(
+        [[float(a.pos.x), float(a.pos.y), float(a.pos.z)] for a in atoms], dtype=np.float32
+    )
 
     if mode == "mean":
         center = coords.mean(axis=0).astype(np.float32)
@@ -279,7 +288,9 @@ def extract_residue_bundle(
     """
     missing_policy = (missing_residue or "skip").strip().lower()
     if missing_policy not in {"skip", "error", "nan"}:
-        raise ValueError(f"Invalid missing_ca policy: {missing_residue!r}. Use 'skip', 'error', or 'nan'.")
+        raise ValueError(
+            f"Invalid missing_ca policy: {missing_residue!r}. Use 'skip', 'error', or 'nan'."
+        )
 
     mode = (mode or "ca").strip().lower()
     if mode not in {"ca", "mean", "com"}:
@@ -334,7 +345,9 @@ def extract_residue_bundle(
         raise StructureLoadError(f"Missing residue center in residues: {preview}{more}")
 
     if not coords:
-        raise StructureLoadError("No residue positions found in selected chain (after filters/policies).")
+        raise StructureLoadError(
+            "No residue positions found in selected chain (after filters/policies)."
+        )
 
     return {
         "pos": np.asarray(coords, dtype=np.float32),
@@ -345,7 +358,6 @@ def extract_residue_bundle(
         "bfactor_ca": np.asarray(bfac_list, dtype=np.float32),
     }
 
-    
 
 def load_select_and_extract(
     inp: StructureInput,
@@ -372,7 +384,7 @@ def load_and_extract_residue(
     inp: StructureInput,
     amino_acids_only: bool = True,
     *,
-    mode:str = "ca",
+    mode: str = "ca",
     altloc: str = "first",
     missing_ca: str = "skip",
 ) -> LoadedStructureData:
@@ -382,10 +394,10 @@ def load_and_extract_residue(
             amino_acids_only=amino_acids_only,
             altloc=altloc,
             missing_residue=missing_ca,
-            mode = mode,
+            mode=mode,
         )
-    return load_select_and_extract(inp, _extract)
 
+    return load_select_and_extract(inp, _extract)
 
 
 # -----------------------
@@ -393,8 +405,23 @@ def load_and_extract_residue(
 # -----------------------
 # Minimal deterministic element vocabulary (extend later if needed)
 _ELEM_VOCAB = [
-    "UNK", "H", "C", "N", "O", "S", "P", "F",
-    "CL", "BR", "I", "MG", "ZN", "CA", "FE", "NA", "K",
+    "UNK",
+    "H",
+    "C",
+    "N",
+    "O",
+    "S",
+    "P",
+    "F",
+    "CL",
+    "BR",
+    "I",
+    "MG",
+    "ZN",
+    "CA",
+    "FE",
+    "NA",
+    "K",
 ]
 _ELEM_TO_INDEX = {e: i for i, e in enumerate(_ELEM_VOCAB)}
 
@@ -580,7 +607,6 @@ def extract_atom_bundle(
     }
 
 
-
 def load_and_extract_atoms(
     inp: StructureInput,
     *,
@@ -594,6 +620,7 @@ def load_and_extract_atoms(
     """
     Atom-level extraction wrapper using StructureInput.
     """
+
     def _extract(ch):
         return extract_atom_bundle(
             ch,
@@ -604,4 +631,5 @@ def load_and_extract_atoms(
             altloc=altloc,
             amino_acids_only=amino_acids_only,
         )
+
     return load_select_and_extract(inp, _extract)

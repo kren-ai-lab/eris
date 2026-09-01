@@ -6,6 +6,7 @@ import numpy as np
 
 _NEIGHBOR_OFFSETS = [(dx, dy, dz) for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)]
 
+
 def cell_index(pos: np.ndarray, cell_size: float) -> np.ndarray:
     return np.floor(pos / float(cell_size)).astype(np.int64)
 

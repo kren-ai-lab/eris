@@ -8,8 +8,9 @@ from eris.features.feature_registry import register_atom_node_feature, FeatureSp
 # -----------------------------
 # Fixed dims (must be stable!)
 # -----------------------------
-ELEM_DIM = 17   # must match io.py _ELEM_VOCAB length
-ROLE_DIM = 6    # roles 0..5 in io.py _atom_role
+ELEM_DIM = 17  # must match io.py _ELEM_VOCAB length
+ROLE_DIM = 6  # roles 0..5 in io.py _atom_role
+
 
 def _onehot_fixed(idx: np.ndarray, dim: int) -> np.ndarray:
     idx = np.asarray(idx, dtype=np.int64).reshape(-1)
@@ -18,12 +19,13 @@ def _onehot_fixed(idx: np.ndarray, dim: int) -> np.ndarray:
     out[np.arange(idx.shape[0])[m], idx[m]] = 1.0
     return out
 
+
 # -------------------------
 # elem_index
 # -------------------------
 def elem_index_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     elem_index = np.asarray(data["elem_index"], dtype=np.int64).reshape(-1)
-    e = _onehot_fixed(elem_index, ELEM_DIM)  
+    e = _onehot_fixed(elem_index, ELEM_DIM)
 
     return e.astype(np.float32)
 
@@ -39,7 +41,9 @@ register_atom_node_feature(
         requires={"elem_index"},
         fn=elem_index_fn,
         keys_fn=elem_index_keys,
-    ))
+    )
+)
+
 
 # -------------------------
 # role
@@ -62,12 +66,14 @@ register_atom_node_feature(
         requires={"atom_role"},
         fn=role_fn,
         keys_fn=role_keys,
-    ))
+    )
+)
 
 
 # -------------------------
 # bfactor
 # -------------------------
+
 
 def bfactor_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     n = data["n"]
@@ -85,6 +91,7 @@ def bfactor_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]
 
     return v.astype(np.float32)
 
+
 def bfactor_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return ["bfactor"]
 
@@ -93,21 +100,24 @@ register_atom_node_feature(
     FeatureSpec(
         token="bfactor",
         order=30,
-        requires={"missing", "bfactor", "bfactor_norm" , "n"},
+        requires={"missing", "bfactor", "bfactor_norm", "n"},
         fn=bfactor_fn,
         keys_fn=bfactor_keys,
-    ))
+    )
+)
 
 
 # -------------------------
 # occ
 # -------------------------
 
+
 def occ_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
 
     oc = np.nan_to_num(np.asarray(data["occ"], dtype=np.float32), nan=0.0).reshape(-1, 1)
 
     return oc.astype(np.float32)
+
 
 def occ_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return ["occ"]
@@ -120,5 +130,5 @@ register_atom_node_feature(
         requires={"occ"},
         fn=occ_fn,
         keys_fn=occ_keys,
-    ))
-
+    )
+)

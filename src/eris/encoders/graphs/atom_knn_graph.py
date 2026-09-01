@@ -31,6 +31,7 @@ class AtomKNNGraph(BaseAtomEncoder):
       - graph_attr (+ keys)
       - plus raw per-atom fields: elem_index, atom_role, bfactor, occ, residue_ids, atom_name, etc.
     """
+
     # Identity
     name: ClassVar[str] = "atom_knn_graph"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
@@ -51,9 +52,7 @@ class AtomKNNGraph(BaseAtomEncoder):
                 raise TypeError("config must be an AtomKNNGraphConfig")
             if representation_kwargs:
                 names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(
-                    f"config cannot be combined with representation kwargs: {names}"
-                )
+                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
             resolved_config = config
         else:
             resolved_config = AtomKNNGraphConfig(**representation_kwargs)
@@ -145,7 +144,6 @@ class AtomKNNGraph(BaseAtomEncoder):
             symmetric=self.config.symmetric,
         )
 
-
         # deterministic baseline attributes
         node_attr, node_attr_keys = build_node_attr(
             elem_index=strc["elem_index"],
@@ -183,7 +181,6 @@ class AtomKNNGraph(BaseAtomEncoder):
             "node_attr": node_attr.astype(np.float32),
             "edge_attr": edge_attr.astype(np.float32),
             "graph_attr": graph_attr.astype(np.float32),
-
             # raw atom fields (useful + deterministic)
             "elem_index": strc["elem_index"].astype(np.int16),
             "atom_role": strc["atom_role"].astype(np.int8),
@@ -197,7 +194,6 @@ class AtomKNNGraph(BaseAtomEncoder):
         }
 
         return data
-
 
     def _update_params_metadata(
         self,

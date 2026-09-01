@@ -11,8 +11,10 @@ class PointCloudRepresentation(BaseRepresentation):
 
     def contracts(self):
         return [PointCloudContract()]
-    
-    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+
+    def feature_keys(
+        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
+    ) -> Dict[str, Any]:
         keys = {}
 
         # Node feature keys

@@ -8,19 +8,18 @@ def test_pool_graph_basic():
     from eris.pooling import pool_graph
 
     # 3 nodes, 2-dim features
-    x = torch.tensor([[1.0, 2.0],
-                      [3.0, 4.0],
-                      [5.0, 6.0]])
+    x = torch.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
 
     # 2 edges, 1-dim features
-    edge_attr = torch.tensor([[10.0],
-                              [20.0]])
+    edge_attr = torch.tensor([[10.0], [20.0]])
 
     graph_attr = torch.tensor([7.0, 8.0])
 
     sample = {"x": x, "edge_attr": edge_attr, "graph_attr": graph_attr}
 
-    g = pool_graph(sample, stats=("mean", "min", "max"), include_edges=True, include_graph_attr=True)
+    g = pool_graph(
+        sample, stats=("mean", "min", "max"), include_edges=True, include_graph_attr=True
+    )
     # dims: node (3 stats * 2) + edge (3 stats * 1) + graph (2) = 6 + 3 + 2 = 11
     assert g.ndim == 1
     assert g.numel() == 11

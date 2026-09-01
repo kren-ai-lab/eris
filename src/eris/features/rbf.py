@@ -3,7 +3,9 @@ from __future__ import annotations
 import numpy as np
 
 
-def old_rbf(dist: np.ndarray, num_kernels: int = 16, dmin: float = 0.0, dmax: float = 20.0) -> np.ndarray:
+def old_rbf(
+    dist: np.ndarray, num_kernels: int = 16, dmin: float = 0.0, dmax: float = 20.0
+) -> np.ndarray:
     """
     Radial basis encoding for distances.
 
@@ -57,4 +59,3 @@ def compute_rbf(
     gamma = 1.0 / (2.0 * sigma * sigma)
 
     return np.exp(-gamma * (dist - centers) ** 2).astype(np.float32)
-

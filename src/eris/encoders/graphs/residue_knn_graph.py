@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 @dataclass(init=False)
 class ResidueKNNGraph(BaseResidueEncoder):
-    #Identity
+    # Identity
     name: ClassVar[str] = "residue_knn_graph"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_GRAPH_OUTPUTS
@@ -42,9 +42,7 @@ class ResidueKNNGraph(BaseResidueEncoder):
                 raise TypeError("config must be a ResidueKNNGraphConfig")
             if representation_kwargs:
                 names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(
-                    f"config cannot be combined with representation kwargs: {names}"
-                )
+                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
             resolved_config = config
         else:
             resolved_config = ResidueKNNGraphConfig(**representation_kwargs)
@@ -130,7 +128,6 @@ class ResidueKNNGraph(BaseResidueEncoder):
             missing_ca=self.config.missing_residue_center,
         )
 
-
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
         strc = ctx.raw_structure
         centroid = ctx.centroid
@@ -148,7 +145,7 @@ class ResidueKNNGraph(BaseResidueEncoder):
         #         "Expected 'local' or 'global'."
         #     )
 
-        # Graph building    
+        # Graph building
         edge_index, edge_dist = knn_edges(
             pos=pos_out,
             k=self.config.k,
@@ -211,7 +208,6 @@ class ResidueKNNGraph(BaseResidueEncoder):
             data["bfactor_ca"] = strc["bfactor_ca"].astype(np.float32)
 
         return data
-
 
     def _update_params_metadata(
         self,

@@ -14,15 +14,16 @@ from eris.core.io import load_and_extract_residue
 @dataclass
 class BaseResidueEncoder(BaseEncoder):
     granularity_contract: ClassVar[GranularityContract] = ResidueContract()
-    residue_center: str = "ca" # ca: aplha carbon - mean: mean between residue atoms - com: center of mass from residue atoms
+    residue_center: str = "ca"  # ca: aplha carbon - mean: mean between residue atoms - com: center of mass from residue atoms
 
     def _load_structure(self, ctx: EncodingContext):
         mode = self.residue_center
         strc = load_and_extract_residue(ctx.inp, mode=mode)
 
         return strc
-    
-    
-    def _update_granularity_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
+
+    def _update_granularity_metadata(
+        self, meta: Dict[str, Any], ctx: EncodingContext
+    ) -> Dict[str, Any]:
         meta["params"]["residue_center"] = str(self.residue_center)
         return meta

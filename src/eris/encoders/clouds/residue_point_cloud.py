@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 @dataclass(init=False)
 class ResiduePointCloudCA(BaseResidueEncoder):
-    #Identity
+    # Identity
     name: ClassVar[str] = "residue_point_cloud"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_POINT_CLOUD_OUTPUTS
@@ -39,9 +39,7 @@ class ResiduePointCloudCA(BaseResidueEncoder):
                 raise TypeError("config must be a ResiduePointCloudConfig")
             if representation_kwargs:
                 names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(
-                    f"config cannot be combined with representation kwargs: {names}"
-                )
+                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
             resolved_config = config
         else:
             resolved_config = ResiduePointCloudConfig(**representation_kwargs)
@@ -106,7 +104,6 @@ class ResiduePointCloudCA(BaseResidueEncoder):
         }
 
         return data
-
 
     def _update_params_metadata(
         self,

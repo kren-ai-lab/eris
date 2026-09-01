@@ -9,18 +9,19 @@ from eris.features.node.constants import AA_VOCAB
 _AA_ONEHOT_KEYS = [f"aa_onehot.{aa}" for aa in AA_VOCAB]
 _AA_INDEX_KEY = ["aa_index"]
 
+
 # -------------------------
 # occupancy
 # -------------------------
 def add_occupancy_fn(
-        *,
-        grid: np.ndarray,
-        counts: Optional[np.ndarray],
-        ch_start: int,
-        data: Dict[str, Any],
-        ctx: Dict[str, Any],
-        params: Dict[str, Any],
-    ) -> int:
+    *,
+    grid: np.ndarray,
+    counts: Optional[np.ndarray],
+    ch_start: int,
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> int:
     ijk = data["ijk"]
     pool = ctx["pool"]
 
@@ -49,14 +50,17 @@ register_grid_voxel_feature(
         requires={"ijk", "pool"},
         fill_fn=add_occupancy_fn,
         keys_fn=occupancy_keys,
-        n_channels_fn = occupancy_n_channels,
-    ))
+        n_channels_fn=occupancy_n_channels,
+    )
+)
 
 
 # -------------------------
 # density
 # -------------------------
-def _gaussian_splat(grid: np.ndarray, center_ijk: Tuple[int, int, int], sigma: float, value: float = 1.0) -> None:
+def _gaussian_splat(
+    grid: np.ndarray, center_ijk: Tuple[int, int, int], sigma: float, value: float = 1.0
+) -> None:
     if sigma <= 0:
         return
     gx, gy, gz = grid.shape
@@ -79,16 +83,15 @@ def _gaussian_splat(grid: np.ndarray, center_ijk: Tuple[int, int, int], sigma: f
     grid[i0 : i1 + 1, j0 : j1 + 1, k0 : k1 + 1] += blob
 
 
-
 def add_density_fn(
-        *,
-        grid: np.ndarray,
-        counts: Optional[np.ndarray],
-        ch_start: int,
-        data: Dict[str, Any],
-        ctx: Dict[str, Any],
-        params: Dict[str, Any],
-    ) -> int:
+    *,
+    grid: np.ndarray,
+    counts: Optional[np.ndarray],
+    ch_start: int,
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> int:
     ijk = data["ijk"]
     pool = ctx["pool"]
 
@@ -105,6 +108,7 @@ def add_density_fn(
 def density_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return ["density"]
 
+
 def density_n_channels(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> int:
     return 1
 
@@ -116,8 +120,9 @@ register_grid_voxel_feature(
         requires={"ijk", "pool", "sigma"},
         fill_fn=add_density_fn,
         keys_fn=density_keys,
-        n_channels_fn = density_n_channels,
-    ))
+        n_channels_fn=density_n_channels,
+    )
+)
 
 
 # -------------------------
@@ -147,7 +152,6 @@ def _accumulate_scalar(
                 counts_ch[i, j, k] += 1.0
 
 
-
 def add_scalar_pool(
     *,
     grid: np.ndarray,
@@ -173,15 +177,15 @@ def add_scalar_pool(
 
 
 def add_plddt_fn(
-        *,
-        grid: np.ndarray,
-        counts: Optional[np.ndarray],
-        ch_start: int,
-        data: Dict[str, Any],
-        ctx: Dict[str, Any],
-        params: Dict[str, Any],
-    ) -> int:
-    
+    *,
+    grid: np.ndarray,
+    counts: Optional[np.ndarray],
+    ch_start: int,
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> int:
+
     return add_scalar_pool(
         grid=grid,
         counts=counts,
@@ -209,21 +213,22 @@ register_grid_voxel_feature(
         fill_fn=add_plddt_fn,
         keys_fn=plddt_keys,
         n_channels_fn=plddt_n_channels,
-    ))
+    )
+)
 
 
 # -------------------------
 # bfactor
 # -------------------------
 def add_bfactor_fn(
-        *,
-        grid: np.ndarray,
-        counts: Optional[np.ndarray],
-        ch_start: int,
-        data: Dict[str, Any],
-        ctx: Dict[str, Any],
-        params: Dict[str, Any],
-    ) -> int:
+    *,
+    grid: np.ndarray,
+    counts: Optional[np.ndarray],
+    ch_start: int,
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> int:
 
     return add_scalar_pool(
         grid=grid,
@@ -239,6 +244,7 @@ def add_bfactor_fn(
 def bfactor_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
     return ["bfactor"]
 
+
 def bfactor_n_channels(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> int:
     return 1
 
@@ -251,7 +257,8 @@ register_grid_voxel_feature(
         fill_fn=add_bfactor_fn,
         keys_fn=bfactor_keys,
         n_channels_fn=bfactor_n_channels,
-    ))
+    )
+)
 
 
 # -------------------------
@@ -285,14 +292,14 @@ def _accumulate_onehot(
 
 
 def add_aa_onehot_fn(
-        *,
-        grid: np.ndarray,
-        counts: Optional[np.ndarray],
-        ch_start: int,
-        data: Dict[str, Any],
-        ctx: Dict[str, Any],
-        params: Dict[str, Any],
-    ) -> int:
+    *,
+    grid: np.ndarray,
+    counts: Optional[np.ndarray],
+    ch_start: int,
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> int:
     ijk = data["ijk"]
     aa_v = data["aa_index"]
     pool = ctx["pool"]
@@ -317,5 +324,5 @@ register_grid_voxel_feature(
         fill_fn=add_aa_onehot_fn,
         keys_fn=aa_onehot_keys,
         n_channels_fn=aa_onehot_n_channels,
-    ))
-
+    )
+)

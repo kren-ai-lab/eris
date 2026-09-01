@@ -364,9 +364,7 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
 
     @property
     def coordinate_source(self) -> str:
-        return {"ca": "ca", "mean": "residue_mean", "com": "residue_com"}[
-            self.residue_center
-        ]
+        return {"ca": "ca", "mean": "residue_mean", "com": "residue_com"}[self.residue_center]
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -527,15 +525,11 @@ class _ResidueBinningConfig(_ResidueSelectionConfig):
             if not isinstance(self.edges, (list, tuple)):
                 raise TypeError("edges must be a list, tuple, or None")
             normalized = tuple(
-                _require_float(f"edges[{index}]", value)
-                for index, value in enumerate(self.edges)
+                _require_float(f"edges[{index}]", value) for index, value in enumerate(self.edges)
             )
             if len(normalized) < 2:
                 raise ValueError("edges must contain at least two values")
-            if any(
-                right <= left
-                for left, right in zip(normalized, normalized[1:], strict=False)
-            ):
+            if any(right <= left for left, right in zip(normalized, normalized[1:], strict=False)):
                 raise ValueError("edges must be strictly increasing")
             object.__setattr__(self, "edges", normalized)
             object.__setattr__(self, "dmin", None)

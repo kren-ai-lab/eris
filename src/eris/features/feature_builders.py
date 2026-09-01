@@ -54,6 +54,7 @@ def validate_feature_mode(mode: Any, registry: Dict[str, FeatureSpec]) -> None:
 # Normal registry
 # -------------------------
 
+
 def build_from_registry(
     data: Dict[str, Any],
     *,
@@ -102,9 +103,7 @@ def build_from_registry(
             raise TypeError(f"Feature '{spec.token}' must return np.ndarray")
 
         if f.ndim != 2:
-            raise ValueError(
-                f"Feature '{spec.token}' must return a 2D array, got shape {f.shape}"
-            )
+            raise ValueError(f"Feature '{spec.token}' must return a 2D array, got shape {f.shape}")
 
         if N is None:
             N = f.shape[0]
@@ -118,8 +117,7 @@ def build_from_registry(
         k = spec.keys_fn(data, feat_ctx, params)
         if len(k) != f.shape[1]:
             raise ValueError(
-                f"Feature '{spec.token}' keys mismatch: "
-                f"{len(k)} keys for {f.shape[1]} columns"
+                f"Feature '{spec.token}' keys mismatch: {len(k)} keys for {f.shape[1]} columns"
             )
         keys.extend(k)
 
@@ -145,10 +143,10 @@ def build_from_registry(
     return (x, keys) if return_keys else x
 
 
-
 # -------------------------
 # Voxel registry
 # -------------------------
+
 
 def _pool_mode(pool: str) -> str:
     p = (pool or "max").strip().lower()

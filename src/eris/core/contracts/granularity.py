@@ -3,9 +3,10 @@ from typing import Any, Dict, ClassVar
 from eris.exceptions import ExecutionError
 from eris.core.contracts.base_contract import BaseContract
 
+
 class GranularityContract(BaseContract):
     level: ClassVar[str]
-    REQUIRED_FIELDS: ClassVar[set[str]] 
+    REQUIRED_FIELDS: ClassVar[set[str]]
 
     def validate(self, data: Dict[str, Any]) -> None:
         # Required fields must exist
@@ -41,15 +42,9 @@ class GranularityContract(BaseContract):
             raise ExecutionError("GranularityContract violation: no atoms/residues present")
 
 
-
 class ResidueContract(GranularityContract):
     level: ClassVar[str] = "residue"
-    REQUIRED_FIELDS: ClassVar[set[str]] = {
-        "aa_index",
-        "plddt",
-        "bfactor_ca"
-    }
-
+    REQUIRED_FIELDS: ClassVar[set[str]] = {"aa_index", "plddt", "bfactor_ca"}
 
 
 class AtomContract(GranularityContract):
@@ -63,5 +58,3 @@ class AtomContract(GranularityContract):
         "seq_pos_residue",
         "aa_index_residue",
     }
-
-

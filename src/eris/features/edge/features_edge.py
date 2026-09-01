@@ -7,6 +7,7 @@ from eris.features.feature_registry import register_graph_edge_feature, FeatureS
 
 from eris.features.rbf import compute_rbf as rbf_encode
 
+
 # -------------------------
 # dist
 # -------------------------
@@ -26,7 +27,8 @@ register_graph_edge_feature(
         requires={"dist"},
         fn=dist_fn,
         keys_fn=dist_keys,
-    ))
+    )
+)
 
 
 # -------------------------
@@ -58,7 +60,8 @@ register_graph_edge_feature(
         requires={"dist", "E", "rbf_k", "rbf_dmax"},
         fn=rbf_fn,
         keys_fn=rbf_keys,
-    ))
+    )
+)
 
 
 # -------------------------
@@ -80,7 +83,8 @@ register_graph_edge_feature(
         requires={"seq_sep"},
         fn=seq_sep_fn,
         keys_fn=seq_sep_keys,
-    ))
+    )
+)
 
 
 # -------------------------
@@ -107,4 +111,5 @@ register_graph_edge_feature(
         requires={"seq_sep", "local_cutoff"},
         fn=local_fn,
         keys_fn=local_keys,
-    ))
+    )
+)

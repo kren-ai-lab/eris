@@ -126,9 +126,9 @@ def _assert_edge_feature_alignment(
         atol=1e-7,
     )
 
-    expected_seq = np.abs(
-        sequence_positions[source] - sequence_positions[target]
-    ).astype(np.float32)
+    expected_seq = np.abs(sequence_positions[source] - sequence_positions[target]).astype(
+        np.float32
+    )
     seq_column = edge_attr_keys.index("seq_sep")
     np.testing.assert_array_equal(edge_attr[:, seq_column], expected_seq)
 

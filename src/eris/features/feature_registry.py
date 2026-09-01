@@ -8,9 +8,12 @@ class FeatureSpec:
     token: str
     order: int
     requires: Set[str]
-    fn: Callable[[Dict[str, Any], Dict[str, Any], Dict[str, Any]], np.ndarray]      # (data, ctx, params) -> (N,F)
-    keys_fn: Callable[[Dict[str, Any], Dict[str, Any], Dict[str, Any]], List[str]]  # (data, ctx, params) -> keys
-
+    fn: Callable[
+        [Dict[str, Any], Dict[str, Any], Dict[str, Any]], np.ndarray
+    ]  # (data, ctx, params) -> (N,F)
+    keys_fn: Callable[
+        [Dict[str, Any], Dict[str, Any], Dict[str, Any]], List[str]
+    ]  # (data, ctx, params) -> keys
 
 
 @dataclass(frozen=True)
@@ -19,12 +22,24 @@ class VoxelFeatureSpec:
     order: int
     requires: Set[str]
     n_channels_fn: Callable[[Dict[str, Any], Dict[str, Any], Dict[str, Any]], int]
-    fill_fn: Callable[[np.ndarray, Optional[np.ndarray], int, Dict[str, Any], Dict[str, Any], Dict[str, Any], str],int]
+    fill_fn: Callable[
+        [
+            np.ndarray,
+            Optional[np.ndarray],
+            int,
+            Dict[str, Any],
+            Dict[str, Any],
+            Dict[str, Any],
+            str,
+        ],
+        int,
+    ]
     keys_fn: Callable[[Dict[str, Any], Dict[str, Any], Dict[str, Any]], List[str]]
 
 
-
 RESIDUE_NODE_REGISTRY: Dict[str, FeatureSpec] = {}
+
+
 def register_residue_node_feature(spec: FeatureSpec):
     if spec.token in RESIDUE_NODE_REGISTRY:
         raise ValueError(f"Duplicate feature token: {spec.token}")
@@ -33,6 +48,8 @@ def register_residue_node_feature(spec: FeatureSpec):
 
 
 ATOM_NODE_REGISTRY: Dict[str, FeatureSpec] = {}
+
+
 def register_atom_node_feature(spec: FeatureSpec):
     if spec.token in ATOM_NODE_REGISTRY:
         raise ValueError(f"Duplicate feature token: {spec.token}")
@@ -41,6 +58,8 @@ def register_atom_node_feature(spec: FeatureSpec):
 
 
 GRAPH_EDGE_REGISTRY: Dict[str, FeatureSpec] = {}
+
+
 def register_graph_edge_feature(spec: FeatureSpec):
     if spec.token in GRAPH_EDGE_REGISTRY:
         raise ValueError(f"Duplicate feature token: {spec.token}")
@@ -49,6 +68,8 @@ def register_graph_edge_feature(spec: FeatureSpec):
 
 
 GRID_VOXEL_REGISTRY: Dict[str, VoxelFeatureSpec] = {}
+
+
 def register_grid_voxel_feature(spec: VoxelFeatureSpec):
     if spec.token in GRID_VOXEL_REGISTRY:
         raise ValueError(f"Duplicate feature token: {spec.token}")
@@ -69,5 +90,3 @@ def register_grid_voxel_feature(spec: VoxelFeatureSpec):
 #         raise ValueError(f"Duplicate feature token: {spec.token}")
 #     GRAPH_STATS[spec.token] = spec
 #     return spec
-
-

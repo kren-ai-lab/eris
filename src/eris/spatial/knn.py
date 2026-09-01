@@ -7,7 +7,9 @@ import numpy as np
 from eris.spatial.spatial_index import cell_index, build_cell_dict, _NEIGHBOR_OFFSETS
 
 
-def _collect_local_neighbor_candidates(pos: np.ndarray, cutoff: float) -> List[List[Tuple[int, float]]]:
+def _collect_local_neighbor_candidates(
+    pos: np.ndarray, cutoff: float
+) -> List[List[Tuple[int, float]]]:
     """
     Collect neighbor candidates within cutoff for each node using spatial hashing.
 
@@ -85,9 +87,7 @@ def _collect_global_neighbor_candidates(pos: np.ndarray) -> List[List[Tuple[int,
             if i == j:
                 continue
             diff = pi - pos[j]
-            dist = float(np.sqrt(diff[0] * diff[0] +
-                                 diff[1] * diff[1] +
-                                 diff[2] * diff[2]))
+            dist = float(np.sqrt(diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2]))
             neigh[i].append((j, dist))
 
     return neigh
@@ -140,9 +140,7 @@ def _knn_edges_from_candidates(
 
     if symmetric:
         original_edges = list(zip(edges_i, edges_j, dists))
-        closure = original_edges + [
-            (j, i, dist) for i, j, dist in original_edges
-        ]
+        closure = original_edges + [(j, i, dist) for i, j, dist in original_edges]
 
         seen: set[tuple[int, int]] = set()
         unique_i: List[int] = []
@@ -162,9 +160,12 @@ def _knn_edges_from_candidates(
         edges_j = unique_j
         dists = unique_dists
 
-    edge_index = np.stack([np.asarray(edges_i, dtype=np.int64), np.asarray(edges_j, dtype=np.int64)], axis=0)
+    edge_index = np.stack(
+        [np.asarray(edges_i, dtype=np.int64), np.asarray(edges_j, dtype=np.int64)], axis=0
+    )
     edge_dist = np.asarray(dists, dtype=np.float32)
     return edge_index, edge_dist
+
 
 def knn_edges(
     pos: np.ndarray,

@@ -38,9 +38,7 @@ class ContactMapCA(BaseResidueEncoder):
                 raise TypeError("config must be a ResidueContactMapConfig")
             if representation_kwargs:
                 names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(
-                    f"config cannot be combined with representation kwargs: {names}"
-                )
+                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
             resolved_config = config
         else:
             resolved_config = ResidueContactMapConfig(**representation_kwargs)

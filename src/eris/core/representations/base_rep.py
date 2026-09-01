@@ -9,9 +9,6 @@ class BaseRepresentation(ABC):
     def contracts(self):
         pass
 
-
     @abstractmethod
     def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:
         pass
-
-

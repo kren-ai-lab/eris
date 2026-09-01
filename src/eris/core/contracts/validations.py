@@ -6,18 +6,18 @@ from typing import Any, Dict
 def validate_pos(data: Dict[str, Any]):
     if "pos" not in data:
         raise ValueError("Position validation: Missing 'pos'")
-    
+
     if not isinstance(data["pos"], np.ndarray):
         raise TypeError("Position validation: 'pos' must be np.ndarray")
-    
+
     if data["pos"].ndim != 2 or data["pos"].shape[1] != 3:
         raise ValueError("Position validation: 'pos' must have shape (N, 3)")
-    
+
     if data["pos"].dtype != np.float32:
         raise TypeError("Position validation: 'pos' items must be np.float32")
-    
+
     if not np.isfinite(data["pos"]).all():
-        raise TypeError("Position validation: 'pos' items must be finite")  
+        raise TypeError("Position validation: 'pos' items must be finite")
 
 
 def validate_node_feature(data: Dict[str, Any], key: str):
@@ -31,7 +31,7 @@ def validate_node_feature(data: Dict[str, Any], key: str):
         raise ValueError(
             f"Node feature validation: '{key}' must have same length as number of nodes"
         )
-    
+
 
 def validate_edge_index(data: Dict[str, Any]):
     if "edge_index" not in data:
@@ -44,24 +44,18 @@ def validate_edge_index(data: Dict[str, Any]):
         raise TypeError("Edge validation: 'edge_index' must be np.ndarray")
 
     if edge_index.ndim != 2 or edge_index.shape[0] != 2:
-        raise ValueError(
-            "Edge validation: 'edge_index' must have shape (2, E)"
-        )
+        raise ValueError("Edge validation: 'edge_index' must have shape (2, E)")
 
     # Dtype
     if edge_index.dtype != np.int64:
-        raise TypeError(
-            "Edge validation: 'edge_index' must be int64"
-        )
-    
+        raise TypeError("Edge validation: 'edge_index' must be int64")
+
     num_nodes = data["pos"].shape[0]
 
     if edge_index.size > 0:
         if edge_index.min() < 0 or edge_index.max() >= num_nodes:
-            raise ValueError(
-                "GraphContract: edge_index contiene índices fuera de rango"
-            )
-    
+            raise ValueError("GraphContract: edge_index contiene índices fuera de rango")
+
 
 def validate_edge_features(data: Dict[str, Any], key: str = "edge_attr"):
     if key not in data:
@@ -81,18 +75,18 @@ def validate_edge_features(data: Dict[str, Any], key: str = "edge_attr"):
 
     if not np.isfinite(edge_attr).all():
         raise ValueError(f"Edge feature validation: {key} must contain finite values")
-    
+
 
 def validate_centroid(data: Dict[str, Any]):
     if "centroid" not in data:
         raise ValueError("Centroid validation: Missing 'centroid'")
-    
+
     if not isinstance(data["centroid"], np.ndarray):
         raise TypeError("Centroid validation: 'centroid' must be np.ndarray")
-    
+
     if data["centroid"].shape != (1, 3):
         raise ValueError("Centroid validation: 'centroid' must have shape (1, 3)")
-    
+
     if data["centroid"].dtype != np.float32:
         raise TypeError("Centroid validation: 'centroid' items must be np.float32")
 
@@ -110,13 +104,13 @@ def validate_residue_data(data: Dict[str, Any]):
     for r in required:
         if r not in data:
             raise ValueError(f"Residue data validation: missing {r}")
-        
+
         if data[r].ndim != 1:
             raise ValueError(f"Residue data validation: {r} must be 1D array")
 
         if len(data[r]) == 0:
             raise ValueError(f"Residue data validation: {r} cannot be empty")
-        
+
         if not np.issubdtype(data[r].dtype, np.str_):
             raise TypeError(f"Residue data validation: {r} items must be np.str_")
 
@@ -144,16 +138,13 @@ def validate_grid(data: Dict[str, Any]):
         raise TypeError("Grid validation: 'grid' must be np.ndarray")
 
     if grid.ndim != 4:
-        raise ValueError(
-            "Grid validation: 'grid' must have shape (C, D, H, W)"
-        )
+        raise ValueError("Grid validation: 'grid' must have shape (C, D, H, W)")
 
     if not np.issubdtype(grid.dtype, np.floating):
         raise TypeError("Grid validation: 'grid' must be float dtype")
 
     if not np.isfinite(grid).all():
         raise ValueError("Grid validation: 'grid' contains non-finite values")
-
 
     # -------------------------
     # GRID SIZE
@@ -205,7 +196,5 @@ def validate_grid(data: Dict[str, Any]):
 
         if not np.isfinite(origin).all():
             raise ValueError("origin contains non-finite values")
-        
 
     return True
-

@@ -36,7 +36,8 @@ class AtomPointCloud(BaseAtomEncoder):
     Optional:
       - node_attr (N,F) if node_attr_mode != "none"
     """
-    #Identity
+
+    # Identity
     name: ClassVar[str] = "atom_point_cloud"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
     output_declarations_v2: ClassVar = ATOM_POINT_CLOUD_OUTPUTS
@@ -56,9 +57,7 @@ class AtomPointCloud(BaseAtomEncoder):
                 raise TypeError("config must be an AtomPointCloudConfig")
             if representation_kwargs:
                 names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(
-                    f"config cannot be combined with representation kwargs: {names}"
-                )
+                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
             resolved_config = config
         else:
             resolved_config = AtomPointCloudConfig(**representation_kwargs)
@@ -139,9 +138,8 @@ class AtomPointCloud(BaseAtomEncoder):
             "seq_pos_residue": strc["seq_pos_residue"].astype(np.int32),
             "aa_index_residue": strc["aa_index_residue"].astype(np.int16),
         }
-        
-        return data
 
+        return data
 
     def _update_params_metadata(
         self,

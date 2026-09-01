@@ -25,4 +25,6 @@ def apply_params(enc: Any, params_json: str, allow_unknown: bool = False) -> Non
         else:
             if allow_unknown:
                 continue
-            raise ValueError(f"Encoder '{getattr(enc, 'name', enc.__class__.__name__)}' has no parameter '{k}'")
+            raise ValueError(
+                f"Encoder '{getattr(enc, 'name', enc.__class__.__name__)}' has no parameter '{k}'"
+            )
