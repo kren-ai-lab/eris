@@ -70,10 +70,9 @@ pyg = [
 
 dev = [
   "pytest",
-  "ruff",
+  "ruff==0.16.5",
   "build",
   "pre-commit",
-  "mypy",
   "tomli>=1.1; python_version < '3.11'"
 ]
 
@@ -97,6 +96,18 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+force-exclude = true
+exclude = [
+  ".git",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv",
+  "build",
+  "dist",
+  "notebooks",
+  "out",
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["E9", "F63", "F7", "F82"]

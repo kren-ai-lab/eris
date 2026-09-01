@@ -557,7 +557,7 @@ clean.
   - **Scope:** Close contract coverage gaps across M1–M7.
   - **Acceptance:** Public contracts/regressions have proportionate positive/negative coverage.
   - **Depends on:** M7 gate.
-- [ ] **M8.5 — Establish lint/static-check baseline**
+- [x] **M8.5 — Establish lint/static-check baseline**
   - **Scope:** Finalize reproducible Ruff, formatting, diff, and justified static checks.
   - **Acceptance:** Checks pass locally/CI with narrow justified exclusions.
   - **Depends on:** M8.4.

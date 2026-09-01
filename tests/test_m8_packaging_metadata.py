@@ -40,5 +40,6 @@ def test_optional_extras_match_implemented_or_development_contracts() -> None:
 
     assert set(extras) == {"gearnet", "pyg", "dev"}
     assert extras["pyg"] == ["torch", "torch-geometric"]
-    assert "mypy" in extras["dev"]
+    assert "ruff==0.16.5" in extras["dev"]
+    assert "mypy" not in extras["dev"]
     assert all(requirement.endswith(GEARNET_MARKER) for requirement in extras["gearnet"])
