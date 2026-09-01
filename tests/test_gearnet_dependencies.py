@@ -167,14 +167,15 @@ def test_gearnet_extra_matches_the_frozen_dependency_contract():
     pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
     pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
 
+    marker = "; python_version >= '3.10' and python_version < '3.11'"
     assert pyproject["project"]["optional-dependencies"]["gearnet"] == [
-        "numpy>=1.26,<2",
-        "torch==2.11.0",
-        "torchdrug==0.2.1",
-        "torch-scatter==2.1.2",
-        "torch-cluster==1.6.3",
-        "rdkit-pypi==2022.9.5",
-        "ninja>=1.11,<2",
+        f"numpy>=1.26,<2{marker}",
+        f"torch==2.11.0{marker}",
+        f"torchdrug==0.2.1{marker}",
+        f"torch-scatter==2.1.2{marker}",
+        f"torch-cluster==1.6.3{marker}",
+        f"rdkit-pypi==2022.9.5{marker}",
+        f"ninja>=1.11,<2{marker}",
     ]
 
 

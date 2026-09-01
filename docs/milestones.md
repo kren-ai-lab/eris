@@ -544,7 +544,7 @@ clean.
   - **Acceptance:** Fresh core/learned installs have no missing/accidental mandatory deps and pass
     `pip check`.
   - **Depends on:** M7 gate, M1.1, and M5.2.
-- [ ] **M8.2 — Finalize packaging metadata and optional extras**
+- [x] **M8.2 — Finalize packaging metadata and optional extras**
   - **Scope:** Correct metadata, classifiers, URLs, license/readme, Python range, content, extras;
     use the distribution name `eris` frozen by M0.X.
   - **Acceptance:** Wheel/sdist describes Eris accurately and uses distribution name `eris`.
