@@ -46,10 +46,11 @@ class GraphRepresentation(BaseRepresentation):
 
     def counts_v2(self, data: dict[str, Any]) -> dict[str, int]:
         edge_index = data["edge_index"]
-        return build_counts(
-            {
-                "n_nodes": int(data["pos"].shape[0]),
-                "n_edges": int(edge_index.shape[1]),
-                "n_self_loops": int(np.count_nonzero(edge_index[0] == edge_index[1])),
-            }
-        )
+        counts = {
+            "n_nodes": int(data["pos"].shape[0]),
+            "n_edges": int(edge_index.shape[1]),
+            "n_self_loops": int(np.count_nonzero(edge_index[0] == edge_index[1])),
+        }
+        if "omitted_residue_ids" in data:
+            counts["n_omitted_residues"] = int(data["omitted_residue_ids"].shape[0])
+        return build_counts(counts)

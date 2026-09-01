@@ -33,4 +33,7 @@ class PointCloudRepresentation(BaseRepresentation):
         return build_feature_keys(node_attr_keys=ctx.runtime["node_attr_keys"])
 
     def counts_v2(self, data: dict[str, Any]) -> dict[str, int]:
-        return build_counts({"n_nodes": int(data["pos"].shape[0])})
+        counts = {"n_nodes": int(data["pos"].shape[0])}
+        if "omitted_residue_ids" in data:
+            counts["n_omitted_residues"] = int(data["omitted_residue_ids"].shape[0])
+        return build_counts(counts)

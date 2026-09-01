@@ -229,7 +229,7 @@ def test_invalid_values_fail_during_construction(factory):
     [
         lambda: ResiduePointCloudConfig(amino_acids_only=False),
         lambda: ResiduePointCloudConfig(altloc="max_occupancy"),
-        lambda: ResiduePointCloudConfig(missing_residue_center="error"),
+        lambda: ResiduePointCloudConfig(missing_residue_center="nan"),
     ],
 )
 def test_residue_loader_policies_remain_frozen_in_m2_2(factory):

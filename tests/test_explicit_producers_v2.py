@@ -76,6 +76,7 @@ ATOM_AUX_BASELINE = (
 )
 RESIDUE_AUX_BASELINE = (
     ("residue_ids", (534,), "<U10"),
+    ("omitted_residue_ids", (0,), "<U1"),
     ("resname", (534,), "<U3"),
     ("aa_index", (534,), "int16"),
     ("plddt", (534,), "float32"),
@@ -201,20 +202,24 @@ def _expected_feature_keys(ctx: EncodingContext, representation_type: str):
 
 def _expected_counts(data: dict[str, np.ndarray], representation_type: str):
     if representation_type == "cloud":
-        return {"n_nodes": int(data["pos"].shape[0])}
-    if representation_type == "graph":
+        counts = {"n_nodes": int(data["pos"].shape[0])}
+    elif representation_type == "graph":
         edge_index = data["edge_index"]
-        return {
+        counts = {
             "n_nodes": int(data["pos"].shape[0]),
             "n_edges": int(edge_index.shape[1]),
             "n_self_loops": int(np.count_nonzero(edge_index[0] == edge_index[1])),
         }
-    if representation_type == "matrix":
+    elif representation_type == "matrix":
         primary = next(
             name for name in ("dist", "dist_bins", "contact", "contact_bins") if name in data
         )
-        return {"n_nodes": int(data[primary].shape[0])}
-    return {}
+        counts = {"n_nodes": int(data[primary].shape[0])}
+    else:
+        counts = {}
+    if "omitted_residue_ids" in data:
+        counts["n_omitted_residues"] = int(data["omitted_residue_ids"].shape[0])
+    return counts
 
 
 def _compact_array_contract(data: dict[str, np.ndarray]):
@@ -259,6 +264,7 @@ def test_shared_output_declarations_have_frozen_semantics():
         ("centroid", "centroid", "structure", None),
         ("node_attr", "node_features", "residue", "NF"),
         ("residue_ids", "node_ids", "residue", "N"),
+        ("omitted_residue_ids", "omitted_residue_ids", "residue", "N"),
         ("resname", "residue_names", "residue", "N"),
         ("aa_index", "amino_acid_index", "residue", "N"),
         ("plddt", "confidence", "residue", "N"),
@@ -299,6 +305,7 @@ def test_shared_output_declarations_have_frozen_semantics():
         ("origin", "origin", None, None),
         ("centroid", "centroid", "structure", None),
         ("residue_ids", "residue_ids", "residue", "N"),
+        ("omitted_residue_ids", "omitted_residue_ids", "residue", "N"),
         ("resname", "residue_names", "residue", "N"),
         ("aa_index", "amino_acid_index", "residue", "N"),
         ("plddt", "confidence", "residue", "N"),

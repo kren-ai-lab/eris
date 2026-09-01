@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 class ResiduePointCloudCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_point_cloud"
+    version: ClassVar[str] = "0.1.1"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_POINT_CLOUD_OUTPUTS
 
@@ -97,6 +98,7 @@ class ResiduePointCloudCA(BaseResidueEncoder):
             "centroid": centroid.astype(np.float32),
             "node_attr": node_attr.astype(np.float32),
             "residue_ids": strc["residue_ids"].astype(np.str_),
+            "omitted_residue_ids": np.asarray(strc.get("omitted_residue_ids", []), dtype=np.str_),
             "resname": strc["resname"].astype(np.str_),
             "aa_index": strc["aa_index"].astype(np.int16),
             "plddt": strc["plddt"].astype(np.float32),

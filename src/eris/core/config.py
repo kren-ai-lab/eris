@@ -357,9 +357,12 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
         default="first",
         metadata=_metadata("Frozen residue alternate-location policy for v0.1."),
     )
-    missing_residue_center: Literal["skip"] = field(
+    missing_residue_center: Literal["skip", "error"] = field(
         default="skip",
-        metadata=_metadata("Frozen missing residue-center policy for v0.1."),
+        metadata=_metadata(
+            "Missing residue-center policy for explicit residue representations.",
+            choices=("skip", "error"),
+        ),
     )
 
     @property
@@ -388,7 +391,7 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
             _normalize_choice(
                 "missing_residue_center",
                 self.missing_residue_center,
-                ("skip",),
+                ("skip", "error"),
             ),
         )
 

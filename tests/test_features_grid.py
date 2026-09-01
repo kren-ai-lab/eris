@@ -359,5 +359,5 @@ def test_voxel_artifact_roundtrip_preserves_channel_contract(tmp_path):
     assert loaded.meta["feature_keys"] == artifact.meta["feature_keys"]
     assert loaded.meta["shapes"] == artifact.meta["shapes"]
     assert loaded.meta["dtypes"] == artifact.meta["dtypes"]
-    assert loaded.meta["counts"] == {}
+    assert loaded.meta["counts"] == {"n_omitted_residues": 0}
     assert loaded.meta["outputs"][0]["layout"] == "CXYZ"

@@ -29,10 +29,12 @@ The residue extraction defaults are:
 
 - amino acids only: `True`;
 - alternate-location policy: `"first"`;
-- missing residue-center policy: `"skip"`.
+- missing residue-center policy: `"skip"` by default, with `"error"` available for strict
+  explicit residue encoding.
 
-These policies are represented explicitly in the typed canonical configuration without changing
-the frozen values.
+With `"skip"`, omitted residues remain traceable through the artifact's
+`omitted_residue_ids` output and `n_omitted_residues` count. These policies are represented
+explicitly in the typed canonical configuration without changing the default value.
 
 ### Atom extraction
 

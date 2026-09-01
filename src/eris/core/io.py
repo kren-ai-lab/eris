@@ -318,6 +318,7 @@ def extract_residue_bundle(
 
         if center is None:
             if missing_policy == "skip":
+                missing_ids.append(rid)
                 continue
             if missing_policy == "error":
                 missing_ids.append(rid)
@@ -356,6 +357,7 @@ def extract_residue_bundle(
         "aa_index": np.asarray(aa_idx, dtype=np.int16),
         "plddt": np.asarray(plddt_list, dtype=np.float32),
         "bfactor_ca": np.asarray(bfac_list, dtype=np.float32),
+        "omitted_residue_ids": np.asarray(missing_ids, dtype=np.str_),
     }
 
 

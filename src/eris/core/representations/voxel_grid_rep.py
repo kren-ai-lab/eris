@@ -33,4 +33,4 @@ class VoxelGridRepresentation(BaseRepresentation):
         return build_feature_keys(grid_channels=ctx.runtime["channels"])
 
     def counts_v2(self, data: dict[str, Any]) -> dict[str, int]:
-        return build_counts({})
+        return build_counts({"n_omitted_residues": int(data["omitted_residue_ids"].shape[0])})

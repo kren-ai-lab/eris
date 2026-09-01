@@ -32,6 +32,7 @@ def _validate_class_capacity(config: ResidueDistogramBinsConfig) -> None:
 class DistogramBinsCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_distogram_bins"
+    version: ClassVar[str] = "0.1.1"
     representation: ClassVar[BaseRepresentation] = DistogramBinsRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_DISTOGRAM_BINS_OUTPUTS
 
@@ -166,6 +167,7 @@ class DistogramBinsCA(BaseResidueEncoder):
             "pos": pos_out.astype(np.float32),
             "centroid": centroid.astype(np.float32),
             "residue_ids": strc["residue_ids"].astype(np.str_),
+            "omitted_residue_ids": np.asarray(strc.get("omitted_residue_ids", []), dtype=np.str_),
             "resname": strc["resname"].astype(np.str_),
             "aa_index": strc["aa_index"].astype(np.int16),
             "plddt": strc["plddt"].astype(np.float32),

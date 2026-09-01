@@ -134,7 +134,7 @@ def test_all_ten_outputs_features_counts_and_dimensions(canonical_artifacts):
         else:
             assert representation_type == "grid"
             assert set(feature_keys) == {"grid_channels"}
-            assert counts == {}
+            assert counts == {"n_omitted_residues": 0}
             assert len(feature_keys["grid_channels"]) == 25
             assert metadata["shapes"]["grid"][0] == 25
 

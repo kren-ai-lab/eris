@@ -30,7 +30,12 @@ class DistogramRepresentation(BaseRepresentation):
         return build_feature_keys()
 
     def counts_v2(self, data: dict[str, Any]) -> dict[str, int]:
-        return build_counts({"n_nodes": int(data["dist"].shape[0])})
+        return build_counts(
+            {
+                "n_nodes": int(data["dist"].shape[0]),
+                "n_omitted_residues": int(data["omitted_residue_ids"].shape[0]),
+            }
+        )
 
 
 class DistogramBinsRepresentation(BaseRepresentation):
@@ -57,4 +62,9 @@ class DistogramBinsRepresentation(BaseRepresentation):
         return build_feature_keys()
 
     def counts_v2(self, data: dict[str, Any]) -> dict[str, int]:
-        return build_counts({"n_nodes": int(data["dist_bins"].shape[0])})
+        return build_counts(
+            {
+                "n_nodes": int(data["dist_bins"].shape[0]),
+                "n_omitted_residues": int(data["omitted_residue_ids"].shape[0]),
+            }
+        )

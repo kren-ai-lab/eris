@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 class VoxelGridCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_voxel_grid"
+    version: ClassVar[str] = "0.1.1"
     representation: ClassVar[BaseRepresentation] = VoxelGridRepresentation()
     output_declarations_v2: ClassVar = VOXEL_OUTPUTS
 
@@ -156,6 +157,7 @@ class VoxelGridCA(BaseResidueEncoder):
             "origin": extra["origin"].astype(np.float32),
             "centroid": centroid.astype(np.float32),
             "residue_ids": strc["residue_ids"],
+            "omitted_residue_ids": np.asarray(strc.get("omitted_residue_ids", []), dtype=np.str_),
             "resname": strc["resname"],
             "aa_index": strc["aa_index"],
             "plddt": strc["plddt"],
