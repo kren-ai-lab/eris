@@ -222,14 +222,12 @@ def test_get_embedder_info_probes_once_without_constructing_backend(monkeypatch)
 
 @pytest.mark.skipif(
     sys.version_info[:2] not in {(3, 11), (3, 12), (3, 13)},
-    reason="GearNet is unavailable by Python contract only on core Python 3.11-3.13",
+    reason="GearNet modern-runtime discovery check targets Python 3.11-3.13",
 )
-def test_real_embedder_discovery_reports_unsupported_core_python():
+def test_real_embedder_discovery_supports_modern_core_python():
     info = eris.get_embedder_info("gearnet_edge")
 
-    assert info["availability"]["available"] is False
-    assert "requires Python >=3.10,<3.11" in info["availability"]["reason"]
-    assert "Eris core remains supported on Python 3.10-3.13" in info["availability"]["reason"]
+    assert info["availability"] == {"available": True, "reason": None}
 
 
 def test_representation_info_does_not_instantiate_encoder(monkeypatch):
