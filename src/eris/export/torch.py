@@ -339,22 +339,6 @@ def to_torch(
     return _apply_device(out, device)
 
 
-def load_torch(
-    artifact_dir: str | Path,
-    *,
-    prefer: str = "grid_or_graph",
-    device: str | None = None,
-    matrix_as_channel: bool = True,
-) -> dict[str, Any]:
-    artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
-    return to_torch(
-        artifact,
-        prefer=prefer,
-        device=device,
-        matrix_as_channel=matrix_as_channel,
-    )
-
-
 def save_artifact_to_torch(
     artifact_dir: str | Path,
     *,
@@ -377,7 +361,6 @@ def save_artifact_to_torch(
 
 __all__ = [
     "TorchExportError",
-    "load_torch",
     "save_artifact_to_torch",
     "to_torch",
 ]

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
 from platformdirs import user_cache_dir
 
 from eris.core.hashing import sha256_text
@@ -126,34 +124,12 @@ def default_cache_dir() -> Path:
     return p
 
 
-def make_cache_key(*parts: str) -> str:
-    return sha256_text("|".join(parts))
-
-
 class DiskCache:
     def __init__(self, cache_dir: Path | None = None) -> None:
         self.cache_dir = cache_dir or default_cache_dir()
 
-    def _paths(self, key: str) -> tuple[Path, Path]:
-        base = self.cache_dir / key
-        return base.with_suffix(".npz"), base.with_suffix(".json")
-
     def _v2_entry_dir(self, key: str) -> Path:
         return self.cache_dir / "v2" / _validate_cache_key_v2(key)
-
-    def get(self, key: str) -> tuple[dict[str, np.ndarray], dict[str, Any]] | None:
-        npz_path, meta_path = self._paths(key)
-        if not npz_path.exists() or not meta_path.exists():
-            return None
-        npz = np.load(npz_path)
-        data = {k: npz[k] for k in npz.files}
-        meta = json.loads(meta_path.read_text())
-        return data, meta
-
-    def set(self, key: str, data: dict[str, np.ndarray], meta: dict[str, Any]) -> None:
-        npz_path, meta_path = self._paths(key)
-        np.savez_compressed(npz_path, **data)
-        meta_path.write_text(json.dumps(meta, indent=2))
 
     def get_v2(self, key: str) -> StructureArtifact | None:
         from eris.core.artifacts import ArtifactValidationError, StructureArtifact

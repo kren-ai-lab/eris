@@ -113,7 +113,7 @@ def _attach_auxiliary_attrs(data: Any, torch_mapping: Mapping[str, Any]) -> None
         data.extra = deepcopy(dict(extra))
 
 
-def torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None):
+def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None):
     """
     Convert a canonical graph Torch mapping into ``torch_geometric.data.Data``.
 
@@ -194,21 +194,9 @@ def to_pyg(
     node_id_name = _node_id_output_name(artifact.meta)
     if node_id_name is not None and node_id_name in artifact.data:
         torch_mapping["node_ids"] = _as_lossless_list(artifact.data[node_id_name])
-    pyg = torch_dict_to_pyg(torch_mapping, device=device)
+    pyg = _torch_dict_to_pyg(torch_mapping, device=device)
     _attach_common_attrs(pyg, _metadata(artifact.meta))
     return pyg
-
-
-def load_pyg(
-    artifact_dir: str | Path,
-    *,
-    prefer: str = "grid_or_graph",
-    device: str | None = None,
-    matrix_as_channel: bool = True,
-):
-    del matrix_as_channel
-    artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
-    return to_pyg(artifact, prefer=prefer, device=device)
 
 
 def save_artifact_to_pyg(
@@ -229,8 +217,6 @@ def save_artifact_to_pyg(
 
 __all__ = [
     "PyGExportError",
-    "load_pyg",
     "save_artifact_to_pyg",
     "to_pyg",
-    "torch_dict_to_pyg",
 ]

@@ -100,7 +100,7 @@ def batch_to_torch(
 
 
 @app.command("batch-to-pyg")
-def to_pyg(
+def batch_to_pyg(
     manifest_path: Path = typer.Option(..., "--artifact-dir", exists=True, readable=True),
     out: Optional[Path] = typer.Option(None, "--out", help="Output .pt file"),
     *,

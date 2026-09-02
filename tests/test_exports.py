@@ -25,7 +25,7 @@ from eris.core.learned import (
     StructuralModelDescriptor,
     build_learned_artifact,
 )
-from eris.export.torch import TorchExportError, load_torch, save_artifact_to_torch, to_torch
+from eris.export.torch import TorchExportError, save_artifact_to_torch, to_torch
 
 PDB = Path("tests/data/1AQ2.pdb")
 
@@ -239,7 +239,7 @@ def test_all_ten_explicit_representations_export_to_torch(representation: str) -
     assert any(isinstance(value, torch.Tensor) for value in out.values())
 
 
-def test_load_torch_strict_loads_artifact_dir_and_save_writes_downstream_pt(tmp_path: Path) -> None:
+def test_save_torch_strictly_loads_artifact_dir_and_writes_downstream_pt(tmp_path: Path) -> None:
     torch = _torch()
     artifact_dir = tmp_path / "artifact"
     artifact = eris.encode(
@@ -249,14 +249,12 @@ def test_load_torch_strict_loads_artifact_dir_and_save_writes_downstream_pt(tmp_
         use_cache=False,
     )
 
-    loaded = load_torch(artifact_dir, prefer="matrix", matrix_as_channel=False)
-    _assert_tensor_equal(loaded["x"], artifact.data["contact"])
-
     out_path = tmp_path / "export" / "data.pt"
     save_artifact_to_torch(artifact_dir, out_path=out_path, prefer="matrix")
     saved = torch.load(out_path, weights_only=False)
     assert saved["representation_name"] == "residue_contact_map"
     assert saved["x"].shape == (1, *artifact.data["contact"].shape)
+    _assert_tensor_equal(saved["x"], artifact.data["contact"][None, ...])
 
 
 def test_learned_node_export_preserves_node_ids_mask_and_dtype() -> None:

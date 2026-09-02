@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Any, NoReturn
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -10,21 +10,17 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
+from eris.cli._utils import usage_error
 
 app = typer.Typer(add_completion=False, help="Artifact inspection utilities.")
 console = Console(width=240)
-
-
-def _usage_error(message: str) -> NoReturn:
-    typer.echo(message, err=True)
-    raise typer.Exit(code=2)
 
 
 def _load_artifact(artifact_dir: Path) -> StructureArtifact:
     try:
         return StructureArtifact.load(artifact_dir, strict=True)
     except ArtifactValidationError as error:
-        _usage_error(str(error))
+        usage_error(str(error))
 
 
 def _json(value: Any) -> Syntax:

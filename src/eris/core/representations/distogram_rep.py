@@ -12,16 +12,6 @@ class DistogramRepresentation(BaseRepresentation):
     def contracts(self):
         return [DistogramContract()]
 
-    def feature_keys(
-        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
-    ) -> Dict[str, Any]:
-        keys = {}
-
-        keys["matrix_key"] = "dist"
-        keys["matrix_attr_keys"] = ["dist"]
-
-        return keys
-
     def feature_keys_v2(
         self,
         data: dict[str, Any],
@@ -43,16 +33,6 @@ class DistogramBinsRepresentation(BaseRepresentation):
 
     def contracts(self):
         return [DistogramContract()]
-
-    def feature_keys(
-        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
-    ) -> Dict[str, Any]:
-        keys = {}
-
-        keys["matrix_key"] = "dist_bins"
-        keys["matrix_attr_keys"] = ["dist_bins", "bin_edges"]
-
-        return keys
 
     def feature_keys_v2(
         self,

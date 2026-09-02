@@ -3,16 +3,16 @@ from __future__ import annotations
 import shutil
 from enum import Enum
 from pathlib import Path
-from typing import NoReturn
 
 import typer
-from platformdirs import user_cache_dir
 from rich.console import Console
 from rich.table import Table
 
 from eris.core.learned.backends.gearnet.metadata import GEARNET_EDGE_CHECKPOINT_DESCRIPTOR
 from eris.core.learned.checkpoint_cache import CheckpointCache
 from eris.exceptions import CacheError
+from eris.cli._utils import cache_root as default_cache_root
+from eris.cli._utils import usage_error
 
 app = typer.Typer(add_completion=False, help="Cache utilities.")
 console = Console()
@@ -22,15 +22,6 @@ class CacheClearTarget(str, Enum):
     ARTIFACTS = "artifacts"
     CHECKPOINTS = "checkpoints"
     ALL = "all"
-
-
-def _usage_error(message: str) -> NoReturn:
-    typer.echo(message, err=True)
-    raise typer.Exit(code=2)
-
-
-def _cache_root() -> Path:
-    return Path(user_cache_dir("eris"))
 
 
 def _count_artifact_v2_entries(cache_root: Path) -> int:
@@ -49,7 +40,7 @@ def _official_checkpoint_cached(cache_root: Path) -> bool:
         checkpoint = CheckpointCache(cache_dir=cache_root).get(GEARNET_EDGE_CHECKPOINT_DESCRIPTOR)
     except CacheError as error:
         del error
-        _usage_error("Unable to inspect gearnet_edge checkpoint cache.")
+        usage_error("Unable to inspect gearnet_edge checkpoint cache.")
     return checkpoint is not None
 
 
@@ -119,7 +110,7 @@ def clear_cache(
     """
     Clear one known Eris cache namespace.
     """
-    cache_root = _cache_root()
+    cache_root = default_cache_root()
     if not yes and not typer.confirm(
         f"Clear Eris {target.value} cache? This cannot be undone.",
         default=False,
@@ -131,7 +122,7 @@ def clear_cache(
         typer.echo(f"No Eris cache root exists; nothing to clear for target '{target.value}'.")
         return
     if not cache_root.is_dir():
-        _usage_error(f"Eris cache root is not a directory: {cache_root}")
+        usage_error(f"Eris cache root is not a directory: {cache_root}")
 
     try:
         removed = [
@@ -144,7 +135,7 @@ def clear_cache(
         else:
             root_removed = False
     except CacheError as error:
-        _usage_error(str(error))
+        usage_error(str(error))
 
     if removed:
         typer.echo(f"Cleared Eris {target.value} cache namespaces: {', '.join(removed)}.")
@@ -160,7 +151,7 @@ def cache_info() -> None:
     Inspect Eris cache state without creating, deleting, or repairing entries.
     """
 
-    cache_root = _cache_root()
+    cache_root = default_cache_root()
     artifact_root = cache_root / "v2"
     checkpoint_root = cache_root / "checkpoints"
 

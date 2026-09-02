@@ -133,7 +133,7 @@ class ResidueContactGraph(BaseResidueEncoder):
 
         node_attr, node_attr_keys = build_node_attr(
             strc["aa_index"],
-            plddt=strc["plddt"],
+            plddt_ca=strc["plddt"],
             bfactor_ca=strc["bfactor_ca"],
             mode=self.config.node_attr_mode.to_list(),
             return_keys=True,
@@ -185,17 +185,3 @@ class ResidueContactGraph(BaseResidueEncoder):
             data["bfactor_ca"] = strc["bfactor_ca"].astype(np.float32)
 
         return data
-
-    def _update_params_metadata(
-        self,
-        meta: dict[str, Any],
-        ctx: EncodingContext,
-    ) -> dict[str, Any]:
-
-        meta["params"] = self.config.to_dict()
-        return meta
-
-    def _finalize_metadata(self, meta: dict[str, Any]) -> dict[str, Any]:
-        meta = super()._finalize_metadata(meta)
-        meta["params"] = self.config.to_dict()
-        return meta

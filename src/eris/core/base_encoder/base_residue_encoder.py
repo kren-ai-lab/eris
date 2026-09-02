@@ -21,9 +21,3 @@ class BaseResidueEncoder(BaseEncoder):
         strc = load_and_extract_residue(ctx.inp, mode=mode)
 
         return strc
-
-    def _update_granularity_metadata(
-        self, meta: Dict[str, Any], ctx: EncodingContext
-    ) -> Dict[str, Any]:
-        meta["params"]["residue_center"] = str(self.residue_center)
-        return meta

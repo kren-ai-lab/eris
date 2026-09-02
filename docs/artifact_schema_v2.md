@@ -311,7 +311,7 @@ The same array-safety policy is enforced in memory and at persistence boundaries
 Persisted Schema v2 artifacts are always loaded with strict validation, regardless of the
 historical `validate` and `strict` arguments retained in the method signature. NPZ data is opened
 with `allow_pickle=False`, and its member names must exactly match the names declared by
-`outputs`. Schema v1 and versionless provisional v1 artifacts are rejected rather than loaded.
+`outputs`. Schema v1 and versionless artifacts are rejected rather than loaded.
 
 `outputs` is the semantic ordering authority. Physical ZIP member order is not contractual; a
 loader reconstructs the runtime data mapping in `outputs` order after confirming exact member
@@ -358,10 +358,10 @@ and chain selection, then validates the refreshed artifact. The persisted cache 
 rewritten merely to refresh the locator. Learned cache hits preserve the original model-source and
 execution-generation provenance.
 
-Schema v2 cache entries live under a separate `v2/<key>/` namespace and use canonical
-`data.npz`/`meta.json` files. Legacy, stale, corrupt, or invalid entries are cache misses; they are
-never migrated to Schema v2 and are not automatically deleted. Active encoding calls only the v2
-cache API; legacy flat cache entries are ignored.
+Schema v2 cache entries live under the `v2/<key>/` namespace and use canonical
+`data.npz`/`meta.json` files. Flat pre-v2 entries are not part of the current cache namespace.
+Stale, corrupt, or invalid v2 entries are cache misses; they are never migrated or automatically
+deleted.
 
 ## Basic and strict validation
 
@@ -414,13 +414,13 @@ active runtime policy is:
 - Schema v1 load, validate, finalize, and save are explicitly rejected as legacy, including
   `save(validate=False)`;
 - no transparent migration or automatic provenance reconstruction is performed;
-- versionless provisional v1 metadata is unsupported;
+- versionless metadata is unsupported;
 - artifacts should be regenerated from their source and canonical config.
 
-Legacy classification remains solely to produce clear unsupported-format errors. No active Schema
-v1 validation, finalization, save, load, or migration implementation remains. Batch processing
-validates an existing artifact before skipping it, so a v1, corrupt, or incomplete output cannot
-silently satisfy a request.
+The sole legacy boundary is a clear unsupported-format error. No active Schema v1 validation,
+finalization, save, load, or migration implementation remains. Batch processing validates an
+existing artifact before skipping it, so a v1, corrupt, or incomplete output cannot silently
+satisfy a request.
 
 ## Encode CLI boundary
 

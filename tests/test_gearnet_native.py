@@ -41,7 +41,7 @@ GRAPH_ARRAYS = (
 
 
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
 def _reference_graph(path: Path) -> dict[str, np.ndarray]:
@@ -79,6 +79,7 @@ def test_frozen_reference_payloads_and_metadata_are_path_safe():
     metadata = json.loads((DATA_DIR / "gearnet_reference.json").read_text(encoding="utf-8"))
 
     assert _sha256(primary) == "7ef6662ceadaae64f187fa974ba866af02ab5337220bdc9fe005afaeb2b9814b"
+    assert metadata["input"]["sha256"] == _sha256(primary)
     assert metadata["input"]["filename"] == primary.name
     assert metadata["reference_provenance"].startswith("Frozen upstream GearNet/TorchDrug")
     assert "\\" not in json.dumps(metadata, sort_keys=True)

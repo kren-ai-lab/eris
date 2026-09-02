@@ -15,7 +15,6 @@ import numpy as np
 from pathlib import Path
 
 from eris import exceptions as exc
-from eris.core.encoder_metadata import check_params
 from eris.core.cache import (
     DiskCache,
     compute_cache_key_v2,
@@ -371,26 +370,3 @@ class BaseEncoder(ABC):
         Must be implemented in encoder class.
         """
         raise NotImplementedError
-
-    @abstractmethod
-    def _update_params_metadata(self, meta: Dict[str, Any], ctx: EncodingContext) -> Dict[str, Any]:
-        """
-        Must be implemented in encoder class.
-        """
-        raise NotImplementedError
-
-    def _update_granularity_metadata(
-        self, meta: Dict[str, Any], ctx: EncodingContext
-    ) -> Dict[str, Any]:
-        """
-        Must be implemented in base granularity (atom/residue) class.
-        """
-        raise NotImplementedError
-
-    def _finalize_metadata(self, meta: Dict[str, Any]) -> Dict[str, Any]:
-        if "params" in meta:
-            meta["params"] = check_params(**meta["params"])
-        return meta
-
-    def validate_output(self, artifact: StructureArtifact) -> None:
-        artifact.validate(strict=True)

@@ -33,18 +33,3 @@ class BaseAtomEncoder(BaseEncoder):
             amino_acids_only=self.amino_acids_only,
         )
         return strc
-
-    def _update_granularity_metadata(
-        self, meta: Dict[str, Any], ctx: EncodingContext
-    ) -> Dict[str, Any]:
-        meta["params"].update(
-            {
-                "include_hetero": bool(self.include_hetero),
-                "include_h": bool(self.include_h),
-                "drop_water": bool(self.drop_water),
-                "keep_ions": bool(self.keep_ions),
-                "altloc": str(self.altloc),
-                "amino_acids_only": bool(self.amino_acids_only),
-            }
-        )
-        return meta

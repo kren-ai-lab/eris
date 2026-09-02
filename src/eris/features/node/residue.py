@@ -15,9 +15,6 @@ def build_node_attr(
     plddt_ca: Optional[np.ndarray] = None,
     bfactor_ca: Optional[np.ndarray] = None,
     has_ca: Optional[np.ndarray] = None,
-    # backwards-compatible aliases
-    plddt: Optional[np.ndarray] = None,
-    bfactor: Optional[np.ndarray] = None,
     # contract
     mode: str = "onehot+aa_index+physchem+aaindex_basic+plddt_ca+bfactor_ca+flags",
     missing: str = "zero",
@@ -30,12 +27,6 @@ def build_node_attr(
         validate_feature_mode(mode, RESIDUE_NODE_REGISTRY)
         x = np.zeros((0, 0), dtype=np.float32)
         return (x, []) if return_keys else x
-
-    # aliases
-    if plddt_ca is None and plddt is not None:
-        plddt_ca = plddt
-    if bfactor_ca is None and bfactor is not None:
-        bfactor_ca = bfactor
 
     if has_ca is None:
         has_ca = np.ones((n,), dtype=bool)

@@ -1,33 +1,16 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated
 
 import typer
 
 import eris
 from eris.exceptions import ConfigError, ExecutionError, RepresentationNotFoundError
 from eris.pipelines.manifest import ManifestValidationError
+from eris.cli._utils import parse_json_object, usage_error
 
 app = typer.Typer(add_completion=False, help="Run canonical batch encode/embed workflows.")
-
-
-def _usage_error(message: str) -> NoReturn:
-    typer.echo(message, err=True)
-    raise typer.Exit(code=2)
-
-
-def _parse_params(params: str | None) -> dict[str, object]:
-    if params is None:
-        return {}
-    try:
-        value = json.loads(params)
-    except json.JSONDecodeError as error:
-        _usage_error(f"Invalid JSON for --params: {error.msg}")
-    if not isinstance(value, dict):
-        _usage_error("--params must be a JSON object")
-    return value
 
 
 def _result_path(artifact_root: Path, results: Path | None) -> Path:
@@ -79,7 +62,7 @@ def encode(
             overwrite=overwrite,
             fail_fast=fail_fast,
             no_cache=no_cache,
-            params=_parse_params(params),
+            params=parse_json_object(params),
         )
     except (
         ConfigError,
@@ -88,7 +71,7 @@ def encode(
         ExecutionError,
         OSError,
     ) as error:
-        _usage_error(str(error))
+        usage_error(str(error))
     _summary(rows, "encode")
 
 
@@ -135,7 +118,7 @@ def embed(
         ExecutionError,
         OSError,
     ) as error:
-        _usage_error(str(error))
+        usage_error(str(error))
     _summary(rows, "embed")
 
 

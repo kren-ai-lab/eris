@@ -1,28 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import NoReturn
 
 import typer
-from platformdirs import user_cache_dir
 from rich.console import Console
 from rich.table import Table
 
 from eris.core.learned.checkpoint_cache import CheckpointCache
 from eris.core.learned.registry import learned_registry
 from eris.exceptions import CacheError, RepresentationNotFoundError
+from eris.cli._utils import cache_root, usage_error
 
 app = typer.Typer(add_completion=False, help="Inspect registered learned model assets.")
 console = Console(width=240)
-
-
-def _usage_error(message: str) -> NoReturn:
-    typer.echo(message, err=True)
-    raise typer.Exit(code=2)
-
-
-def _cache_root() -> Path:
-    return Path(user_cache_dir("eris"))
 
 
 def _model_names() -> list[str]:
@@ -45,10 +35,10 @@ def _model_info(name: str):
 
 def _checkpoint_cached(info) -> bool:
     try:
-        checkpoint = CheckpointCache(cache_dir=_cache_root()).get(info.model_descriptor.checkpoint)
+        checkpoint = CheckpointCache(cache_dir=cache_root()).get(info.model_descriptor.checkpoint)
     except CacheError as error:
         del error
-        _usage_error(
+        usage_error(
             f"Unable to inspect checkpoint cache for model/embedder {info.representation_name!r}."
         )
     return checkpoint is not None
@@ -72,7 +62,7 @@ def model_info(name: str) -> None:
     try:
         info = _model_info(name)
     except RepresentationNotFoundError as error:
-        _usage_error(str(error))
+        usage_error(str(error))
 
     model = info.model_descriptor
     checkpoint = model.checkpoint

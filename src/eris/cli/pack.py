@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated
 
 import typer
 
 import eris
 from eris.pipelines.pack import PackIndexError
-
-
-def _usage_error(message: str) -> NoReturn:
-    typer.echo(message, err=True)
-    raise typer.Exit(code=2)
+from eris.cli._utils import usage_error
 
 
 def pack(
@@ -25,7 +21,7 @@ def pack(
     try:
         rows = eris.pack_artifacts(artifact_root, out)
     except (PackIndexError, OSError) as error:
-        _usage_error(str(error))
+        usage_error(str(error))
 
     typer.echo(f"Packed {len(rows)} artifacts to {out}")
 

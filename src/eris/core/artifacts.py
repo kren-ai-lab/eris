@@ -23,56 +23,12 @@ _SCHEMA_V1_UNSUPPORTED = (
 )
 
 
-_PROVISIONAL_V1_REQUIRED = {
-    "encoder_name",
-    "encoder_version",
-    "encoder_fingerprint",
-    "type",
-    "level",
-    "params",
-    "input",
-    "feature_keys",
-}
-_V2_IDENTITY_FIELDS = {
-    "representation_name",
-    "representation_family",
-    "representation_type",
-    "coordinate_source",
-    "encoder",
-    "model",
-    "parameters",
-    "provenance",
-    "outputs",
-}
-
-
 def _detect_artifact_schema(meta: dict[str, Any]) -> str:
     if not isinstance(meta, dict):
         raise ArtifactValidationError("Artifact metadata must be a dict.")
-
-    if "schema_version" not in meta:
-        missing = sorted(_PROVISIONAL_V1_REQUIRED - meta.keys())
-        mixed = sorted(_V2_IDENTITY_FIELDS & meta.keys())
-        if not missing and not mixed:
-            return "provisional_v1"
-        details = []
-        if missing:
-            details.append(f"missing legacy fields: {missing}")
-        if mixed:
-            details.append(f"contains Schema v2 fields: {mixed}")
-        raise ArtifactValidationError(
-            "Versionless metadata is not a complete provisional Schema v1 artifact"
-            f" ({'; '.join(details)})."
-        )
-
-    version = meta["schema_version"]
-    if type(version) is not int:
-        raise ArtifactValidationError("schema_version must be an exact plain Python int.")
-    if version == 1:
-        return "v1"
-    if version == 2:
+    if type(meta.get("schema_version")) is int and meta["schema_version"] == 2:
         return "v2"
-    raise ArtifactValidationError(f"Unsupported schema_version={version}.")
+    return "obsolete"
 
 
 def _validate_artifact_v2(
@@ -193,40 +149,6 @@ def _load_npz_data(
         raise ArtifactValidationError(f"Invalid or unsafe artifact NPZ: {data_path}") from error
 
 
-def infer_counts(data: Mapping[str, np.ndarray]) -> Dict[str, int]:
-    counts: Dict[str, int] = {}
-
-    # Graph
-    if (
-        "edge_index" in data
-        and isinstance(data["edge_index"], np.ndarray)
-        and data["edge_index"].ndim == 2
-    ):
-        counts["n_edges"] = int(data["edge_index"].shape[1])
-    if "pos" in data and isinstance(data["pos"], np.ndarray) and data["pos"].ndim == 2:
-        counts["n_nodes"] = int(data["pos"].shape[0])
-
-    # Matrix
-    if "x" in data and isinstance(data["x"], np.ndarray) and data["x"].ndim >= 2:
-        counts.setdefault("n_nodes", int(data["x"].shape[0]))
-
-    # Grid
-    if "grid" in data and isinstance(data["grid"], np.ndarray):
-        # common: (C,G,G,G) or (G,G,G) – we store both if possible
-        g = data["grid"]
-        if g.ndim == 4:
-            counts["grid_c"] = int(g.shape[0])
-            counts["grid_g"] = int(g.shape[-1])
-        elif g.ndim == 3:
-            counts["grid_g"] = int(g.shape[-1])
-
-    # Cloud
-    if "pos" in data and isinstance(data["pos"], np.ndarray) and data["pos"].ndim == 2:
-        counts.setdefault("n_points", int(data["pos"].shape[0]))
-
-    return counts
-
-
 @dataclass
 class StructureArtifact:
     """
@@ -242,23 +164,20 @@ class StructureArtifact:
 
     def finalize(self) -> None:
         schema = _detect_artifact_schema(self.meta)
-        if schema == "v2":
-            canonical_meta = _validate_artifact_v2(self.meta, self.data)
-            if canonical_meta != self.meta:
-                self.meta = canonical_meta
-            return
-        raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
+        if schema != "v2":
+            raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
+        canonical_meta = _validate_artifact_v2(self.meta, self.data)
+        if canonical_meta != self.meta:
+            self.meta = canonical_meta
 
     def validate(self, strict=False):
         schema = _detect_artifact_schema(self.meta)
-        if schema == "v2":
-            _validate_artifact_v2(self.meta, self.data)
-            return
-        raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
+        if schema != "v2":
+            raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
+        _validate_artifact_v2(self.meta, self.data)
 
     def save(self, outdir: Path, *, validate: bool = True) -> None:
         self.finalize()
-        self.validate(strict=True)
         output_names = [output["name"] for output in self.meta["outputs"]]
         serialized_data = {name: self.data[name] for name in output_names}
         serialized_meta = json.dumps(

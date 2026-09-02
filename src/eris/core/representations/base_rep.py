@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, ClassVar
+from typing import ClassVar
 
 
 class BaseRepresentation(ABC):
@@ -7,8 +7,4 @@ class BaseRepresentation(ABC):
 
     @abstractmethod
     def contracts(self):
-        pass
-
-    @abstractmethod
-    def feature_keys(self, data: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:
         pass

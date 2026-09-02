@@ -361,10 +361,10 @@ def test_invalid_schema_versions_reject_without_mutation(
     ],
     ids=["incomplete", "mixed-v1-v2"],
 )
-def test_invalid_versionless_metadata_is_not_treated_as_v1(meta):
+def test_versionless_metadata_is_rejected_by_the_schema_v2_boundary(meta):
     artifact = StructureArtifact(data={}, meta=meta)
 
-    with pytest.raises(ArtifactValidationError, match="Versionless metadata"):
+    with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
         artifact.finalize()
 
 

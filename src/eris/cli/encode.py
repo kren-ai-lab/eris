@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated
 
 import typer
 
@@ -10,23 +9,7 @@ import eris
 from eris.core.artifacts import ArtifactValidationError
 from eris.core.io import StructureLoadError
 from eris.exceptions import CacheError, ConfigError, RepresentationNotFoundError
-
-
-def _usage_error(message: str) -> NoReturn:
-    typer.echo(message, err=True)
-    raise typer.Exit(code=2)
-
-
-def _parse_params(params: str | None) -> dict[str, object]:
-    if params is None:
-        return {}
-    try:
-        parsed = json.loads(params)
-    except json.JSONDecodeError as error:
-        _usage_error(f"Invalid JSON for --params: {error.msg}")
-    if not isinstance(parsed, dict):
-        _usage_error("--params must be a JSON object")
-    return parsed
+from eris.cli._utils import parse_json_object, usage_error
 
 
 def encode(
@@ -57,7 +40,7 @@ def encode(
         "representation": representation,
         "output": out,
         "use_cache": not no_cache,
-        **_parse_params(params),
+        **parse_json_object(params),
     }
     if chain is not None:
         encode_kwargs["chain_id"] = chain
@@ -68,7 +51,7 @@ def encode(
         artifact = eris.encode(**encode_kwargs)
     except FileNotFoundError as error:
         missing = error.filename if error.filename is not None else input
-        _usage_error(f"File not found: {missing}")
+        usage_error(f"File not found: {missing}")
     except (
         RepresentationNotFoundError,
         ConfigError,
@@ -76,7 +59,7 @@ def encode(
         ArtifactValidationError,
         CacheError,
     ) as error:
-        _usage_error(str(error))
+        usage_error(str(error))
 
     typer.echo(f"Encoded {artifact.meta['representation_name']} -> {out}")
 

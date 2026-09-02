@@ -126,16 +126,3 @@ class ContactMapCA(BaseResidueEncoder):
             "plddt": strc["plddt"].astype(np.float32),
             "bfactor_ca": strc["bfactor_ca"].astype(np.float32),
         }
-
-    def _update_params_metadata(
-        self,
-        meta: dict[str, Any],
-        ctx: EncodingContext,
-    ) -> dict[str, Any]:
-        meta["params"] = self.config.to_dict()
-        return meta
-
-    def _finalize_metadata(self, meta: dict[str, Any]) -> dict[str, Any]:
-        meta = super()._finalize_metadata(meta)
-        meta["params"] = self.config.to_dict()
-        return meta

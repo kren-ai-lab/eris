@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated
 
 import typer
 
@@ -14,11 +14,7 @@ from eris.exceptions import (
     ExecutionError,
     RepresentationNotFoundError,
 )
-
-
-def _usage_error(message: str) -> NoReturn:
-    typer.echo(message, err=True)
-    raise typer.Exit(code=2)
+from eris.cli._utils import usage_error
 
 
 def embed(
@@ -70,7 +66,7 @@ def embed(
         artifact = eris.embed(**embed_kwargs)
     except FileNotFoundError as error:
         missing = error.filename if error.filename is not None else input
-        _usage_error(f"File not found: {missing}")
+        usage_error(f"File not found: {missing}")
     except (
         RepresentationNotFoundError,
         ConfigError,
@@ -79,7 +75,7 @@ def embed(
         CacheError,
         ExecutionError,
     ) as error:
-        _usage_error(str(error))
+        usage_error(str(error))
 
     mode = artifact.meta.get("parameters", {}).get("output_mode", output_mode)
     typer.echo(f"Embedded {artifact.meta['representation_name']} ({mode}) -> {out}")

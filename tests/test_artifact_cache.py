@@ -20,7 +20,6 @@ from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import (
     DiskCache,
     compute_cache_key_v2,
-    make_cache_key,
     parser_hint_from_source,
     parser_hint_matches_format,
 )
@@ -301,19 +300,6 @@ def test_v2_cache_rejects_unsafe_or_noncanonical_keys(tmp_path, key):
         cache.set_v2(key, _artifact())
 
 
-def test_v2_cache_namespace_is_isolated_from_legacy_flat_files(tmp_path):
-    cache = DiskCache(tmp_path)
-    key = _key()
-    legacy = _legacy_artifact()
-
-    cache.set(key, legacy.data, legacy.meta)
-
-    assert (tmp_path / f"{key}.npz").is_file()
-    assert (tmp_path / f"{key}.json").is_file()
-    assert cache.get_v2(key) is None
-    assert not _entry(tmp_path, key).exists()
-
-
 def test_v2_cache_round_trip_returns_strict_valid_artifact(tmp_path):
     cache = DiskCache(tmp_path)
     key = _key()
@@ -409,35 +395,11 @@ def test_invalid_v2_cache_write_raises_without_usable_entry(tmp_path, case):
     assert not _entry(tmp_path, key).exists()
 
 
-def test_legacy_cache_get_set_and_key_behavior_remain_unchanged(tmp_path):
-    cache = DiskCache(tmp_path)
-    data = {"value": np.array([1, 2], dtype=np.int64)}
-    meta = {"legacy": True}
-    key = make_cache_key("one", "two")
-
-    cache.set(key, data, meta)
-    loaded = cache.get(key)
-
-    assert key == sha256_text("one|two")
-    assert loaded is not None
-    loaded_data, loaded_meta = loaded
-    np.testing.assert_array_equal(loaded_data["value"], data["value"])
-    assert loaded_meta == meta
-    assert (tmp_path / f"{key}.npz").is_file()
-    assert (tmp_path / f"{key}.json").is_file()
-
-
-class _NoLegacyDiskCache(DiskCache):
+class _RecordingDiskCache(DiskCache):
     def __init__(self, cache_dir) -> None:
         super().__init__(cache_dir)
         self.v2_get_keys: list[str] = []
         self.v2_set_keys: list[str] = []
-
-    def get(self, key: str):
-        raise AssertionError("active encode must not consult legacy cache")
-
-    def set(self, key: str, data, meta) -> None:
-        raise AssertionError("active encode must not write legacy cache")
 
     def get_v2(self, key: str):
         self.v2_get_keys.append(key)
@@ -458,7 +420,7 @@ def test_active_encoder_cache_miss_then_hit_uses_only_v2_api(
     monkeypatch,
     encoder_type,
 ):
-    cache = _NoLegacyDiskCache(tmp_path)
+    cache = _RecordingDiskCache(tmp_path)
     inp = StructureInput(source=str(PDB))
     first_encoder = encoder_type(use_cache=True, cache=cache)
     first = first_encoder.encode(inp)
@@ -479,28 +441,6 @@ def test_active_encoder_cache_miss_then_hit_uses_only_v2_api(
         np.testing.assert_array_equal(second.data[name], expected)
 
 
-def test_active_encoder_ignores_corresponding_legacy_flat_cache(tmp_path):
-    inp = StructureInput(source=str(PDB))
-    encoder = ResiduePointCloudCA(use_cache=True)
-    legacy_key = make_cache_key(
-        encoder.name,
-        encoder.fingerprint(),
-        sha256_file(PDB),
-        inp.to_string(),
-    )
-    legacy = _legacy_artifact()
-    DiskCache(tmp_path).set(legacy_key, legacy.data, legacy.meta)
-    cache = _NoLegacyDiskCache(tmp_path)
-    encoder.cache = cache
-
-    artifact = encoder.encode(inp)
-
-    assert artifact.meta["schema_version"] == 2
-    assert (tmp_path / f"{legacy_key}.npz").is_file()
-    assert (tmp_path / f"{legacy_key}.json").is_file()
-    assert len(cache.v2_get_keys) == len(cache.v2_set_keys) == 1
-
-
 def test_cache_hit_refreshes_current_source_without_rewriting_cached_metadata(
     tmp_path,
     monkeypatch,
@@ -512,7 +452,7 @@ def test_cache_hit_refreshes_current_source_without_rewriting_cached_metadata(
     source_bytes = PDB.read_bytes()
     source_a.write_bytes(source_bytes)
     source_b.write_bytes(source_bytes)
-    cache = _NoLegacyDiskCache(tmp_path / "cache")
+    cache = _RecordingDiskCache(tmp_path / "cache")
 
     first = ResiduePointCloudCA(use_cache=True, cache=cache).encode(
         StructureInput(source=str(source_a))
@@ -543,7 +483,7 @@ def test_parser_hint_prevents_pdb_cache_from_satisfying_cif_parse(tmp_path):
     source_bytes = PDB.read_bytes()
     pdb_source.write_bytes(source_bytes)
     cif_source.write_bytes(source_bytes)
-    cache = _NoLegacyDiskCache(tmp_path / "cache")
+    cache = _RecordingDiskCache(tmp_path / "cache")
 
     ResiduePointCloudCA(use_cache=True, cache=cache).encode(StructureInput(source=str(pdb_source)))
     with pytest.raises(StructureLoadError, match="Failed to parse structure"):
@@ -556,7 +496,7 @@ def test_parser_hint_prevents_pdb_cache_from_satisfying_cif_parse(tmp_path):
 
 
 def test_strict_valid_cache_artifact_with_wrong_identity_is_a_miss(tmp_path):
-    cache = _NoLegacyDiskCache(tmp_path)
+    cache = _RecordingDiskCache(tmp_path)
     inp = StructureInput(source=str(PDB))
     expected_encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
     parameters = expected_encoder.config.to_dict()

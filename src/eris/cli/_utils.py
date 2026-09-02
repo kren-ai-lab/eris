@@ -1,30 +1,29 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from pathlib import Path
+from typing import NoReturn
+
+import typer
+from platformdirs import user_cache_dir
 
 
-def apply_params(enc: Any, params_json: str, allow_unknown: bool = False) -> None:
-    """
-    Apply JSON parameters to an encoder instance via setattr.
-    """
-    if not params_json or params_json.strip() in ("{}", ""):
-        return
+def usage_error(message: str) -> NoReturn:
+    typer.echo(message, err=True)
+    raise typer.Exit(code=2)
 
+
+def parse_json_object(params: str | None) -> dict[str, object]:
+    if params is None:
+        return {}
     try:
-        params = json.loads(params_json)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON for --params: {e}") from e
+        value = json.loads(params)
+    except json.JSONDecodeError as error:
+        usage_error(f"Invalid JSON for --params: {error.msg}")
+    if not isinstance(value, dict):
+        usage_error("--params must be a JSON object")
+    return value
 
-    if not isinstance(params, dict):
-        raise ValueError("--params must be a JSON object/dict, e.g. '{\"cutoff\": 8.0}'")
 
-    for k, v in params.items():
-        if hasattr(enc, k):
-            setattr(enc, k, v)
-        else:
-            if allow_unknown:
-                continue
-            raise ValueError(
-                f"Encoder '{getattr(enc, 'name', enc.__class__.__name__)}' has no parameter '{k}'"
-            )
+def cache_root() -> Path:
+    return Path(user_cache_dir("eris"))

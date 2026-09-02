@@ -12,19 +12,6 @@ class VoxelGridRepresentation(BaseRepresentation):
     def contracts(self):
         return [VoxelGridContract()]
 
-    def feature_keys(
-        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
-    ) -> Dict[str, Any]:
-        keys = {}
-
-        keys["grid_key"] = "grid"
-        keys["grid_layout"] = "CXYZ"
-
-        if "channels" in ctx.runtime:
-            keys["grid_channels"] = ctx.runtime["channels"]
-
-        return keys
-
     def feature_keys_v2(
         self,
         data: dict[str, Any],

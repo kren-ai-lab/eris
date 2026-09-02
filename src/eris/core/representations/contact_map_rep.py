@@ -12,16 +12,6 @@ class ContactMapRepresentation(BaseRepresentation):
     def contracts(self):
         return [ContactMapContract()]
 
-    def feature_keys(
-        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
-    ) -> Dict[str, Any]:
-        keys = {}
-
-        keys["matrix_key"] = "contact"
-        keys["matrix_attr_keys"] = ["contact"]
-
-        return keys
-
     def feature_keys_v2(
         self,
         data: dict[str, Any],
@@ -43,16 +33,6 @@ class ContactMapBinsRepresentation(BaseRepresentation):
 
     def contracts(self):
         return [ContactMapContract()]
-
-    def feature_keys(
-        self, data: Dict[str, Any], meta: Dict[str, Any], ctx: EncodingContext
-    ) -> Dict[str, Any]:
-        keys = {}
-
-        keys["matrix_key"] = "contact_bins"
-        keys["matrix_attr_keys"] = ["contact_bins", "bin_edges"]
-
-        return keys
 
     def feature_keys_v2(
         self,
