@@ -1,0 +1,61 @@
+{
+  "arrays": {
+    "probe": "gearnet_legacy_spatial_max_neighbors_probe.npz"
+  },
+  "candidate_spatial_neighbors_before_truncation": 35,
+  "fixture_schema_version": 1,
+  "legacy_environment": {
+    "optional_dependencies": {
+      "ninja": "1.13.0",
+      "numpy": "1.26.4",
+      "rdkit-pypi": "2022.9.5",
+      "torch": "2.11.0+cpu",
+      "torch_cluster": "1.6.3+pt211cpu",
+      "torch_geometric": null,
+      "torch_scatter": "2.1.2+pt211cpu",
+      "torch_sparse": null,
+      "torchdrug": "0.2.1"
+    },
+    "platform": "Windows-10-10.0.26200-SP0",
+    "python": "3.10.21"
+  },
+  "max_num_neighbors": 32,
+  "node_count": 40,
+  "purpose": "legacy spatial max-neighbor parity probe",
+  "retained_sources_in_legacy_order": [
+    39,
+    38,
+    37,
+    36,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32
+  ],
+  "retained_spatial_neighbors": 32,
+  "target_node": 0
+}
