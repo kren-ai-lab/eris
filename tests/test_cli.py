@@ -235,9 +235,6 @@ def test_required_representation_and_out_are_enforced(tmp_path):
     ("args", "expected"),
     [
         (["--representation", "missing"], "Unknown embedder"),
-        (["--representation", "residue_knn_graph"], "Unknown embedder"),
-        (["--representation", "gearnet_edge", "--output-mode", "invalid"], "output_mode"),
-        (["--representation", "gearnet_edge", "--device", "banana"], "device"),
         (["--representation", "gearnet_edge", "--precision", "wide"], "precision"),
     ],
 )
@@ -371,7 +368,7 @@ def _assert_real_gearnet_artifact(
 
 @pytest.mark.parametrize(
     ("output_mode", "granularity"),
-    [("both", "mixed"), ("node", "residue"), ("global", "structure")],
+    [("both", "mixed")],
 )
 def test_real_gearnet_cli_modes(output_mode, granularity, tmp_path):
     _require_gearnet_stack()

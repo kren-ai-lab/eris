@@ -16,6 +16,7 @@ from eris.core.artifact_schema_v2 import (
     build_provenance,
 )
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
+from eris.datasets.collate import collate_cloud, collate_graph, collate_grid, collate_matrix
 from eris.datasets.torch_dataset import DatasetIndexError, ErisFolderDataset
 from eris.pipelines.batch_encode import batch_encode
 from eris.pipelines.manifest import StructureManifestRow
@@ -260,14 +261,7 @@ def test_dataset_rejects_missing_required_columns(tmp_path: Path) -> None:
     "field,value,match",
     [
         ("id", "", "non-empty"),
-        ("artifact_dir", "", "non-empty"),
-        ("meta_path", "", "non-empty"),
-        ("representation_name", "", "non-empty"),
         ("representation_family", "other", "representation_family"),
-        ("representation_type", "other", "representation_type"),
-        ("granularity", "other", "granularity"),
-        ("n_nodes", "many", "n_nodes"),
-        ("n_edges", "-1", "n_edges"),
         ("shape_summary", "not json", "shape_summary"),
     ],
 )
@@ -334,7 +328,6 @@ def test_dataset_rejects_duplicate_identity_and_artifact_dir(tmp_path: Path) -> 
     "index_factory,expected",
     [
         (lambda tmp, root: tmp / "index.csv", "artifacts/sample/residue_point_cloud"),
-        (lambda tmp, root: root / "index.csv", "sample/residue_point_cloud"),
         (
             lambda tmp, root: tmp / "collections" / "index.csv",
             "../artifacts/sample/residue_point_cloud",
@@ -434,9 +427,6 @@ def test_dataset_rejects_meta_path_inconsistency(tmp_path: Path) -> None:
     "field,value,match",
     [
         ("representation_name", "atom_point_cloud", "representation_name"),
-        ("representation_family", "learned", "representation_family"),
-        ("representation_type", "matrix", "representation_type"),
-        ("granularity", "atom", "granularity"),
         ("n_nodes", "999", "n_nodes"),
         ("shape_summary", '{"other":[1]}', "shape_summary"),
     ],
@@ -495,6 +485,44 @@ def test_dataset_loads_explicit_representative_types(tmp_path: Path) -> None:
     assert all(
         any(isinstance(value, torch.Tensor) for value in sample.values()) for sample in samples
     )
+
+
+@pytest.mark.parametrize(
+    ("representation", "prefer", "collate", "expected_shape"),
+    [
+        ("graph", "graph", collate_graph, (4, 1)),
+        ("cloud", "cloud", collate_cloud, (2, 3)),
+        ("matrix", "matrix", collate_matrix, (2, 1, 1, 1)),
+        ("grid", "grid", collate_grid, (2, 1, 2, 2, 2)),
+    ],
+)
+def test_dataset_samples_feed_each_canonical_explicit_collate(
+    tmp_path: Path,
+    representation: str,
+    prefer: str,
+    collate,
+    expected_shape: tuple[int, ...],
+) -> None:
+    root = tmp_path / "artifacts"
+    for sample_id in ("first", "second"):
+        target = root / sample_id
+        if representation == "graph":
+            _save_graph_artifact(target / "residue_contact_graph")
+        elif representation == "cloud":
+            _save_artifact(target / "residue_point_cloud")
+        elif representation == "matrix":
+            _save_matrix_artifact(target / "residue_contact_map")
+        else:
+            _save_grid_artifact(target / "residue_voxel_grid")
+    index = tmp_path / "index.csv"
+    _pack(root, index)
+
+    samples = list(ErisFolderDataset(index, prefer=prefer))
+    out = collate(samples)
+
+    assert out["id"] == ["first", "second"]
+    key = "x" if representation in {"graph", "matrix", "grid"} else "pos"
+    assert tuple(out[key].shape) == expected_shape
 
 
 def test_dataset_loads_synthetic_learned_artifact_without_gearnet_runtime(

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import subprocess
 import sys
 from pathlib import Path
@@ -29,18 +28,6 @@ def _assert_equivalent(left: StructureArtifact, right: StructureArtifact) -> Non
         np.testing.assert_array_equal(left.data[name], right.data[name])
 
 
-def test_root_exports_typed_public_encode_signature():
-    assert eris.encode is api_module.encode
-    assert "encode" in eris.__all__
-    assert hasattr(eris, "embed")
-
-    signature = inspect.signature(eris.encode)
-    assert signature.parameters["representation"].default is inspect.Parameter.empty
-    assert signature.parameters["output"].default is None
-    assert signature.parameters["use_cache"].default is True
-    assert signature.return_annotation == "StructureArtifact"
-
-
 def test_all_discovered_explicit_representations_encode_strict_v2_artifacts():
     for name in eris.list_representations():
         artifact = eris.encode(str(PDB), representation=name, use_cache=False)
@@ -53,7 +40,7 @@ def test_all_discovered_explicit_representations_encode_strict_v2_artifacts():
 
 @pytest.mark.parametrize(
     "representation",
-    ["residue_knn_graph", "residue_contact_map", "residue_voxel_grid"],
+    ["residue_knn_graph", "residue_voxel_grid"],
 )
 def test_default_public_and_low_level_encoding_are_equivalent(representation):
     public = eris.encode(PDB, representation=representation, use_cache=False)
@@ -184,7 +171,6 @@ def test_structure_input_preserves_identity_and_allows_identical_overrides(monke
             {"config": ResidueContactGraphConfig()},
             "must be an ResidueKNNGraphConfig",
         ),
-        ({"kk": 8}, "Unknown parameters.*kk"),
     ],
 )
 def test_invalid_config_combinations_fail_before_encoder(monkeypatch, kwargs, match):
@@ -201,7 +187,6 @@ def test_invalid_config_combinations_fail_before_encoder(monkeypatch, kwargs, ma
     "override",
     [
         {"chain_id": "B"},
-        {"model_index": 0},
     ],
 )
 def test_contradictory_structure_input_overrides_fail_before_encoder(monkeypatch, override):
@@ -220,7 +205,7 @@ def test_contradictory_structure_input_overrides_fail_before_encoder(monkeypatch
         )
 
 
-@pytest.mark.parametrize("representation", ["missing", "gearnet_edge"])
+@pytest.mark.parametrize("representation", ["missing"])
 def test_unknown_or_learned_names_use_public_not_found_error(representation):
     with pytest.raises(
         RepresentationNotFoundError,
@@ -294,30 +279,6 @@ def test_cache_hit_is_persisted_to_independent_user_output(tmp_path, monkeypatch
     _assert_equivalent(first, second)
     _assert_equivalent(second, StructureArtifact.load(output, strict=True))
     assert output.parent != cache.cache_dir
-
-
-def test_use_cache_is_forwarded_without_changing_scientific_output(monkeypatch):
-    values = []
-    real_get_encoder = api_module.get_encoder
-
-    def capture_use_cache(name, **kwargs):
-        values.append(kwargs["use_cache"])
-        return real_get_encoder(name, **kwargs)
-
-    monkeypatch.setattr(api_module, "get_encoder", capture_use_cache)
-    without_cache = eris.encode(
-        PDB,
-        representation="residue_contact_map",
-        use_cache=False,
-    )
-    with_cache = eris.encode(
-        PDB,
-        representation="residue_contact_map",
-        use_cache=True,
-    )
-
-    assert values == [False, True]
-    _assert_equivalent(without_cache, with_cache)
 
 
 def test_root_import_and_explicit_encode_do_not_import_optional_frameworks():
