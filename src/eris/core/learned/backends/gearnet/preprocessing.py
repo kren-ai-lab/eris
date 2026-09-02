@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import math
-import tempfile
-from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from collections.abc import Sequence
 from dataclasses import dataclass
 from numbers import Real
 from pathlib import Path
@@ -15,26 +13,11 @@ import gemmi
 import numpy as np
 
 from eris.core.io import _parsed_input_format, _select_atom_altloc, load_structure, select_chain
-from eris.core.learned.backends.gearnet.metadata import (
-    GEARNET_EDGE_CANONICAL_RESIDUES,
-    GEARNET_EDGE_EDGE_FEATURE,
-    GEARNET_EDGE_EDGE_INPUT_DIM,
-    GEARNET_EDGE_KNN_K,
-    GEARNET_EDGE_KNN_MIN_DISTANCE,
-    GEARNET_EDGE_NODE_INPUT_DIM,
-    GEARNET_EDGE_NUM_RELATION,
-    GEARNET_EDGE_SEQUENTIAL_MAX_DISTANCE,
-    GEARNET_EDGE_SPATIAL_MAX_NEIGHBORS,
-    GEARNET_EDGE_SPATIAL_MIN_DISTANCE,
-    GEARNET_EDGE_SPATIAL_RADIUS,
-)
+from eris.core.learned.backends.gearnet.metadata import GEARNET_EDGE_CANONICAL_RESIDUES
 from eris.core.residue_identity import format_residue_id
 from eris.core.types import StructureInput
 from eris.exceptions import ExecutionError
 
-_SYNTHETIC_CHAIN_ID = "A"
-_FIRST_SYNTHETIC_RESIDUE_NUMBER = 2
-_MAX_PDB_RESIDUE_NUMBER = 9999
 _CANONICAL_AMINO_ACIDS = frozenset(GEARNET_EDGE_CANONICAL_RESIDUES)
 
 
@@ -100,7 +83,7 @@ class SelectedBiologicalStructure:
 
 @dataclass(frozen=True, slots=True)
 class TransportNodeRecord:
-    """One already-selected model node encoded through synthetic PDB identity."""
+    """One already-selected model node for native graph construction."""
 
     transport_index: int
     biological_index: int
@@ -228,8 +211,6 @@ def _validate_transport_records(
     normalized = tuple(records)
     if not normalized:
         raise GearNetPreprocessingError("transport records must not be empty")
-    if len(normalized) > _MAX_PDB_RESIDUE_NUMBER - _FIRST_SYNTHETIC_RESIDUE_NUMBER + 1:
-        raise GearNetPreprocessingError("synthetic PDB residue numbering exceeds 9999")
 
     if any(
         type(record.transport_index) is not int or record.transport_index < 0
@@ -258,7 +239,6 @@ def _validate_transport_records(
     ):
         raise GearNetPreprocessingError("biological carrier index is outside the identity table")
 
-    synthetic_ids: set[tuple[str, int, str]] = set()
     for record in normalized:
         if not isinstance(record.residue_name, str):
             raise GearNetPreprocessingError("transport residue names must be strings")
@@ -286,43 +266,7 @@ def _validate_transport_records(
         ):
             raise GearNetPreprocessingError("transport coordinates must be three finite numbers")
 
-        synthetic_number = _FIRST_SYNTHETIC_RESIDUE_NUMBER + record.transport_index
-        synthetic_id = (_SYNTHETIC_CHAIN_ID, synthetic_number, "")
-        if synthetic_id in synthetic_ids:
-            raise GearNetPreprocessingError("synthetic residue identifiers must be unique")
-        synthetic_ids.add(synthetic_id)
     return normalized
-
-
-def _pdb_atom_line(serial: int, record: TransportNodeRecord) -> str:
-    residue_number = _FIRST_SYNTHETIC_RESIDUE_NUMBER + record.transport_index
-    x, y, z = (float(value) for value in record.coordinate)
-    residue_name = record.residue_name.strip().upper()
-    return (
-        f"ATOM  {serial:5d}  CA  {residue_name:>3s} {_SYNTHETIC_CHAIN_ID}"
-        f"{residue_number:4d}    {x:8.3f}{y:8.3f}{z:8.3f}"
-        f"{1.0:6.2f}{0.0:6.2f}           C  "
-    )
-
-
-def build_synthetic_pdb(records: Sequence[TransportNodeRecord]) -> str:
-    """Build deterministic single-chain CA-only PDB transport text."""
-
-    normalized = _validate_transport_records(records)
-    lines = [_pdb_atom_line(index + 1, record) for index, record in enumerate(normalized)]
-    lines.extend(("TER", "END"))
-    return "\n".join(lines) + "\n"
-
-
-@contextmanager
-def temporary_synthetic_pdb(records: Sequence[TransportNodeRecord]) -> Iterator[Path]:
-    """Yield a Windows-compatible temporary PDB and remove it after use."""
-
-    pdb_text = build_synthetic_pdb(records)
-    with tempfile.TemporaryDirectory(prefix="eris-gearnet-") as directory:
-        path = Path(directory) / "transport.pdb"
-        path.write_text(pdb_text, encoding="ascii", newline="\n")
-        yield path
 
 
 def _validate_carrier(carrier: Sequence[int], *, table_size: int) -> tuple[int, ...]:
@@ -332,97 +276,6 @@ def _validate_carrier(carrier: Sequence[int], *, table_size: int) -> tuple[int, 
     if any(type(index) is not int or index < 0 or index >= table_size for index in indexes):
         raise GearNetPreprocessingError("model-node carrier index is outside the identity table")
     return indexes
-
-
-def _scalar_int(value: Any) -> int:
-    return int(value.item()) if hasattr(value, "item") else int(value)
-
-
-def construct_gearnet_input(
-    records: Sequence[TransportNodeRecord],
-    biological_table: BiologicalIdentityTable,
-) -> GearNetPreparedInput:
-    """Materialize the frozen TorchDrug graph from already-selected model-node records."""
-
-    normalized = _validate_transport_records(records, table_size=len(biological_table.records))
-
-    # Optional backend imports remain behind the M5.2 availability boundary.
-    import torch
-    from torchdrug import data, layers, transforms
-    from torchdrug.layers import geometry
-
-    with temporary_synthetic_pdb(normalized) as pdb_path:
-        protein = data.Protein.from_pdb(
-            str(pdb_path),
-            atom_feature=None,
-            bond_feature=None,
-            residue_feature="default",
-        )
-    if protein is None:
-        raise GearNetPreprocessingError("TorchDrug did not construct a Protein")
-
-    expected_numbers = [
-        _FIRST_SYNTHETIC_RESIDUE_NUMBER + record.transport_index for record in normalized
-    ]
-    parsed_numbers = protein.residue_number.tolist()
-    if parsed_numbers != expected_numbers:
-        raise GearNetPreprocessingError(
-            "TorchDrug synthetic residue identities do not match the transport records"
-        )
-
-    carrier_values = [record.biological_index for record in normalized]
-    with protein.residue():
-        protein.eris_residue_index = torch.tensor(
-            carrier_values,
-            dtype=torch.long,
-            device=protein.device,
-        )
-
-    protein = transforms.ProteinView(view="residue")({"graph": protein})["graph"]
-    packed = data.Protein.pack([protein])
-    graph_construction = layers.GraphConstruction(
-        node_layers=[geometry.AlphaCarbonNode()],
-        edge_layers=[
-            geometry.SequentialEdge(max_distance=GEARNET_EDGE_SEQUENTIAL_MAX_DISTANCE),
-            geometry.SpatialEdge(
-                radius=GEARNET_EDGE_SPATIAL_RADIUS,
-                min_distance=GEARNET_EDGE_SPATIAL_MIN_DISTANCE,
-                max_distance=None,
-                max_num_neighbors=GEARNET_EDGE_SPATIAL_MAX_NEIGHBORS,
-            ),
-            geometry.KNNEdge(
-                k=GEARNET_EDGE_KNN_K,
-                min_distance=GEARNET_EDGE_KNN_MIN_DISTANCE,
-                max_distance=None,
-            ),
-        ],
-        edge_feature=GEARNET_EDGE_EDGE_FEATURE,
-    )
-    graph = graph_construction(packed)
-
-    if _scalar_int(graph.batch_size) != 1:
-        raise GearNetPreprocessingError("GearNet preprocessing must produce exactly one graph")
-    num_node = _scalar_int(graph.num_node)
-    if num_node != _scalar_int(graph.num_residue):
-        raise GearNetPreprocessingError("GearNet graph must have one node per retained residue")
-    carrier = graph.eris_residue_index.detach().cpu().numpy().astype(np.int64, copy=True)
-    if carrier.ndim != 1 or carrier.shape[0] != num_node:
-        raise GearNetPreprocessingError("model-node carrier must align with graph nodes")
-    carrier_tuple = _validate_carrier(carrier.tolist(), table_size=len(biological_table.records))
-    if graph.node_feature.ndim != 2 or graph.node_feature.shape[1] != GEARNET_EDGE_NODE_INPUT_DIM:
-        raise GearNetPreprocessingError("GearNet node_feature width must be 21")
-    if graph.edge_feature.ndim != 2 or graph.edge_feature.shape[1] != GEARNET_EDGE_EDGE_INPUT_DIM:
-        raise GearNetPreprocessingError("GearNet edge_feature width must be 59")
-    if _scalar_int(graph.num_relation) != GEARNET_EDGE_NUM_RELATION:
-        raise GearNetPreprocessingError("GearNet graph must declare 7 relations")
-
-    node_ids = np.asarray(biological_table.node_ids_for(carrier_tuple), dtype=np.str_)
-    return GearNetPreparedInput(
-        graph=graph,
-        carrier=carrier,
-        biological_table=biological_table,
-        node_ids=node_ids,
-    )
 
 
 def construct_native_gearnet_input(
@@ -454,10 +307,7 @@ __all__ = [
     "SelectedBiologicalStructure",
     "TransportNodeRecord",
     "build_biological_identity_table",
-    "build_synthetic_pdb",
-    "construct_gearnet_input",
     "construct_native_gearnet_input",
     "load_selected_biological_structure",
     "select_gearnet_transport_records",
-    "temporary_synthetic_pdb",
 ]

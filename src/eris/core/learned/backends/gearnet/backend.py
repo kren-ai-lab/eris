@@ -16,9 +16,9 @@ from eris.core.learned.backends.gearnet.metadata import (
     GEARNET_EDGE_EDGE_INPUT_DIM,
     GEARNET_EDGE_NODE_INPUT_DIM,
     GEARNET_EDGE_NUM_RELATION,
-)
-from eris.core.learned.backends.gearnet.model import (
     GEARNET_EDGE_OUTPUT_DIM,
+)
+from eris.core.learned.backends.gearnet.loading import (
     _validate_cpu_fp32,
     _validate_execution,
 )

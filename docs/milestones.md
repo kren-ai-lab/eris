@@ -38,7 +38,7 @@ v0.1.
 - [x] **M0.7 — Freeze conceptual Artifact Schema v2.** Schema v2 is the first stable public
   artifact contract; Schema v1 remains pre-release.
 - [x] **M0.8 — Freeze core Python and dependency policy.** Core targets Python 3.10–3.12 and is
-  independent of Roxy, Sylphy, Torch, PyG, and TorchDrug/GearNet dependencies.
+  independent of Roxy, Sylphy, and optional learned/backend dependencies.
 - [x] **M0.9 — Freeze configuration authority.** Typed canonical configuration will drive
   defaults, Registry metadata, CLI help, artifact parameters, fingerprints, and documentation.
 - [x] **M0.10 — Freeze target Python API and CLI.** The target hierarchy is recorded in
@@ -152,8 +152,8 @@ a release condition, not an open M0 decision.
 ### M1 gate
 
 - Clean installation succeeds in at least one supported Python environment.
-- `python -c "import eris; print(eris.__version__)"` succeeds without Roxy, Sylphy, Torch, PyG,
-  or TorchDrug.
+- `python -c "import eris; print(eris.__version__)"` succeeds without optional learned or graph
+  frameworks.
 - Core dependencies are correctly declared.
 - Focused scientific/regression tests and graph invariants are green.
 - Every current explicit representation produces a strict-valid artifact under its corresponding
@@ -167,8 +167,7 @@ Gate evidence:
   and the focused M1 regression suite passed all 167 tests.
 - Python 3.10 and 3.11 passed clean install, import, version, and `pip check` smoke validation;
   the full Python 3.10–3.12 CI matrix remains assigned to M8.6.
-- Core dependencies are declared, and base import loads none of Roxy, Sylphy, Torch, PyG, or
-  TorchDrug.
+- Core dependencies are declared, and base import loads no optional learned or graph framework.
 - All ten current explicit representations executed and produced strict-valid pre-v2 artifacts.
 - Tracked `out/` cleanup and the Ruff baseline remain assigned to M8.3 and M8.5 respectively;
   neither blocks the completed M1 gate.
@@ -340,13 +339,13 @@ backend.
 - [x] **M4.7 — Validate the complete learned path using a fake backend**
   - **Scope:** Exercise input → preprocessing → checkpoint/cache → fake model → local/global
     outputs → mapping → Artifact v2 → save/load.
-  - **Acceptance:** The whole path passes without TorchDrug/GearNet.
+  - **Acceptance:** The whole path passes without a concrete learned backend becoming core.
   - **Depends on:** M4.2, M4.4, M4.5, M4.6, and M3.6.
 
 ### M4 gate
 
-A fake backend completes the whole learned architecture without TorchDrug/GearNet becoming core
-dependencies.
+A fake backend completes the whole learned architecture without a concrete learned backend becoming
+a core dependency.
 
 ## M5 — GearNet / GearNet-Edge
 
@@ -587,8 +586,8 @@ clean wheel install passes; docs/examples execute; no generated execution output
 
 **Post-M8 GearNet modernization:** GMR.1–GMR.5 are complete. The production `gearnet_edge`
 backend uses Eris-native graph/model construction with CPU/fp32 `torch==2.11.0` on Python
-3.10–3.13. TorchDrug remains manual legacy tooling solely for parity-reference regeneration.
-M9 remains paused.
+3.10–3.13. Frozen reference fixtures provide native scientific regression evidence; no alternate
+runtime is supported. M9 remains paused.
 
 ## M9 — Release candidate and PyPI
 

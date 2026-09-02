@@ -38,13 +38,12 @@ and loads only a supplied local checkpoint.
 
 The architecture is frozen from the official
 [`mc_gearnet_edge.yaml`](https://github.com/DeepGraphLearning/GearNet/blob/main/config/pretrain/mc_gearnet_edge.yaml)
-configuration and the TorchDrug
-[`models.GearNet`](https://github.com/DeepGraphLearning/torchdrug/blob/master/torchdrug/models/gearnet.py)
-implementation:
+configuration. Its native Eris implementation was verified against the frozen upstream GearNet
+reference semantics:
 
 | field | value |
 | --- | --- |
-| TorchDrug Registry model | `models.GearNet` |
+| upstream reference model | `models.GearNet` |
 | implementation class | `GeometryAwareRelationalGraphNeuralNetwork` |
 | `input_dim` | `21` |
 | `hidden_dims` | `[512, 512, 512, 512, 512, 512]` |
@@ -85,7 +84,7 @@ total of seven. The 59-dimensional GearNet edge feature is composed of:
 | spatial distance | 1 |
 | **total** | **59** |
 
-The upstream graph construction is defined in TorchDrug's
+The frozen graph semantics were derived from TorchDrug's
 [`geometry/graph.py`](https://github.com/DeepGraphLearning/torchdrug/blob/master/torchdrug/layers/geometry/graph.py)
 and edge/node layers in
 [`geometry/function.py`](https://github.com/DeepGraphLearning/torchdrug/blob/master/torchdrug/layers/geometry/function.py).
@@ -162,17 +161,16 @@ records without reordering or compacting their biological indexes. The index is 
 native graph data carries `eris_residue_index` through `AlphaCarbonNode` semantics, residue
 compaction, and frozen graph construction. Final `node_ids` are
 resolved through that carrier and the biological table; they are not reconstructed from output
-length, compacted residue position, or synthetic PDB numbering.
+length or compacted residue position.
 
 The native runtime consumes the already selected records directly. Its chain and residue numbers
-remain transport-only identifiers; synthetic residue numbering begins at 2 to preserve parity with
-the legacy TorchDrug reference. Tests against canonical clean and supplemental spatial references
+remain source identifiers. Tests against canonical clean and supplemental spatial references
 demonstrate exact graph equivalence for node features, coordinates, edges, relations, and edge
 features.
 
 ## Optional dependency boundary
 
-The Eris core remains independent of Torch, TorchDrug, compiled PyG extensions, and RDKit and
+The Eris core remains independent of Torch and compiled PyG extensions and
 supports Python 3.10–3.13 (`>=3.10,<3.14`). The optional native GearNet-Edge backend supports
 the same Python range:
 
@@ -182,9 +180,6 @@ the same Python range:
 | PyTorch | `==2.11.0` |
 
 The CPU wheel label `torch==2.11.0+cpu` satisfies this contract.
-
-TorchDrug and its compiled stack are not production requirements. They remain an opt-in,
-Python-3.10-only legacy reference environment for regenerating the frozen golden fixtures.
 
 ### CPU production installation
 
@@ -204,7 +199,7 @@ order:
    ```
 
 The separate CPU index is required to select the validated CPU wheel. The Eris extra declares
-only `torch==2.11.0`; it does not install a checkpoint or any legacy compiled extension.
+only `torch==2.11.0`; it does not install a checkpoint or compiled extension.
 
 The extra does not install or download the checkpoint. Dependency availability also does not
 guarantee checkpoint presence, network availability, or successful GearNet inference.
@@ -257,12 +252,7 @@ node-ID alignment. The exact forward is:
 
 ```python
 with torch.inference_mode():
-    output = model(
-        prepared.graph,
-        prepared.graph.node_feature.float(),
-        all_loss=None,
-        metric=None,
-    )
+    output = model(prepared.graph)
 ```
 
 The prepared integer node features remain unchanged. Eris validates the upstream tensors as
@@ -274,17 +264,10 @@ The result is then checked by the authoritative M4 `StructuralEmbeddingResult` v
 
 ### Determinism evidence
 
-The native runtime reproduces the frozen Python 3.10 TorchDrug reference within the GMR.3 golden
-gate (`rtol=1e-6`, `atol=2e-6`) and is deterministic across repeated CPU/fp32 forwards. This is
+The native runtime reproduces frozen upstream reference arrays within the GMR.3 golden gate
+(`rtol=1e-6`, `atol=2e-6`) and is deterministic across repeated CPU/fp32 forwards. This is
 evidence for the frozen CPU/fp32 stack, not a universal determinism promise for future platforms,
 accelerators, or precisions.
-
-### Legacy reference environment
-
-GMR.1 and GMR.1b generated the frozen golden references with the historical Python 3.10 TorchDrug
-stack. Regeneration is manual, opt-in developer tooling and may require TorchDrug, compiled PyG
-extensions, MSVC, and Ninja. It is not part of normal installation, CI, artifact provenance, or
-cache identity.
 
 ## Artifact Schema v2 identity and provenance
 
@@ -297,8 +280,8 @@ The frozen learned representation and Eris adapter identity is:
 | implementation | `eris.core.learned.backends.gearnet.backend.GearNetEdgeBackend` |
 | adapter/encoder version | `2` |
 
-Adapter version `2` versions the native Eris GearNet contract and prevents reuse of legacy
-TorchDrug-generated artifacts. It is independent of the Eris package version, Artifact Schema
+Adapter version `2` versions the native Eris GearNet contract and prevents reuse of pre-native
+artifacts. It is independent of the Eris package version, Artifact Schema
 version, upstream source revision, and checkpoint
 revision. The Schema v2 `model` block records architecture `GearNet-Edge` and the official
 checkpoint identifier, SHA-256, Zenodo record revision, and source. Local checkpoint paths,
@@ -313,9 +296,8 @@ spatial, and kNN edge settings; GearNet edge features; seven relations; and 21/5
 widths. The selected chain and model index remain in the canonical `input` block rather than being
 duplicated in `parameters`.
 
-The temporary sanitized PDB is an implementation transport and is never persisted. The Artifact
-input source is the caller's current structure locator and its SHA-256 is the scientific content
-identity.
+The Artifact input source is the caller's current structure locator and its SHA-256 is the
+scientific content identity.
 
 ### Execution and runtime provenance
 
@@ -349,8 +331,8 @@ names. `valid_mask` is absent for the frozen GearNet policy. Granularity is resp
 
 The production learned Registry contains `gearnet_edge` exactly once, with backend ID
 `gearnet-edge`, adapter version `2`, and `GearNetEdgeConfig`. Registration stores only static
-metadata and lazy callables: importing Eris or inspecting the Registry does not import Torch or
-any legacy reference dependency. Availability reports an actionable optional
+metadata and lazy callables: importing Eris or inspecting the Registry does not import Torch.
+Availability reports an actionable optional
 dependency error before factory construction or checkpoint access in a core-only environment.
 
 ## Production integration evidence
@@ -377,7 +359,6 @@ before model load/forward and leaves no artifact-cache entry.
 
 The production smoke is offline and reads the official checkpoint from an explicit local path
 (conventionally `ERIS_GEARNET_CHECKPOINT`); normal tests do not require the checkpoint or network.
-The native runtime has no TorchDrug JIT extension, MSVC, or Ninja requirement.
 
 ## Licensing
 

@@ -45,11 +45,11 @@ def _graph_arrays(path: Path) -> dict[str, np.ndarray]:
 @pytest.mark.parametrize(
     ("input_name", "graph_name"),
     (
-        ("gearnet_legacy_reference.pdb", "gearnet_legacy_reference_graph.npz"),
-        ("gearnet_legacy_spatial_reference.pdb", "gearnet_legacy_spatial_reference_graph.npz"),
+        ("gearnet_reference.pdb", "gearnet_reference_graph.npz"),
+        ("gearnet_spatial_reference.pdb", "gearnet_spatial_reference_graph.npz"),
     ),
 )
-def test_native_graph_matches_each_frozen_legacy_reference_exactly(
+def test_native_graph_matches_each_frozen_reference_exactly(
     input_name: str, graph_name: str
 ) -> None:
     native = construct_native_gearnet_graph(_records(DATA_DIR / input_name))
@@ -74,7 +74,7 @@ def test_native_spatial_search_preserves_frozen_max_neighbor_order() -> None:
     )
     native = construct_native_gearnet_graph(records)
     with np.load(
-        DATA_DIR / "gearnet_legacy_spatial_max_neighbors_probe.npz", allow_pickle=False
+        DATA_DIR / "gearnet_spatial_max_neighbors_reference.npz", allow_pickle=False
     ) as probe:
         mask = (native.edge_relation == 5) & (native.edge_destination == 0)
         np.testing.assert_array_equal(native.edge_source[mask], probe["spatial_edge_source"])

@@ -1,4 +1,4 @@
-"""Exact construction and safe checkpoint loading for frozen GearNet-Edge."""
+"""Checkpoint and execution validation for the native GearNet-Edge runtime."""
 
 from __future__ import annotations
 
@@ -7,28 +7,12 @@ from collections.abc import Mapping
 from typing import Any
 
 from eris.core.learned.backends.gearnet.metadata import (
-    GEARNET_EDGE_ARCHITECTURE,
     GEARNET_EDGE_CHECKPOINT_IDENTIFIER,
     GEARNET_EDGE_CHECKPOINT_SHA256,
-    GEARNET_EDGE_EDGE_INPUT_DIM,
-    GEARNET_EDGE_HIDDEN_DIMS,
-    GEARNET_EDGE_NODE_INPUT_DIM,
-    GEARNET_EDGE_NUM_ANGLE_BIN,
-    GEARNET_EDGE_NUM_RELATION,
-    GEARNET_EDGE_OUTPUT_DIM,
 )
 from eris.core.learned.checkpoints import VerifiedCheckpoint
 from eris.core.learned.execution import ResolvedExecution
 from eris.exceptions import ExecutionError
-
-
-def _import_frameworks() -> tuple[Any, Any]:
-    try:
-        import torch
-        from torchdrug import models
-    except (ImportError, OSError) as error:
-        raise ExecutionError(f"Unable to import the frozen GearNet runtime: {error}") from error
-    return torch, models
 
 
 def _validate_execution(execution: ResolvedExecution) -> None:
@@ -55,42 +39,6 @@ def _validate_checkpoint_identity(checkpoint: VerifiedCheckpoint) -> None:
         raise ExecutionError(
             "GearNet-Edge requires the frozen mc_gearnet_edge.pth checkpoint identity"
         )
-
-
-def _validate_model_identity(model: Any, models: Any) -> None:
-    model_type = type(model)
-    expected_type = models.GearNet
-    if model_type is not expected_type:
-        actual = f"{model_type.__module__}.{model_type.__qualname__}"
-        raise ExecutionError(f"Unexpected GearNet model class: {actual}")
-    if model.output_dim != GEARNET_EDGE_OUTPUT_DIM:
-        raise ExecutionError(
-            f"Unexpected GearNet-Edge output_dim: {model.output_dim!r}; "
-            f"expected {GEARNET_EDGE_OUTPUT_DIM}"
-        )
-
-
-def _construct_model(models: Any) -> Any:
-    model = models.GearNet(
-        input_dim=GEARNET_EDGE_NODE_INPUT_DIM,
-        hidden_dims=list(GEARNET_EDGE_HIDDEN_DIMS),
-        num_relation=GEARNET_EDGE_NUM_RELATION,
-        edge_input_dim=GEARNET_EDGE_EDGE_INPUT_DIM,
-        num_angle_bin=GEARNET_EDGE_NUM_ANGLE_BIN,
-        short_cut=True,
-        batch_norm=True,
-        concat_hidden=True,
-        readout="sum",
-    )
-    _validate_model_identity(model, models)
-    return model
-
-
-def construct_gearnet_edge_model() -> Any:
-    """Construct the exact TorchDrug model required by the frozen checkpoint."""
-
-    _, models = _import_frameworks()
-    return _construct_model(models)
 
 
 def _deserialize_state_dict(checkpoint: VerifiedCheckpoint, torch: Any) -> Mapping[str, Any]:
@@ -139,37 +87,3 @@ def _validate_cpu_fp32(model: Any, torch: Any) -> None:
             raise ExecutionError(f"GearNet-Edge {kind} '{name}' is not on CPU")
         if tensor.is_floating_point() and tensor.dtype != torch.float32:
             raise ExecutionError(f"GearNet-Edge {kind} '{name}' is not torch.float32")
-
-
-def _set_and_validate_eval(model: Any) -> None:
-    model.eval()
-    if model.training or any(module.training for module in model.modules()):
-        raise ExecutionError("GearNet-Edge model did not enter eval mode completely")
-
-
-def load_verified_gearnet_edge_model(
-    checkpoint: VerifiedCheckpoint,
-    *,
-    execution: ResolvedExecution,
-) -> Any:
-    """Safely load the frozen verified checkpoint into the exact CPU/fp32 model."""
-
-    _validate_execution(execution)
-    _validate_checkpoint_identity(checkpoint)
-    torch, models = _import_frameworks()
-    model = _construct_model(models)
-    state_dict = _deserialize_state_dict(checkpoint, torch)
-    _load_state_dict_strict(model, state_dict)
-    _validate_cpu_fp32(model, torch)
-    _set_and_validate_eval(model)
-    return model
-
-
-__all__ = [
-    "GEARNET_EDGE_ARCHITECTURE",
-    "GEARNET_EDGE_CHECKPOINT_IDENTIFIER",
-    "GEARNET_EDGE_CHECKPOINT_SHA256",
-    "GEARNET_EDGE_OUTPUT_DIM",
-    "construct_gearnet_edge_model",
-    "load_verified_gearnet_edge_model",
-]

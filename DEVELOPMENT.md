@@ -53,7 +53,7 @@ Eris core is intended to remain independent from:
 - Sylphy;
 - Torch;
 - PyTorch Geometric;
-- TorchDrug and GearNet dependencies.
+- optional GearNet dependencies.
 
 Known intended core runtime dependencies include:
 
@@ -67,8 +67,7 @@ Known intended core runtime dependencies include:
 - `platformdirs`.
 
 These dependencies form the declared core runtime contract. GearNet and PyG remain optional and
-are isolated from core imports. TorchDrug is not a production dependency; it is legacy reference
-tooling for GearNet golden-fixture regeneration only.
+are isolated from core imports.
 
 ## Validation workflow
 
@@ -97,7 +96,7 @@ python -m ruff format --check .
 Use focused tests during ordinary development. Run the full Python 3.10 suite for broad or
 gate-level changes; Python 3.12 and 3.13 core checks and `pip check` are expected at
 milestone/packaging boundaries. The native GearNet runtime is CPU/fp32-only and supports Python
-3.10–3.13. Legacy TorchDrug reference regeneration is a manual Python 3.10-only workflow.
+3.10–3.13.
 
 ## Git workflow
 

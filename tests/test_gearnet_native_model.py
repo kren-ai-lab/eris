@@ -45,21 +45,17 @@ def _checkpoint():
 
 def _graph():
     selected = load_selected_biological_structure(
-        StructureInput(
-            source=DATA_DIR / "gearnet_legacy_reference.pdb", chain_id="A", model_index=0
-        )
+        StructureInput(source=DATA_DIR / "gearnet_reference.pdb", chain_id="A", model_index=0)
     )
     return construct_native_gearnet_graph(select_gearnet_transport_records(selected))
 
 
 def _golden() -> dict[str, np.ndarray]:
-    with np.load(
-        DATA_DIR / "gearnet_legacy_reference_embeddings.npz", allow_pickle=False
-    ) as arrays:
+    with np.load(DATA_DIR / "gearnet_reference_embeddings.npz", allow_pickle=False) as arrays:
         return {name: arrays[name] for name in arrays.files}
 
 
-def test_native_model_matches_legacy_state_dict_layout_exactly():
+def test_native_model_matches_frozen_checkpoint_state_dict_layout_exactly():
     model = construct_native_gearnet_edge_model()
 
     assert len(model.state_dict()) == 138
@@ -68,7 +64,7 @@ def test_native_model_matches_legacy_state_dict_layout_exactly():
     assert model.state_dict()["edge_layers.0.self_loop.weight"].shape == (21, 59)
 
 
-def test_native_model_strict_load_and_embedding_parity():
+def test_native_model_strict_load_and_reference_embedding_parity():
     model = load_native_gearnet_edge_model(_checkpoint())
     graph = _graph()
     golden = _golden()

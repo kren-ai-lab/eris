@@ -1,9 +1,4 @@
-"""TorchDrug-free construction of the frozen GearNet-Edge graph inputs.
-
-This module is deliberately internal: it reconstructs the legacy graph arrays for
-the future native runtime, but does not select a production backend or run a
-neural network.
-"""
+"""Construction of the frozen GearNet-Edge graph inputs for native inference."""
 
 from __future__ import annotations
 
@@ -57,12 +52,12 @@ _KDTREE_LEAF_SIZE: Final = 10
 
 
 class NativeGearNetGraphError(ExecutionError):
-    """Raised when native graph construction cannot preserve legacy semantics."""
+    """Raised when native graph construction cannot preserve frozen semantics."""
 
 
 @dataclass(frozen=True, slots=True)
 class NativeGearNetGraph:
-    """The numerical graph arrays required by the future native GearNet runtime."""
+    """The numerical graph arrays required by the native GearNet runtime."""
 
     node_feature: np.ndarray
     node_position: np.ndarray
@@ -84,13 +79,13 @@ class _KdNode:
     right: _KdNode | None = None
 
 
-class _LegacyKdTree:
-    """Minimal CPU radius / kNN traversal matching the frozen legacy search order."""
+class _ReferenceKdTree:
+    """Minimal CPU radius / kNN traversal matching frozen reference search order."""
 
     def __init__(self, points: np.ndarray) -> None:
         self.points = np.ascontiguousarray(points, dtype=np.float32)
         if self.points.ndim != 2 or self.points.shape[0] == 0:
-            raise NativeGearNetGraphError("legacy KD-tree points must be a non-empty matrix")
+            raise NativeGearNetGraphError("reference KD-tree points must be a non-empty matrix")
         indexes = np.arange(self.points.shape[0], dtype=np.int64)
         low = self.points.min(axis=0).astype(np.float32, copy=False)
         high = self.points.max(axis=0).astype(np.float32, copy=False)
@@ -213,7 +208,7 @@ class _LegacyKdTree:
 
 
 def _positions(records: tuple[TransportNodeRecord, ...]) -> np.ndarray:
-    # The legacy implementation serializes transport coordinates through PDB %.3f first.
+    # Frozen reference coordinates use PDB-style %.3f quantization before graph construction.
     return np.asarray(
         [[float(f"{value:.3f}") for value in record.coordinate] for record in records],
         dtype=np.float32,
@@ -227,7 +222,7 @@ def _node_feature(records: tuple[TransportNodeRecord, ...]) -> np.ndarray:
             residue_id = _RESIDUE_TO_ID[record.residue_name.strip().upper()]
         except KeyError as error:
             raise NativeGearNetGraphError(
-                f"legacy GearNet graph has no residue ID for {record.residue_name!r}"
+                f"frozen GearNet graph has no residue ID for {record.residue_name!r}"
             ) from error
         feature[index, residue_id] = 1
     return feature
@@ -253,7 +248,7 @@ def _sequential_edges(nodes: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     )
 
 
-def _spatial_edges(tree: _LegacyKdTree, positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _spatial_edges(tree: _ReferenceKdTree, positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     sources: list[int] = []
     destinations: list[int] = []
     for destination, query in enumerate(positions):
@@ -274,7 +269,7 @@ def _spatial_edges(tree: _LegacyKdTree, positions: np.ndarray) -> tuple[np.ndarr
     return np.asarray(sources, dtype=np.int64), np.asarray(destinations, dtype=np.int64)
 
 
-def _knn_edges(tree: _LegacyKdTree, positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _knn_edges(tree: _ReferenceKdTree, positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     sources: list[int] = []
     destinations: list[int] = []
     for destination, query in enumerate(positions):
@@ -312,7 +307,7 @@ def _edge_feature(
 def _line_graph(
     positions: np.ndarray, source: np.ndarray, destination: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    # Legacy Graph.line_graph() delegates ordering and fp32 angle arithmetic to Torch.
+    # Frozen reference line-graph ordering and fp32 angle arithmetic use Torch.
     # Torch remains optional and is imported only when native learned construction runs.
     try:
         import torch
@@ -361,12 +356,12 @@ def _line_graph(
 
 
 def construct_native_gearnet_graph(records: tuple[TransportNodeRecord, ...]) -> NativeGearNetGraph:
-    """Reconstruct the frozen legacy GearNet graph arrays without TorchDrug."""
+    """Construct frozen GearNet graph arrays for native inference."""
 
     normalized = _validate_transport_records(records)
     positions = _positions(normalized)
     node_feature = _node_feature(normalized)
-    tree = _LegacyKdTree(positions)
+    tree = _ReferenceKdTree(positions)
     sequential_source, sequential_destination, sequential_relation = _sequential_edges(
         len(normalized)
     )

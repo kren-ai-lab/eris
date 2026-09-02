@@ -12,9 +12,7 @@ from eris.core.learned.backends.gearnet.preprocessing import (
     BiologicalResidueIdentity,
     GearNetPreprocessingError,
     TransportNodeRecord,
-    build_synthetic_pdb,
     load_selected_biological_structure,
-    temporary_synthetic_pdb,
 )
 from eris.core.types import StructureInput
 from eris.exceptions import ErisError
@@ -154,18 +152,6 @@ def test_biological_table_rejects_reordered_indexes_and_invalid_carriers():
         table.node_ids_for([2])
 
 
-def test_synthetic_transport_is_deterministic_single_chain_and_starts_at_two():
-    first = build_synthetic_pdb(_records())
-    second = build_synthetic_pdb(_records())
-
-    assert first == second
-    atom_lines = first.splitlines()[:3]
-    assert [line[21] for line in atom_lines] == ["A", "A", "A"]
-    assert [int(line[22:26]) for line in atom_lines] == [2, 3, 4]
-    assert [line[17:20].strip() for line in atom_lines] == ["ALA", "SER", "THR"]
-    assert first.endswith("TER\nEND\n")
-
-
 def test_mapping_uses_biological_carrier_not_transport_position():
     table = BiologicalIdentityTable(records=tuple(_identity(index) for index in range(4)))
 
@@ -176,61 +162,12 @@ def test_mapping_uses_biological_carrier_not_transport_position():
     )
 
 
-def test_temporary_transport_is_removed_after_context_exit():
-    with temporary_synthetic_pdb(_records()) as path:
-        directory = path.parent
-        assert path.exists()
-        assert directory.exists()
-
-    assert not path.exists()
-    assert not directory.exists()
-
-
-@pytest.mark.parametrize(
-    ("records", "message"),
-    [
-        ((), "must not be empty"),
-        (
-            (
-                TransportNodeRecord(0, 0, "ALA", (0.0, 0.0, 0.0)),
-                TransportNodeRecord(0, 1, "GLY", (3.8, 0.0, 0.0)),
-            ),
-            "transport indexes must be unique",
-        ),
-        (
-            (TransportNodeRecord(0, 0, "ALA", (float("nan"), 0.0, 0.0)),),
-            "three finite numbers",
-        ),
-        (
-            (TransportNodeRecord(0, 0, "ALA", (0.0, 0.0)),),
-            "three finite numbers",
-        ),
-        (
-            (TransportNodeRecord(0, 0, "ALA", None),),
-            "three finite numbers",
-        ),
-    ],
-)
-def test_synthetic_transport_rejects_invalid_inputs(records, message):
-    with pytest.raises(GearNetPreprocessingError, match=message):
-        build_synthetic_pdb(records)
-
-
-def test_synthetic_transport_rejects_pdb_numbering_overflow():
-    records = tuple(
-        TransportNodeRecord(index, index, "ALA", (0.0, 0.0, 0.0)) for index in range(9999)
-    )
-
-    with pytest.raises(GearNetPreprocessingError, match="numbering exceeds 9999"):
-        build_synthetic_pdb(records)
-
-
 def test_policy_neutral_preprocessing_import_does_not_load_optional_frameworks():
     script = """
 import sys
 import eris.core.learned.backends.gearnet.preprocessing
 
-blocked = {'torch', 'torchdrug', 'torch_scatter', 'torch_cluster', 'rdkit'}
+blocked = {'torch', 'torch_scatter', 'torch_cluster', 'rdkit'}
 loaded = sorted(blocked.intersection(sys.modules))
 if loaded:
     raise SystemExit(f'optional GearNet frameworks loaded: {loaded}')

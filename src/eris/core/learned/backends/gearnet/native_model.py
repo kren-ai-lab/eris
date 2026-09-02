@@ -5,9 +5,6 @@ This internal numerical implementation is the frozen production runtime.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
-
 import numpy as np
 import torch
 from torch import nn
@@ -21,7 +18,7 @@ from eris.core.learned.backends.gearnet.metadata import (
     GEARNET_EDGE_NUM_RELATION,
     GEARNET_EDGE_OUTPUT_DIM,
 )
-from eris.core.learned.backends.gearnet.model import (
+from eris.core.learned.backends.gearnet.loading import (
     _deserialize_state_dict,
     _load_state_dict_strict,
     _validate_checkpoint_identity,
@@ -41,7 +38,7 @@ def _scatter_add(values: torch.Tensor, index: torch.Tensor, size: int) -> torch.
 
 
 class _GeometricRelationalGraphConv(nn.Module):
-    """Parameter-compatible native form of TorchDrug's geometric relation layer."""
+    """Parameter-compatible native form of the frozen upstream relation layer."""
 
     def __init__(self, input_dim: int, output_dim: int, num_relation: int) -> None:
         super().__init__()
@@ -68,7 +65,7 @@ class _GeometricRelationalGraphConv(nn.Module):
 
 
 class NativeGearNetEdgeModel(nn.Module):
-    """Six-layer CPU/fp32 GearNet-Edge with direct legacy-checkpoint compatibility."""
+    """Six-layer CPU/fp32 GearNet-Edge for the frozen upstream checkpoint."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -169,8 +166,6 @@ def load_native_gearnet_edge_model(checkpoint: VerifiedCheckpoint) -> NativeGear
     _validate_checkpoint_identity(checkpoint)
     model = construct_native_gearnet_edge_model()
     state_dict = _deserialize_state_dict(checkpoint, torch)
-    if not isinstance(state_dict, Mapping):
-        raise NativeGearNetModelError("native GearNet checkpoint must be a state_dict mapping")
     _load_state_dict_strict(model, state_dict)
     model.eval()
     return model

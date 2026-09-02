@@ -1,11 +1,10 @@
 {
   "arrays": {
-    "embeddings": "gearnet_legacy_reference_embeddings.npz",
-    "graph": "gearnet_legacy_reference_graph.npz"
+    "embeddings": "gearnet_reference_embeddings.npz",
+    "graph": "gearnet_reference_graph.npz"
   },
   "backend": {
     "backend_id": "gearnet-edge",
-    "encoder_version": "1",
     "execution": {
       "device": "cpu",
       "eval": true,
@@ -24,24 +23,9 @@
   "fixture_schema_version": 1,
   "input": {
     "chain_id": "A",
-    "filename": "gearnet_legacy_reference.pdb",
+    "filename": "gearnet_reference.pdb",
     "model_index": 0,
     "sha256": "7ef6662ceadaae64f187fa974ba866af02ab5337220bdc9fe005afaeb2b9814b"
-  },
-  "legacy_environment": {
-    "optional_dependencies": {
-      "ninja": "1.13.0",
-      "numpy": "1.26.4",
-      "rdkit-pypi": "2022.9.5",
-      "torch": "2.11.0+cpu",
-      "torch_cluster": "1.6.3+pt211cpu",
-      "torch_geometric": null,
-      "torch_scatter": "2.1.2+pt211cpu",
-      "torch_sparse": null,
-      "torchdrug": "0.2.1"
-    },
-    "platform": "Windows-10-10.0.26200-SP0",
-    "python": "3.10.21"
   },
   "model": {
     "architecture": "GearNet-Edge",
@@ -59,9 +43,9 @@
     "num_relation": 7,
     "output_dim": 3072
   },
-  "reference_generation_note": "Generated from the frozen Python-3.10 TorchDrug GearNet-Edge CPU/fp32 backend; regenerating changes the scientific parity baseline.",
+  "reference_provenance": "Frozen upstream GearNet/TorchDrug CPU/fp32 reference retained as immutable evidence for native Eris regression.",
   "tie_behavior": {
-    "ordering_authority": "legacy TorchDrug graph and line-graph array order",
+    "ordering_authority": "frozen upstream graph and line-graph array order",
     "primary_fixture_contains_distance_ties": true,
     "tie_comparison_decimals": 5
   }

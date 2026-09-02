@@ -1,4 +1,4 @@
-"""TorchDrug-free integrity checks for the frozen legacy GearNet reference."""
+"""Integrity checks for the frozen GearNet scientific reference."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from eris.core.learned.backends.gearnet.metadata import GEARNET_EDGE_CHECKPOINT_
 
 
 DATA_DIR = Path(__file__).with_name("data")
-INPUT_PATH = DATA_DIR / "gearnet_legacy_reference.pdb"
-GRAPH_PATH = DATA_DIR / "gearnet_legacy_reference_graph.npz"
-EMBEDDING_PATH = DATA_DIR / "gearnet_legacy_reference_embeddings.npz"
-METADATA_PATH = DATA_DIR / "gearnet_legacy_reference.json"
+INPUT_PATH = DATA_DIR / "gearnet_reference.pdb"
+GRAPH_PATH = DATA_DIR / "gearnet_reference_graph.npz"
+EMBEDDING_PATH = DATA_DIR / "gearnet_reference_embeddings.npz"
+METADATA_PATH = DATA_DIR / "gearnet_reference.json"
 
 
 def _metadata() -> dict[str, object]:
@@ -31,7 +31,7 @@ def _load_npz(path: Path) -> dict[str, np.ndarray]:
         return {name: arrays[name] for name in arrays.files}
 
 
-def test_legacy_reference_metadata_is_path_safe_and_identifies_input_and_checkpoint():
+def test_reference_metadata_is_path_safe_and_identifies_input_and_checkpoint():
     metadata = _metadata()
 
     assert metadata["fixture_schema_version"] == 1
@@ -53,6 +53,10 @@ def test_legacy_reference_metadata_is_path_safe_and_identifies_input_and_checkpo
     assert metadata["determinism"] == {
         "same_process_repeated_inference": "exact_array_equal",
     }
+    assert metadata["reference_provenance"] == (
+        "Frozen upstream GearNet/TorchDrug CPU/fp32 reference retained as immutable evidence "
+        "for native Eris regression."
+    )
     serialized = json.dumps(metadata, sort_keys=True)
     assert "eris-gearnet-" not in serialized
     assert "\\" not in serialized
@@ -60,7 +64,7 @@ def test_legacy_reference_metadata_is_path_safe_and_identifies_input_and_checkpo
     assert ":\\" not in serialized
 
 
-def test_legacy_graph_fixture_preserves_node_edge_and_line_graph_alignment():
+def test_reference_graph_preserves_node_edge_and_line_graph_alignment():
     graph = _load_npz(GRAPH_PATH)
     assert set(graph) == {
         "carrier",
@@ -104,7 +108,7 @@ def test_legacy_graph_fixture_preserves_node_edge_and_line_graph_alignment():
     assert np.all((0 <= graph["line_angle_relation"]) & (graph["line_angle_relation"] < 8))
 
 
-def test_legacy_embedding_fixture_is_finite_fp32_and_aligned_to_graph_node_ids():
+def test_reference_embedding_is_finite_fp32_and_aligned_to_graph_node_ids():
     graph = _load_npz(GRAPH_PATH)
     embeddings = _load_npz(EMBEDDING_PATH)
 
@@ -138,5 +142,5 @@ def test_primary_reference_includes_distance_ties_for_ordering_parity():
     assert metadata["tie_behavior"]["primary_fixture_contains_distance_ties"] is True
     assert np.unique(rounded).size < rounded.size
     assert metadata["tie_behavior"]["ordering_authority"] == (
-        "legacy TorchDrug graph and line-graph array order"
+        "frozen upstream graph and line-graph array order"
     )

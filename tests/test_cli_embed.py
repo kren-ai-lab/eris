@@ -91,16 +91,9 @@ def _checkpoint() -> Path:
 
 
 def _require_gearnet_stack() -> None:
-    pytest.importorskip("torch")
-    pytest.importorskip("torchdrug")
-    pytest.importorskip("ninja")
-
-
-def _skip_known_real_environment_gap(result) -> None:
-    if result.exit_code == 2 and (
-        "Ninja is required" in result.output or "MSVC x64/cl.exe and Ninja" in result.output
-    ):
-        pytest.skip(f"GearNet real runtime environment is incomplete: {result.output}")
+    torch = pytest.importorskip("torch")
+    if torch.__version__.partition("+")[0] != "2.11.0":
+        pytest.skip("GearNet CLI validation requires torch==2.11.0")
 
 
 def test_embed_help_exposes_public_direct_command_only():
@@ -347,36 +340,6 @@ if loaded:
     subprocess.run([sys.executable, "-c", script], check=True)
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 11),
-    reason="GearNet unsupported-Python CLI path is exercised on Python 3.11+",
-)
-def test_unsupported_python_unavailable_backend_path_is_clean(tmp_path):
-    script = f"""
-from typer.testing import CliRunner
-from eris.cli.main import app
-
-result = CliRunner().invoke(
-    app,
-    [
-        'embed',
-        'tests/data/1AQ2.pdb',
-        '--representation',
-        'gearnet_edge',
-        '--out',
-        r'{tmp_path}',
-        '--no-cache',
-    ],
-)
-assert result.exit_code == 2, result.output
-assert '>=3.10,<3.11' in result.output or 'unavailable' in result.output
-assert 'ModuleNotFoundError' not in result.output
-assert 'Traceback' not in result.output
-"""
-
-    subprocess.run([sys.executable, "-c", script], check=True)
-
-
 def _assert_real_gearnet_artifact(
     artifact: StructureArtifact,
     *,
@@ -437,7 +400,6 @@ def test_real_gearnet_cli_modes(output_mode, granularity, tmp_path):
         ],
     )
 
-    _skip_known_real_environment_gap(result)
     assert result.exit_code == 0, result.output
     _assert_real_gearnet_artifact(
         StructureArtifact.load(output, strict=True),
@@ -474,7 +436,6 @@ def test_real_gearnet_cli_and_public_api_are_equivalent(tmp_path):
         ],
     )
 
-    _skip_known_real_environment_gap(result)
     assert result.exit_code == 0, result.output
     api_artifact = eris.embed(
         str(source),
@@ -519,7 +480,6 @@ def test_real_gearnet_checkpoint_cache_and_artifact_cache_work_through_cli(tmp_p
         ],
     )
 
-    _skip_known_real_environment_gap(first)
     second = runner.invoke(
         app,
         [
@@ -536,7 +496,6 @@ def test_real_gearnet_checkpoint_cache_and_artifact_cache_work_through_cli(tmp_p
         ],
     )
 
-    _skip_known_real_environment_gap(second)
     third = runner.invoke(
         app,
         [
@@ -553,7 +512,6 @@ def test_real_gearnet_checkpoint_cache_and_artifact_cache_work_through_cli(tmp_p
         ],
     )
 
-    _skip_known_real_environment_gap(third)
     assert first.exit_code == 0, first.output
     assert second.exit_code == 0, second.output
     assert third.exit_code == 0, third.output

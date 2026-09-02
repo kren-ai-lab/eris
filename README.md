@@ -7,7 +7,7 @@ Eris v0.1 has two representation families:
 - explicit structural representations, such as point clouds, graphs, matrices, and voxel grids;
 - the optional learned `gearnet_edge` structural embedder.
 
-The core package works without Torch, TorchDrug, RDKit, MSVC, or Ninja. Learned GearNet execution
+The core package works without Torch, RDKit, MSVC, or Ninja. Learned GearNet execution
 is an optional CPU/fp32 environment with a separately supplied checkpoint.
 
 ## Installation
@@ -150,8 +150,7 @@ python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl
 python -m pip install ".[gearnet]"
 ```
 
-Normal GearNet inference does not require TorchDrug, RDKit, PyG extensions, MSVC, or Ninja.
-TorchDrug remains only an opt-in legacy reference environment for regenerating parity fixtures.
+Normal GearNet inference does not require RDKit, PyG extensions, MSVC, or Ninja.
 
 Discover the learned backend and its model metadata without running GearNet:
 

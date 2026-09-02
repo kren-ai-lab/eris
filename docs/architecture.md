@@ -30,7 +30,7 @@ GearNet-Edge pretrained with Multiview Contrast is the selected and registered l
 v0.1. Its scientific architecture, checkpoint, preprocessing, output contract, and validated
 production lifecycle are frozen in `docs/gearnet_edge_backend.md`. The backend implements frozen
 preprocessing, verified checkpoint loading, deterministic CPU/fp32 inference, and complete
-Artifact v2 provenance.
+Artifact v2 provenance through the single native Eris runtime.
 
 ## Canonical public representation identifiers
 

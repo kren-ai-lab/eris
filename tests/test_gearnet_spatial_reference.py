@@ -1,4 +1,4 @@
-"""TorchDrug-free integrity checks for the legacy SpatialEdge parity reference."""
+"""Integrity checks for the frozen GearNet SpatialEdge reference."""
 
 from __future__ import annotations
 
@@ -10,20 +10,20 @@ import numpy as np
 
 
 DATA_DIR = Path(__file__).with_name("data")
-INPUT_PATH = DATA_DIR / "gearnet_legacy_spatial_reference.pdb"
-GRAPH_PATH = DATA_DIR / "gearnet_legacy_spatial_reference_graph.npz"
-METADATA_PATH = DATA_DIR / "gearnet_legacy_spatial_reference.json"
-PROBE_PATH = DATA_DIR / "gearnet_legacy_spatial_max_neighbors_probe.npz"
-PROBE_METADATA_PATH = DATA_DIR / "gearnet_legacy_spatial_max_neighbors_probe.json"
+INPUT_PATH = DATA_DIR / "gearnet_spatial_reference.pdb"
+GRAPH_PATH = DATA_DIR / "gearnet_spatial_reference_graph.npz"
+METADATA_PATH = DATA_DIR / "gearnet_spatial_reference.json"
+PROBE_PATH = DATA_DIR / "gearnet_spatial_max_neighbors_reference.npz"
+PROBE_METADATA_PATH = DATA_DIR / "gearnet_spatial_max_neighbors_reference.json"
 PRIMARY_FIXTURE_SHA256 = {
-    "gearnet_legacy_reference.pdb": "7ef6662ceadaae64f187fa974ba866af02ab5337220bdc9fe005afaeb2b9814b",
-    "gearnet_legacy_reference_graph.npz": (
+    "gearnet_reference.pdb": "7ef6662ceadaae64f187fa974ba866af02ab5337220bdc9fe005afaeb2b9814b",
+    "gearnet_reference_graph.npz": (
         "09f4990e372ecece2f71feee3c0b6d16a15514049332f4e6999753f3639770d6"
     ),
-    "gearnet_legacy_reference_embeddings.npz": (
+    "gearnet_reference_embeddings.npz": (
         "5487b04e70c2c10186cec2856ebb5be5bee1d3bcf2a7249351641e58e64db1ba"
     ),
-    "gearnet_legacy_reference.json": "695c57e2cc948f44bbd5ca06f8680ac7349cea4dd1aafcaa1266fbc16544bfb5",
+    "gearnet_reference.json": "d6b795db8dc0272c61a586898fd9fc9d6dca99610491b7d73ac387a67dda23eb",
 }
 
 
@@ -47,7 +47,7 @@ def _spatial_pairs(graph: dict[str, np.ndarray]) -> list[tuple[int, int]]:
     )
 
 
-def test_primary_gmr1_fixture_bytes_remain_unchanged():
+def test_primary_reference_bytes_remain_unchanged():
     assert {
         path.name: _sha256(path) for path in (DATA_DIR / name for name in PRIMARY_FIXTURE_SHA256)
     } == PRIMARY_FIXTURE_SHA256
@@ -107,12 +107,12 @@ def test_supplemental_spatial_runtime_observations_are_frozen():
     assert (0, 4) not in spatial_pair_set
     assert (5, 0) in spatial_pair_set
     assert (0, 5) in spatial_pair_set
-    assert observations["target_zero_spatial_sources_in_legacy_order"] == [5, 6, 7, 8]
+    assert observations["target_zero_spatial_sources_in_reference_order"] == [5, 6, 7, 8]
     assert [source for source, destination in spatial_pairs if destination == 0] == [5, 6, 7, 8]
     assert observations["equal_distance_tie"] == {
         "destination": 0,
         "distance": 6.0,
-        "sources_in_legacy_order": [6, 7],
+        "sources_in_reference_order": [6, 7],
     }
     knn_pairs = set(
         zip(
@@ -143,7 +143,7 @@ def test_supplemental_line_graph_preserves_spatial_edges_and_angle_bins():
     assert metadata["observations"]["line_graph_spatial_angle_bins"] == angle_bins
 
 
-def test_max_neighbor_probe_freezes_legacy_truncation_order():
+def test_max_neighbor_probe_freezes_reference_truncation_order():
     probe = _npz(PROBE_PATH)
     metadata = _json(PROBE_METADATA_PATH)
     target_zero_sources = probe["spatial_edge_source"][probe["spatial_edge_destination"] == 0]
@@ -155,7 +155,7 @@ def test_max_neighbor_probe_freezes_legacy_truncation_order():
     assert metadata["retained_spatial_neighbors"] == 32
     np.testing.assert_array_equal(
         target_zero_sources,
-        np.asarray(metadata["retained_sources_in_legacy_order"], dtype=np.int64),
+        np.asarray(metadata["retained_sources_in_reference_order"], dtype=np.int64),
     )
 
 
@@ -163,7 +163,11 @@ def test_supplemental_metadata_identifies_input_and_leaks_no_paths():
     metadata = _json(METADATA_PATH)
 
     assert metadata["fixture_schema_version"] == 1
-    assert metadata["purpose"] == "legacy spatial parity reference"
+    assert metadata["purpose"] == "frozen spatial reference"
+    assert metadata["reference_provenance"] == (
+        "Frozen upstream GearNet/TorchDrug graph reference retained as immutable evidence "
+        "for native Eris regression."
+    )
     assert metadata["input"] == {
         "chain_id": "A",
         "filename": INPUT_PATH.name,
