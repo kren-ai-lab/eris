@@ -193,7 +193,7 @@ refreshing only the current structure locator.
 
 The production learned Registry contains exactly one v0.1 backend, `gearnet_edge`. Its static
 metadata and configuration are registered during core import, while dependency probing, factory
-construction, and all Torch/TorchDrug imports remain lazy. The M4 fake backend exists only in
+construction, and all Torch imports remain lazy. The M4 fake backend exists only in
 tests. `eris.embed` and the public learned CLI are implemented public M6 entrypoints over this
 internal runtime.
 

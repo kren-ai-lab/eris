@@ -9,7 +9,6 @@ except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10
 
 
 ROOT = Path(__file__).resolve().parents[1]
-GEARNET_MARKER = "; python_version >= '3.10' and python_version < '3.11'"
 
 
 def _pyproject() -> dict[str, object]:
@@ -43,4 +42,4 @@ def test_optional_extras_match_implemented_or_development_contracts() -> None:
     assert extras["pyg"] == ["torch", "torch-geometric"]
     assert "ruff==0.16.5" in extras["dev"]
     assert "mypy" not in extras["dev"]
-    assert all(requirement.endswith(GEARNET_MARKER) for requirement in extras["gearnet"])
+    assert extras["gearnet"] == ["torch==2.11.0"]

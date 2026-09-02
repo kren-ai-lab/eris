@@ -66,8 +66,9 @@ Known intended core runtime dependencies include:
 - `gemmi`;
 - `platformdirs`.
 
-These dependencies form the declared core runtime contract. GearNet/TorchDrug/PyG remain optional
-and are isolated from core imports.
+These dependencies form the declared core runtime contract. GearNet and PyG remain optional and
+are isolated from core imports. TorchDrug is not a production dependency; it is legacy reference
+tooling for GearNet golden-fixture regeneration only.
 
 ## Validation workflow
 
@@ -83,9 +84,8 @@ Use the validation ladder in increasing scope:
    consistency, package import, and CLI entry points.
 
 The repository declares `python -m pytest -q`, `python -m build`, the `eris` entry point, and
-Ruff pre-commit hooks. The core CI matrix covers Python 3.10–3.13; a separate Python 3.10 lane
-validates the optional GearNet environment and wheel/sdist installation. There is no project-wide
-mypy gate.
+Ruff pre-commit hooks. The core CI matrix covers Python 3.10–3.13; the separate native GearNet
+lane covers the same range with CPU `torch==2.11.0`. There is no project-wide mypy gate.
 
 The canonical local static checks are:
 
@@ -96,7 +96,8 @@ python -m ruff format --check .
 
 Use focused tests during ordinary development. Run the full Python 3.10 suite for broad or
 gate-level changes; Python 3.12 and 3.13 core checks and `pip check` are expected at
-milestone/packaging boundaries. The learned GearNet environment is intentionally Python 3.10-only.
+milestone/packaging boundaries. The native GearNet runtime is CPU/fp32-only and supports Python
+3.10–3.13. Legacy TorchDrug reference regeneration is a manual Python 3.10-only workflow.
 
 ## Git workflow
 

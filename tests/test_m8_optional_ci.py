@@ -24,13 +24,25 @@ def test_distribution_and_optional_ci_keep_their_frozen_boundaries() -> None:
     assert "eris.__version__ == version('eris')" in distribution
     assert "pip check" in distribution
 
-    assert 'python-version: "3.10"' in learned
+    assert 'python-version: ["3.10", "3.11", "3.12", "3.13"]' in learned
+    assert "python-version: ${{ matrix.python-version }}" in learned
     assert "https://download.pytorch.org/whl/cpu" in learned
-    assert "https://data.pyg.org/whl/torch-2.11.0+cpu.html" in learned
     assert 'python -m pip install -e ".[dev,gearnet]"' in learned
     assert "tests/test_gearnet_dependencies.py" in learned
-    assert "tests/test_gearnet_preprocessing_optional.py" in learned
-    assert "tests/test_gearnet_model_loading_optional.py" in learned
+    assert "tests/test_gearnet_native_graph.py" in learned
+    assert "tests/test_gearnet_native_model.py" in learned
+    assert "tests/test_gearnet_inference.py" in learned
+
+    for legacy_dependency in (
+        "torchdrug",
+        "rdkit",
+        "torch-scatter",
+        "torch-cluster",
+        "torch-sparse",
+        "torch-geometric",
+        "ninja",
+    ):
+        assert legacy_dependency not in learned.casefold()
 
     for forbidden in (
         "cuda",

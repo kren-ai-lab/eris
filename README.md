@@ -8,12 +8,12 @@ Eris v0.1 has two representation families:
 - the optional learned `gearnet_edge` structural embedder.
 
 The core package works without Torch, TorchDrug, RDKit, MSVC, or Ninja. Learned GearNet execution
-is an optional environment with a separately supplied checkpoint.
+is an optional CPU/fp32 environment with a separately supplied checkpoint.
 
 ## Installation
 
-Eris core supports Python 3.10-3.13 (`>=3.10,<3.14`). The optional GearNet-Edge backend
-currently requires Python 3.10.
+Eris core and the optional native GearNet-Edge backend support Python 3.10-3.13
+(`>=3.10,<3.14`). GearNet-Edge is frozen to CPU/fp32 and `torch==2.11.0`.
 
 From a checkout or source distribution:
 
@@ -141,18 +141,17 @@ The v0.1 learned backend is:
 `node` mode emits residue-level embeddings, `global` mode emits a structure-level embedding, and
 `both` emits both. GearNet-Edge v0.1 embeddings are 3072-dimensional.
 
-The GearNet runtime is optional and currently validated as a Python 3.10 CPU/fp32 environment.
-Install order matters because PyPI alone may not resolve the compiled PyG extension wheels:
+The GearNet runtime is optional, native to Eris, and CPU/fp32-only. Its CI contract covers Python
+3.10-3.13; local validation is recorded in the development documentation. Install its only runtime
+dependency from the PyTorch CPU index, then install the extra:
 
 ```console
 python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
-python -m pip install torch-scatter==2.1.2 torch-cluster==1.6.3 --find-links https://data.pyg.org/whl/torch-2.11.0+cpu.html
 python -m pip install ".[gearnet]"
 ```
 
-On Windows, the first GearNet/TorchDrug execution can require MSVC x64 Build Tools and Ninja for
-PyTorch's native extension/JIT path. This does not apply to Eris core or explicit
-representations.
+Normal GearNet inference does not require TorchDrug, RDKit, PyG extensions, MSVC, or Ninja.
+TorchDrug remains only an opt-in legacy reference environment for regenerating parity fixtures.
 
 Discover the learned backend and its model metadata without running GearNet:
 

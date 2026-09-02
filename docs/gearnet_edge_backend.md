@@ -103,6 +103,18 @@ during embedding inference:
 Inference constructs the deterministic model graph above and runs the frozen GearNet-Edge model;
 it does not construct random contrastive views.
 
+## Production runtime flow
+
+The production backend is native Eris code and follows the frozen path:
+
+```text
+structure → existing Eris biological preprocessing → native tensor graph
+→ native GearNet-Edge model → unchanged upstream checkpoint → node/global embeddings
+```
+
+The checkpoint remains upstream-compatible and is strict-loaded unchanged. This runtime supports
+inference only; it does not claim training support.
+
 ## Canonical Eris outputs
 
 For one input structure, the canonical learned outputs are:
@@ -144,50 +156,37 @@ the complete representation: there is no silent omission, alternate-atom substit
 imputation, or `valid_mask=False`. GearNet v0.1 freezes CA alternate-location selection to
 `altloc = first`; other selector modes are not exposed by `GearNetEdgeConfig`.
 
-Eris records an ordered biological identity table before TorchDrug. Model-node records selected
+Eris records an ordered biological identity table before native graph construction. Model-node records selected
 by the v0.1 policy carry an explicit, potentially sparse index into that table. Filtering removes
 records without reordering or compacting their biological indexes. The index is stored as the
-TorchDrug residue-level attribute `eris_residue_index`, which survives packing,
-`AlphaCarbonNode`, residue compaction, and the frozen `GraphConstruction`. Final `node_ids` are
+native graph data carries `eris_residue_index` through `AlphaCarbonNode` semantics, residue
+compaction, and frozen graph construction. Final `node_ids` are
 resolved through that carrier and the biological table; they are not reconstructed from output
 length, compacted residue position, or synthetic PDB numbering.
 
-TorchDrug receives a deterministic, adapter-local, single-chain CA-only PDB made from records that
-have already been selected. Its chain and residue numbers are transport-only identifiers. Synthetic
-residue numbering begins at 2 to avoid TorchDrug 0.2.1's terminal dummy-residue collision. The
-temporary PDB is removed after TorchDrug materializes the graph and its path is not provenance.
-This sanitized single-chain boundary also prevents TorchDrug's raw multichain residue-key
-collisions. Tests against a canonical clean PDB demonstrate exact graph equivalence for node
-features, coordinates, edges, relations, and edge features.
+The native runtime consumes the already selected records directly. Its chain and residue numbers
+remain transport-only identifiers; synthetic residue numbering begins at 2 to preserve parity with
+the legacy TorchDrug reference. Tests against canonical clean and supplemental spatial references
+demonstrate exact graph equivalence for node features, coordinates, edges, relations, and edge
+features.
 
 ## Optional dependency boundary
 
 The Eris core remains independent of Torch, TorchDrug, compiled PyG extensions, and RDKit and
-supports Python 3.10–3.13 (`>=3.10,<3.14`). The optional GearNet-Edge backend has a deliberately
-narrower Eris v0.1 runtime contract and currently requires Python 3.10:
+supports Python 3.10–3.13 (`>=3.10,<3.14`). The optional native GearNet-Edge backend supports
+the same Python range:
 
 | dependency | frozen requirement |
 | --- | --- |
-| Python | `>=3.10,<3.11` |
-| NumPy | `>=1.26,<2` |
+| Python | `>=3.10,<3.14` |
 | PyTorch | `==2.11.0` |
-| TorchDrug | `==0.2.1` |
-| `torch-scatter` | `==2.1.2` |
-| `torch-cluster` | `==1.6.3` |
-| `rdkit-pypi` | `==2022.9.5` |
-| Ninja | `>=1.11,<2` |
 
-Local PEP 440 wheel labels do not change the required public versions. For example,
-`torch==2.11.0+cpu`, `torch-scatter==2.1.2+pt211cpu`, and
-`torch-cluster==1.6.3+pt211cpu` satisfy this contract.
+The CPU wheel label `torch==2.11.0+cpu` satisfies this contract.
 
-TorchDrug 0.2.1 officially supports Python through 3.10 and documents PyTorch support only
-through 2.0. PyTorch 2.11 with TorchDrug 0.2.1 is therefore an **Eris-validated experimental
-compatibility baseline**, not an upstream-supported TorchDrug combination. It was selected to
-retain the relevant modern PyTorch checkpoint-loading security fixes and matching compiled PyG
-wheels.
+TorchDrug and its compiled stack are not production requirements. They remain an opt-in,
+Python-3.10-only legacy reference environment for regenerating the frozen golden fixtures.
 
-### CPU reference installation
+### CPU production installation
 
 CPU is the M5.2 installation baseline for Windows and Linux. Install the environment in this
 order:
@@ -198,26 +197,17 @@ order:
    python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
    ```
 
-2. Install the matching compiled PyG extensions from the official PyG wheel index:
-
-   ```console
-   python -m pip install torch-scatter==2.1.2 torch-cluster==1.6.3 --find-links https://data.pyg.org/whl/torch-2.11.0+cpu.html
-   ```
-
-3. Install Eris with its declarative optional dependency group:
+2. Install Eris with its declarative optional dependency group:
 
    ```console
    python -m pip install "eris[gearnet]"
    ```
 
-The ordering is intentional. PyPI alone does not provide portable binary resolution for the
-required compiled PyG extensions, so a clean install may otherwise attempt source compilation.
-The Eris extra declares package requirements but does not encode platform- or accelerator-specific
-external indexes.
+The separate CPU index is required to select the validated CPU wheel. The Eris extra declares
+only `torch==2.11.0`; it does not install a checkpoint or any legacy compiled extension.
 
 The extra does not install or download the checkpoint. Dependency availability also does not
-guarantee checkpoint presence, GPU availability, network availability, successful JIT compilation,
-or successful GearNet inference.
+guarantee checkpoint presence, network availability, or successful GearNet inference.
 
 ### Availability semantics
 
@@ -236,7 +226,7 @@ validated contract.
 
 ## Verified M5.4 model-loading foundation
 
-The internal M5.4 loading foundation constructs the exact frozen `models.GearNet` architecture
+The internal native loader constructs the exact frozen GearNet-Edge architecture
 and loads the official `mc_gearnet_edge.pth` state dictionary strictly. The verified official
 checkpoint has 138 tensor entries, matches the constructed model without missing, unexpected, or
 shape-mismatched keys, and produces the expected
@@ -284,26 +274,17 @@ The result is then checked by the authoritative M4 `StructuralEmbeddingResult` v
 
 ### Determinism evidence
 
-On the frozen Python 3.10, PyTorch 2.11 CPU, TorchDrug 0.2.1, and NumPy 1.26 stack, the official
-checkpoint and canonical validation fixture produced bitwise-identical node and global embeddings
-across three forwards in one process and a fresh process. Both maximum absolute and relative
-differences were zero, and the biological mapping was identical. This is evidence for the frozen
-CPU/fp32 stack, not a universal determinism promise for future platforms, accelerators, or
-precisions.
+The native runtime reproduces the frozen Python 3.10 TorchDrug reference within the GMR.3 golden
+gate (`rtol=1e-6`, `atol=2e-6`) and is deterministic across repeated CPU/fp32 forwards. This is
+evidence for the frozen CPU/fp32 stack, not a universal determinism promise for future platforms,
+accelerators, or precisions.
 
-### Windows JIT and observed performance
+### Legacy reference environment
 
-On the validated Windows environment, the first forward materialized
-`torchdrug.utils.torch.torch_ext` through PyTorch's C++ extension machinery using Ninja and a
-discoverable MSVC x64 `cl.exe`. The observed first compilation took about 25.8 seconds and the
-first complete forward about 26.1 seconds; warm forwards were about 45–49 milliseconds. These are
-observations, not performance contracts. A fresh process reused the JIT cache. This path did not
-materialize the `generalized_rspmm`, spmm, or embedding loaders.
-
-TorchDrug and PyTorch 2.11 used different nominal/effective cache-path conventions during the
-experiment. Eris neither depends on those paths nor manages, relocates, or deletes the PyTorch JIT
-cache. TorchDrug also emits an upstream deprecation warning once per process because it calls
-`torch.cross` without `dim`; Eris does not patch or globally silence that warning.
+GMR.1 and GMR.1b generated the frozen golden references with the historical Python 3.10 TorchDrug
+stack. Regeneration is manual, opt-in developer tooling and may require TorchDrug, compiled PyG
+extensions, MSVC, and Ninja. It is not part of normal installation, CI, artifact provenance, or
+cache identity.
 
 ## Artifact Schema v2 identity and provenance
 
@@ -314,10 +295,11 @@ The frozen learned representation and Eris adapter identity is:
 | `representation_name` | `gearnet_edge` |
 | `backend_id` | `gearnet-edge` |
 | implementation | `eris.core.learned.backends.gearnet.backend.GearNetEdgeBackend` |
-| adapter/encoder version | `1` |
+| adapter/encoder version | `2` |
 
-Adapter version `1` versions the Eris GearNet contract. It is independent of the Eris package
-version, Artifact Schema version, TorchDrug version, upstream source revision, and checkpoint
+Adapter version `2` versions the native Eris GearNet contract and prevents reuse of legacy
+TorchDrug-generated artifacts. It is independent of the Eris package version, Artifact Schema
+version, upstream source revision, and checkpoint
 revision. The Schema v2 `model` block records architecture `GearNet-Edge` and the official
 checkpoint identifier, SHA-256, Zenodo record revision, and source. Local checkpoint paths,
 checkpoint-cache paths, and temporary transport paths are never model identity.
@@ -341,11 +323,10 @@ Generation provenance records requested and resolved execution through the gener
 For the frozen backend both resolved device and precision are `cpu` and `fp32`. Effective precision
 participates in learned cache identity; device does not.
 
-Schema v2 and M4 do not define an authoritative dependency-version block. Python, Torch,
-TorchDrug, PyG-extension, MSVC, and Ninja versions therefore remain documented operational
-compatibility information rather than being inserted into model identity or a new schema field.
-The JIT cache location is neither provenance nor scientific identity. Extending runtime
-environment capture requires a later general convention rather than a GearNet-only schema.
+Schema v2 and M4 do not define an authoritative dependency-version block. Python and Torch remain
+documented operational compatibility information rather than being inserted into model identity or
+a new schema field. Extending runtime environment capture requires a later general convention
+rather than a GearNet-only schema.
 
 ### Cache identity and reuse
 
@@ -367,19 +348,18 @@ names. `valid_mask` is absent for the frozen GearNet policy. Granularity is resp
 `residue`, `structure`, or `mixed`, while coordinate source is always `model_specific`.
 
 The production learned Registry contains `gearnet_edge` exactly once, with backend ID
-`gearnet-edge`, adapter version `1`, and `GearNetEdgeConfig`. Registration stores only static
-metadata and lazy callables: importing Eris or inspecting the Registry does not import Torch,
-TorchDrug, `torch-scatter`, `torch-cluster`, or RDKit. Availability reports an actionable optional
+`gearnet-edge`, adapter version `2`, and `GearNetEdgeConfig`. Registration stores only static
+metadata and lazy callables: importing Eris or inspecting the Registry does not import Torch or
+any legacy reference dependency. Availability reports an actionable optional
 dependency error before factory construction or checkpoint access in a core-only environment.
 
 ## Production integration evidence
 
-The M5.6 reference smoke uses the production Registry and generic `StructuralEmbedderRunner` from
-a real `StructureInput`. With the official verified checkpoint and the frozen Python 3.10 CPU/fp32
-stack, the cache-miss path covers availability, backend construction, execution resolution,
-checkpoint verification/cache, Gemmi biological selection, TorchDrug graph construction, strict
-model loading, inference, Artifact Schema v2 assembly, validation, persistence, and artifact-cache
-write.
+The production smoke uses the production Registry and generic `StructuralEmbedderRunner` from a
+real `StructureInput`. With the official verified checkpoint and the frozen CPU/fp32 stack, the
+cache-miss path covers availability, backend construction, execution resolution, checkpoint
+verification/cache, Gemmi biological selection, native graph construction, strict model loading,
+inference, Artifact Schema v2 assembly, validation, persistence, and artifact-cache write.
 
 For output mode `both`, the validated artifact contains finite float32 `node_embedding` with shape
 `(N, 3072)`, finite float32 `global_embedding` with shape `(3072,)`, and unique Unicode `node_ids`
@@ -395,11 +375,9 @@ global embeddings, and node IDs, demonstrating independent generation determinis
 cache reuse. A retained canonical residue without CA fails with an actionable preprocessing error
 before model load/forward and leaves no artifact-cache entry.
 
-The real-stack smoke is offline and reads the official checkpoint from an explicit local path
+The production smoke is offline and reads the official checkpoint from an explicit local path
 (conventionally `ERIS_GEARNET_CHECKPOINT`); normal tests do not require the checkpoint or network.
-On Windows, the first forward may materialize PyTorch's `torch_ext` JIT extension and therefore
-requires discoverable MSVC x64 and Ninja. That first run can be considerably slower; the JIT cache
-is reused, but its path and timings are not Eris API, provenance, or cache identity.
+The native runtime has no TorchDrug JIT extension, MSVC, or Ninja requirement.
 
 ## Licensing
 

@@ -582,11 +582,13 @@ clean.
 
 ### M8 gate
 
-CI is green; core passes on Python 3.10–3.12; learned passes in its compatible environment;
+CI is green; core passes on Python 3.10–3.13; learned passes in its compatible environment;
 clean wheel install passes; docs/examples execute; no generated execution output is tracked.
 
-**Post-M8 compatibility note:** Eris core also supports Python 3.13 (`>=3.10,<3.14`). The optional
-GearNet-Edge backend remains restricted to Python 3.10 (`>=3.10,<3.11`).
+**Post-M8 GearNet modernization:** GMR.1–GMR.5 are complete. The production `gearnet_edge`
+backend uses Eris-native graph/model construction with CPU/fp32 `torch==2.11.0` on Python
+3.10–3.13. TorchDrug remains manual legacy tooling solely for parity-reference regeneration.
+M9 remains paused.
 
 ## M9 — Release candidate and PyPI
 

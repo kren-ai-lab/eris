@@ -92,14 +92,12 @@ def test_torch_214_cannot_enter_the_native_runtime(compatible_environment):
     assert "found torch 2.14.0" in str(captured.value)
 
 
-def test_gearnet_extra_is_intentionally_legacy_until_gmr5():
+def test_gearnet_extra_contains_only_the_native_runtime():
     pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
     pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     extra = pyproject["project"]["optional-dependencies"]["gearnet"]
 
-    assert any(requirement.startswith("torchdrug==0.2.1") for requirement in extra)
-    assert any(requirement.startswith("rdkit-pypi==2022.9.5") for requirement in extra)
-    assert all("python_version < '3.11'" in requirement for requirement in extra)
+    assert extra == ["torch==2.11.0"]
 
 
 def test_gearnet_dependency_import_is_framework_lazy_and_registry_neutral():
