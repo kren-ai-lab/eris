@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
-pytest.importorskip("torchdrug")
 
 import eris.core.learned.runner as runner_module  # noqa: E402
 from eris.core.artifacts import StructureArtifact  # noqa: E402
@@ -24,7 +25,11 @@ from eris.core.learned.backends.gearnet.metadata import (  # noqa: E402
 )
 from eris.core.learned.backends.gearnet.preprocessing import (  # noqa: E402
     GearNetPreprocessingError,
+    construct_gearnet_input,
+    load_selected_biological_structure,
+    select_gearnet_transport_records,
 )
+from eris.core.learned.backends.gearnet.model import load_verified_gearnet_edge_model  # noqa: E402
 from eris.core.learned.checkpoint_cache import CheckpointCache  # noqa: E402
 from eris.core.learned.checkpoints import verify_checkpoint  # noqa: E402
 from eris.core.learned.config import StructuralEmbedderConfig  # noqa: E402
@@ -50,6 +55,7 @@ RESIDUES = (
     "LEU",
     "LYS",
 )
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _atom_line(index: int, residue_name: str) -> str:
@@ -134,6 +140,88 @@ def test_real_cpu_fp32_inference_modes_and_repeatability(tmp_path):
     )
     assert np.array_equal(results["both"].node_embedding, repeated.node_embedding)
     assert np.array_equal(results["both"].global_embedding, repeated.global_embedding)
+
+
+def test_python_310_legacy_reference_and_public_native_path_are_exactly_equal():
+    if sys.version_info[:2] != (3, 10):
+        pytest.skip("TorchDrug legacy parity is frozen only on Python 3.10")
+    pytest.importorskip("torchdrug")
+
+    source = ROOT / "tests" / "data" / "gearnet_legacy_reference.pdb"
+    checkpoint = verify_checkpoint(_checkpoint(), GEARNET_EDGE_CHECKPOINT_DESCRIPTOR)
+    selected = load_selected_biological_structure(
+        StructureInput(source=str(source), chain_id="A", model_index=0)
+    )
+    legacy_prepared = construct_gearnet_input(
+        select_gearnet_transport_records(selected), selected.biological_table
+    )
+    legacy_model = load_verified_gearnet_edge_model(
+        checkpoint,
+        execution=ResolvedExecution(device="cpu", precision="fp32"),
+    )
+    with torch.inference_mode():
+        legacy_output = legacy_model(
+            legacy_prepared.graph,
+            legacy_prepared.graph.node_feature.float(),
+        )
+
+    import eris
+
+    artifact = eris.embed(
+        str(source),
+        representation="gearnet_edge",
+        chain_id="A",
+        model_index=0,
+        checkpoint_path=checkpoint.path,
+        device="cpu",
+        precision="fp32",
+        use_cache=False,
+    )
+
+    np.testing.assert_array_equal(artifact.data["node_ids"], legacy_prepared.node_ids)
+    np.testing.assert_array_equal(
+        artifact.data["node_embedding"], legacy_output["node_feature"].numpy()
+    )
+    np.testing.assert_array_equal(
+        artifact.data["global_embedding"], legacy_output["graph_feature"][0].numpy()
+    )
+
+
+def test_public_native_embed_does_not_import_legacy_frameworks(tmp_path):
+    checkpoint = _checkpoint()
+    output = tmp_path / "native-artifact"
+    script = f"""
+import sys
+from pathlib import Path
+import numpy as np
+import eris
+from eris.core.artifacts import StructureArtifact
+
+artifact = eris.embed(
+    {str(ROOT / "tests" / "data" / "gearnet_legacy_reference.pdb")!r},
+    representation='gearnet_edge',
+    chain_id='A',
+    model_index=0,
+    checkpoint_path={str(checkpoint)!r},
+    device='cpu',
+    precision='fp32',
+    output={str(output)!r},
+    use_cache=False,
+)
+artifact.validate(strict=True)
+loaded = StructureArtifact.load(Path({str(output)!r}), validate=True, strict=True)
+for name in artifact.data:
+    np.testing.assert_array_equal(loaded.data[name], artifact.data[name])
+with np.load({str(ROOT / "tests" / "data" / "gearnet_legacy_reference_embeddings.npz")!r}, allow_pickle=False) as golden:
+    np.testing.assert_array_equal(artifact.data['node_ids'], golden['node_ids'])
+    np.testing.assert_array_equal(artifact.data['node_embedding'], golden['node_embedding'])
+    np.testing.assert_array_equal(artifact.data['global_embedding'], golden['global_embedding'])
+blocked = {{'torchdrug', 'rdkit', 'torch_scatter', 'torch_cluster', 'torch_sparse', 'torch_geometric', 'ninja'}}
+loaded_modules = sorted(blocked.intersection(sys.modules))
+if loaded_modules:
+    raise SystemExit(f'legacy frameworks imported by production path: {{loaded_modules}}')
+"""
+    subprocess.run([sys.executable, "-c", script], cwd=ROOT, check=True)
 
 
 def test_real_runner_builds_strict_gearnet_artifact_and_reuses_generation_provenance(

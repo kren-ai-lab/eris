@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import importlib.util
-import subprocess
 import sys
 from dataclasses import dataclass
 from importlib import metadata
 
 from eris.core.learned.registry import BackendAvailability
 
-GEARNET_PYTHON_REQUIREMENT = ">=3.10,<3.11"
-_IMPORT_SMOKE_TIMEOUT_SECONDS = 30
+GEARNET_PYTHON_REQUIREMENT = ">=3.10,<3.14"
 
 
 @dataclass(frozen=True)
@@ -23,24 +21,7 @@ class GearNetDependencyRequirement:
     requirement: str
 
 
-GEARNET_DEPENDENCY_REQUIREMENTS = (
-    GearNetDependencyRequirement("numpy", "numpy", ">=1.26,<2"),
-    GearNetDependencyRequirement("torch", "torch", "==2.11.0"),
-    GearNetDependencyRequirement("torchdrug", "torchdrug", "==0.2.1"),
-    GearNetDependencyRequirement("torch-scatter", "torch_scatter", "==2.1.2"),
-    GearNetDependencyRequirement("torch-cluster", "torch_cluster", "==1.6.3"),
-    GearNetDependencyRequirement("rdkit-pypi", "rdkit", "==2022.9.5"),
-    GearNetDependencyRequirement("ninja", "ninja", ">=1.11,<2"),
-)
-
-_IMPORT_SMOKE = """
-import torch
-import torchdrug
-import torch_scatter
-import torch_cluster
-import rdkit
-from torchdrug import models, layers, data
-"""
+GEARNET_DEPENDENCY_REQUIREMENTS = (GearNetDependencyRequirement("torch", "torch", "==2.11.0"),)
 
 
 def _current_python_version() -> tuple[int, int]:
@@ -84,55 +65,20 @@ def _matches_requirement(installed: str, requirement: str) -> bool:
     release = _numeric_release(public)
     if release is None:
         return False
-    if requirement == ">=1.26,<2":
-        return _compare_releases(release, (1, 26)) >= 0 and _compare_releases(release, (2,)) < 0
-    if requirement == ">=1.11,<2":
-        return _compare_releases(release, (1, 11)) >= 0 and _compare_releases(release, (2,)) < 0
     raise AssertionError(f"Unsupported frozen GearNet requirement: {requirement}")
-
-
-def _last_error_line(stderr: str, stdout: str) -> str:
-    lines = [line.strip() for line in (stderr or stdout).splitlines() if line.strip()]
-    for line in reversed(lines):
-        if line != "Traceback (most recent call last):" and not line.startswith("File "):
-            return line[:500]
-    return "subprocess exited without an error message"
-
-
-def _run_import_smoke() -> str | None:
-    try:
-        result = subprocess.run(
-            [sys.executable, "-c", _IMPORT_SMOKE],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=_IMPORT_SMOKE_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired:
-        return (
-            "GearNet dependency import smoke timed out after "
-            f"{_IMPORT_SMOKE_TIMEOUT_SECONDS} seconds"
-        )
-    except OSError as exc:
-        return f"GearNet dependency import smoke could not start: {exc}"
-
-    if result.returncode != 0:
-        detail = _last_error_line(result.stderr, result.stdout)
-        return f"GearNet dependency import smoke failed: {detail}"
-    return None
 
 
 def probe_gearnet_availability() -> BackendAvailability:
     """Check the frozen dependency stack without instantiating or running GearNet."""
 
     python_version = _current_python_version()
-    if not (python_version >= (3, 10) and python_version < (3, 11)):
+    if not (python_version >= (3, 10) and python_version < (3, 14)):
         actual = ".".join(str(part) for part in python_version)
         return BackendAvailability(
             available=False,
             reason=(
                 f"GearNet backend requires Python {GEARNET_PYTHON_REQUIREMENT}; "
-                f"running Python {actual}. Eris core remains supported on Python 3.10-3.13."
+                f"running Python {actual}."
             ),
         )
 
@@ -160,7 +106,7 @@ def probe_gearnet_availability() -> BackendAvailability:
             available=False,
             reason=(
                 f"GearNet backend dependencies are not installed: {missing}. "
-                "Install the documented Eris GearNet CPU environment."
+                "Install torch==2.11.0 for the Eris native GearNet CPU runtime."
             ),
         )
     if missing_modules:
@@ -169,7 +115,7 @@ def probe_gearnet_availability() -> BackendAvailability:
             available=False,
             reason=(
                 f"GearNet distributions are installed but import modules are missing: {missing}. "
-                "Reinstall the documented Eris GearNet CPU environment."
+                "Reinstall torch==2.11.0 for the Eris native GearNet CPU runtime."
             ),
         )
     if incompatible:
@@ -178,19 +124,41 @@ def probe_gearnet_availability() -> BackendAvailability:
             available=False,
             reason=(
                 f"GearNet backend dependency versions are incompatible: {details}. "
-                "Install the frozen Eris v0.1 GearNet dependency versions."
+                "Install torch==2.11.0 for the frozen Eris native GearNet numerical runtime."
             ),
         )
 
-    smoke_error = _run_import_smoke()
-    if smoke_error is not None:
-        return BackendAvailability(available=False, reason=smoke_error)
     return BackendAvailability(available=True)
+
+
+def import_native_gearnet_torch():
+    """Import exactly the frozen PyTorch runtime required for native GearNet execution."""
+
+    try:
+        installed = _distribution_version("torch")
+    except metadata.PackageNotFoundError as error:
+        raise ImportError(
+            "Native GearNet-Edge requires optional dependency torch==2.11.0; "
+            "install the Eris GearNet CPU runtime"
+        ) from error
+    if not _matches_requirement(installed, "==2.11.0"):
+        raise ImportError(
+            "Native GearNet-Edge requires torch==2.11.0 for frozen numerical parity; "
+            f"found torch {installed}"
+        )
+    try:
+        import torch
+    except (ImportError, OSError) as error:
+        raise ImportError(
+            "Native GearNet-Edge could not import the required torch==2.11.0 CPU runtime"
+        ) from error
+    return torch
 
 
 __all__ = [
     "GEARNET_DEPENDENCY_REQUIREMENTS",
     "GEARNET_PYTHON_REQUIREMENT",
     "GearNetDependencyRequirement",
+    "import_native_gearnet_torch",
     "probe_gearnet_availability",
 ]

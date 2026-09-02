@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
 
-from eris.core.learned.backends.gearnet.dependencies import probe_gearnet_availability
+from eris.core.learned.backends.gearnet.dependencies import (
+    import_native_gearnet_torch,
+    probe_gearnet_availability,
+)
 from eris.core.learned.backends.gearnet.metadata import (
     GEARNET_EDGE_BACKEND_ID,
     GEARNET_EDGE_EDGE_INPUT_DIM,
@@ -19,11 +21,11 @@ from eris.core.learned.backends.gearnet.model import (
     GEARNET_EDGE_OUTPUT_DIM,
     _validate_cpu_fp32,
     _validate_execution,
-    load_verified_gearnet_edge_model,
 )
+from eris.core.learned.backends.gearnet.native_graph import NativeGearNetGraph
 from eris.core.learned.backends.gearnet.preprocessing import (
     GearNetPreparedInput,
-    construct_gearnet_input,
+    construct_native_gearnet_input,
     load_selected_biological_structure,
     select_gearnet_transport_records,
 )
@@ -41,36 +43,24 @@ from eris.exceptions import ExecutionError
 
 def _import_torch() -> Any:
     try:
-        import torch
-    except (ImportError, OSError) as error:
-        raise ExecutionError(f"Unable to import the frozen GearNet runtime: {error}") from error
-    return torch
-
-
-def _scalar_int(value: Any, name: str) -> int:
-    try:
-        scalar = value.item() if hasattr(value, "item") else value
-        result = int(scalar)
-    except (TypeError, ValueError) as error:
-        raise ExecutionError(f"GearNet prepared graph {name} must be an integer") from error
-    if isinstance(scalar, bool) or result != scalar:
-        raise ExecutionError(f"GearNet prepared graph {name} must be an integer")
-    return result
+        return import_native_gearnet_torch()
+    except ImportError as error:
+        raise ExecutionError(str(error)) from error
 
 
 def _validate_prepared(prepared: GearNetPreparedInput) -> int:
     if not isinstance(prepared, GearNetPreparedInput):
         raise TypeError("prepared must be a GearNetPreparedInput")
     graph = prepared.graph
-    if graph is None:
-        raise ExecutionError("GearNet prepared graph must exist")
+    if not isinstance(graph, NativeGearNetGraph):
+        raise ExecutionError("GearNet prepared graph must be a NativeGearNetGraph")
 
-    num_node = _scalar_int(getattr(graph, "num_node", None), "num_node")
+    num_node = graph.node_feature.shape[0]
     if num_node <= 0:
         raise ExecutionError("GearNet prepared graph must contain at least one node")
 
     node_feature = getattr(graph, "node_feature", None)
-    if getattr(node_feature, "ndim", None) != 2:
+    if not isinstance(node_feature, np.ndarray) or node_feature.ndim != 2:
         raise ExecutionError("GearNet prepared node_feature must be two-dimensional")
     if tuple(node_feature.shape) != (num_node, GEARNET_EDGE_NODE_INPUT_DIM):
         raise ExecutionError(
@@ -79,18 +69,24 @@ def _validate_prepared(prepared: GearNetPreparedInput) -> int:
         )
 
     edge_feature = getattr(graph, "edge_feature", None)
-    if getattr(edge_feature, "ndim", None) != 2:
+    if not isinstance(edge_feature, np.ndarray) or edge_feature.ndim != 2:
         raise ExecutionError("GearNet prepared edge_feature must be two-dimensional")
     if edge_feature.shape[1] != GEARNET_EDGE_EDGE_INPUT_DIM:
         raise ExecutionError(
             f"GearNet prepared edge_feature width must be {GEARNET_EDGE_EDGE_INPUT_DIM}"
         )
 
-    num_relation = _scalar_int(getattr(graph, "num_relation", None), "num_relation")
-    if num_relation != GEARNET_EDGE_NUM_RELATION:
+    if graph.edge_relation.size and (
+        graph.edge_relation.min() < 0 or graph.edge_relation.max() >= GEARNET_EDGE_NUM_RELATION
+    ):
         raise ExecutionError(
             f"GearNet prepared graph must declare {GEARNET_EDGE_NUM_RELATION} relations"
         )
+    if (
+        graph.edge_source.shape != graph.edge_destination.shape
+        or graph.edge_source.shape != graph.edge_relation.shape
+    ):
+        raise ExecutionError("GearNet prepared edge arrays must align")
 
     carrier = prepared.carrier
     if not isinstance(carrier, np.ndarray) or carrier.ndim != 1:
@@ -118,23 +114,17 @@ def _validate_prepared(prepared: GearNetPreparedInput) -> int:
     return num_node
 
 
-def _validate_input_tensors(prepared: GearNetPreparedInput, torch: Any) -> None:
+def _validate_native_graph(prepared: GearNetPreparedInput) -> None:
     graph = prepared.graph
     node_feature = graph.node_feature
     edge_feature = graph.edge_feature
-    if not isinstance(node_feature, torch.Tensor):
-        raise ExecutionError("GearNet prepared node_feature must be a torch.Tensor")
-    if not isinstance(edge_feature, torch.Tensor):
-        raise ExecutionError("GearNet prepared edge_feature must be a torch.Tensor")
-    if node_feature.device.type != "cpu" or edge_feature.device.type != "cpu":
-        raise ExecutionError("GearNet prepared graph tensors must be on CPU")
-    if node_feature.dtype != torch.int64:
-        raise ExecutionError("GearNet prepared node_feature must be torch.int64")
-    if edge_feature.dtype != torch.float32:
-        raise ExecutionError("GearNet prepared edge_feature must be torch.float32")
-    if not bool(torch.isfinite(node_feature).all().item()):
+    if node_feature.dtype != np.int64:
+        raise ExecutionError("GearNet prepared node_feature must be int64")
+    if edge_feature.dtype != np.float32:
+        raise ExecutionError("GearNet prepared edge_feature must be float32")
+    if not np.isfinite(node_feature).all():
         raise ExecutionError("GearNet prepared node_feature must contain only finite values")
-    if not bool(torch.isfinite(edge_feature).all().item()):
+    if not np.isfinite(edge_feature).all():
         raise ExecutionError("GearNet prepared edge_feature must contain only finite values")
 
 
@@ -175,10 +165,7 @@ def _validate_numpy_output(
 
 
 def _forward_error(error: Exception) -> ExecutionError:
-    message = f"GearNet-Edge CPU/fp32 inference failed: {error}"
-    if sys.platform == "win32":
-        message += "; TorchDrug C++ extensions may require discoverable MSVC x64/cl.exe and Ninja"
-    return ExecutionError(message)
+    return ExecutionError(f"GearNet-Edge native CPU/fp32 inference failed: {error}")
 
 
 class GearNetEdgeBackend:
@@ -210,7 +197,7 @@ class GearNetEdgeBackend:
             raise TypeError("config must be a StructuralEmbedderConfig")
         selected = load_selected_biological_structure(structure)
         records = select_gearnet_transport_records(selected)
-        prepared = construct_gearnet_input(records, selected.biological_table)
+        prepared = construct_native_gearnet_input(records, selected.biological_table)
         return StructuralPreprocessingResult(
             prepared=prepared,
             input_format=selected.input_format,
@@ -222,7 +209,11 @@ class GearNetEdgeBackend:
         *,
         execution: ResolvedExecution,
     ) -> Any:
-        return load_verified_gearnet_edge_model(checkpoint, execution=execution)
+        _validate_execution(execution)
+        _import_torch()
+        from eris.core.learned.backends.gearnet.native_model import load_native_gearnet_edge_model
+
+        return load_native_gearnet_edge_model(checkpoint)
 
     def infer(
         self,
@@ -239,18 +230,13 @@ class GearNetEdgeBackend:
             raise ExecutionError("GearNet-Edge model must be in eval mode before inference")
         num_node = _validate_prepared(prepared)
 
+        _validate_native_graph(prepared)
         torch = _import_torch()
         _validate_cpu_fp32(model, torch)
-        _validate_input_tensors(prepared, torch)
 
         try:
             with torch.inference_mode():
-                output = model(
-                    prepared.graph,
-                    prepared.graph.node_feature.float(),
-                    all_loss=None,
-                    metric=None,
-                )
+                output = model(prepared.graph)
         except (ImportError, OSError, RuntimeError) as error:
             raise _forward_error(error) from error
 

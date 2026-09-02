@@ -102,6 +102,7 @@ import sys
 import eris
 import eris.core.learned
 from eris.core.learned.backends.gearnet import dependencies
+from importlib.metadata import PackageNotFoundError
 
 blocked = {"torch", "torch_geometric", "torchdrug", "torch_scatter", "torch_cluster", "rdkit"}
 loaded = sorted(blocked.intersection(sys.modules))
@@ -109,15 +110,12 @@ if loaded:
     raise SystemExit(f"optional frameworks loaded during learned metadata import: {loaded}")
 
 assert eris.get_embedder_info("gearnet_edge")["name"] == "gearnet_edge"
-assert dependencies.GEARNET_PYTHON_REQUIREMENT == ">=3.10,<3.11"
-dependencies._module_exists = lambda name: name != "torch"
+assert dependencies.GEARNET_PYTHON_REQUIREMENT == ">=3.10,<3.14"
+dependencies._distribution_version = lambda name: (_ for _ in ()).throw(PackageNotFoundError(name))
 status = dependencies.probe_gearnet_availability()
 if status.available:
     raise SystemExit("GearNet cannot be available while its frameworks are blocked")
-if sys.version_info[:2] >= (3, 11):
-    if "requires Python" not in status.reason:
-        raise SystemExit("GearNet unavailable status must identify its Python boundary")
-elif "torch" not in status.reason:
+if "torch" not in status.reason:
     raise SystemExit("GearNet unavailable status must identify the missing dependency")
 """
     )

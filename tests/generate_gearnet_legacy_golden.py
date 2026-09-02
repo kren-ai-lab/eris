@@ -29,9 +29,6 @@ from typing import Any
 
 import numpy as np
 
-from eris.core.learned.backends.gearnet.backend import GearNetEdgeBackend
-from eris.core.learned.backends.gearnet.config import GearNetEdgeConfig
-from eris.core.learned.backends.gearnet.dependencies import probe_gearnet_availability
 from eris.core.learned.backends.gearnet.metadata import (
     GEARNET_EDGE_ARCHITECTURE,
     GEARNET_EDGE_BACKEND_ID,
@@ -52,7 +49,10 @@ from eris.core.learned.backends.gearnet.preprocessing import (
     BiologicalResidueIdentity,
     TransportNodeRecord,
     construct_gearnet_input,
+    load_selected_biological_structure,
+    select_gearnet_transport_records,
 )
+from eris.core.learned.backends.gearnet.model import load_verified_gearnet_edge_model
 from eris.core.learned.checkpoints import verify_checkpoint
 from eris.core.learned.execution import ResolvedExecution
 from eris.core.types import StructureInput
@@ -103,9 +103,10 @@ def _require_legacy_environment() -> None:
         raise RuntimeError(
             "MSVC x64 cl.exe is not on PATH; start an x64 Visual Studio developer environment"
         )
-    availability = probe_gearnet_availability()
-    if not availability.available:
-        raise RuntimeError(f"Frozen GearNet dependency validation failed: {availability.reason}")
+    try:
+        import torchdrug  # noqa: F401
+    except ImportError as error:
+        raise RuntimeError("Legacy reference generation requires TorchDrug") from error
 
 
 def _validate_targets(paths: tuple[Path, ...], *, overwrite: bool) -> None:
@@ -137,23 +138,24 @@ def regenerate(*, checkpoint_path: Path, overwrite: bool) -> None:
     _require_legacy_environment()
     _validate_targets(OUTPUT_PATHS, overwrite=overwrite)
     checkpoint = verify_checkpoint(checkpoint_path, GEARNET_EDGE_CHECKPOINT_DESCRIPTOR)
-    backend = GearNetEdgeBackend()
-    execution = ResolvedExecution(device="cpu", precision="fp32")
-    config = GearNetEdgeConfig(
-        representation_name=GEARNET_EDGE_REPRESENTATION_NAME,
-        output_mode="both",
+    selected = load_selected_biological_structure(
+        StructureInput(source=str(INPUT_PATH), chain_id="A", model_index=0)
     )
-    preprocessed = backend.preprocess(
-        StructureInput(source=str(INPUT_PATH), chain_id="A", model_index=0),
-        config=config,
+    prepared = construct_gearnet_input(
+        select_gearnet_transport_records(selected), selected.biological_table
     )
-    prepared = preprocessed.prepared
-    model = backend.load(checkpoint, execution=execution)
-    first = backend.infer(model, prepared, config=config, execution=execution)
-    second = backend.infer(model, prepared, config=config, execution=execution)
-    if not np.array_equal(first.node_embedding, second.node_embedding) or not np.array_equal(
-        first.global_embedding, second.global_embedding
-    ):
+    model = load_verified_gearnet_edge_model(
+        checkpoint,
+        execution=ResolvedExecution(device="cpu", precision="fp32"),
+    )
+    import torch
+
+    with torch.inference_mode():
+        first = model(prepared.graph, prepared.graph.node_feature.float())
+        second = model(prepared.graph, prepared.graph.node_feature.float())
+    if not np.array_equal(
+        first["node_feature"].numpy(), second["node_feature"].numpy()
+    ) or not np.array_equal(first["graph_feature"].numpy(), second["graph_feature"].numpy()):
         raise RuntimeError("Legacy CPU/fp32 inference was not exactly deterministic")
 
     graph = prepared.graph
@@ -175,9 +177,9 @@ def regenerate(*, checkpoint_path: Path, overwrite: bool) -> None:
         "line_angle_relation": line_edge_list[:, 2],
     }
     embedding_arrays = {
-        "node_ids": first.node_ids.copy(),
-        "node_embedding": first.node_embedding.copy(),
-        "global_embedding": first.global_embedding.copy(),
+        "node_ids": prepared.node_ids.copy(),
+        "node_embedding": first["node_feature"].numpy().copy(),
+        "global_embedding": first["graph_feature"][0].numpy().copy(),
     }
     np.savez(GRAPH_PATH, **graph_arrays)
     np.savez(EMBEDDING_PATH, **embedding_arrays)
@@ -397,19 +399,12 @@ def regenerate_spatial_reference(*, overwrite: bool) -> None:
 
     _require_legacy_environment()
     _validate_targets(SPATIAL_OUTPUT_PATHS, overwrite=overwrite)
-    backend = GearNetEdgeBackend()
-    config = GearNetEdgeConfig(
-        representation_name=GEARNET_EDGE_REPRESENTATION_NAME,
-        output_mode="both",
+    selected = load_selected_biological_structure(
+        StructureInput(source=str(SPATIAL_INPUT_PATH), chain_id="A", model_index=0)
     )
-    first = backend.preprocess(
-        StructureInput(source=str(SPATIAL_INPUT_PATH), chain_id="A", model_index=0),
-        config=config,
-    ).prepared
-    second = backend.preprocess(
-        StructureInput(source=str(SPATIAL_INPUT_PATH), chain_id="A", model_index=0),
-        config=config,
-    ).prepared
+    records = select_gearnet_transport_records(selected)
+    first = construct_gearnet_input(records, selected.biological_table)
+    second = construct_gearnet_input(records, selected.biological_table)
     first_arrays = _graph_arrays(first, _line_graph(first.graph))
     second_arrays = _graph_arrays(second, _line_graph(second.graph))
     _assert_exact_arrays(first_arrays, second_arrays)

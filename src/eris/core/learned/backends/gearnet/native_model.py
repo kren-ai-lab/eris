@@ -1,7 +1,6 @@
 """Native PyTorch implementation of the frozen GearNet-Edge numerical model.
 
-This is an internal parity implementation. Production continues to use the
-legacy TorchDrug backend until a later migration unit explicitly switches it.
+This internal numerical implementation is the frozen production runtime.
 """
 
 from __future__ import annotations

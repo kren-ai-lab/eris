@@ -425,6 +425,27 @@ def construct_gearnet_input(
     )
 
 
+def construct_native_gearnet_input(
+    records: Sequence[TransportNodeRecord],
+    biological_table: BiologicalIdentityTable,
+) -> GearNetPreparedInput:
+    """Build the native graph while preserving the existing biological carrier contract."""
+
+    normalized = _validate_transport_records(records, table_size=len(biological_table.records))
+    from eris.core.learned.backends.gearnet.native_graph import construct_native_gearnet_graph
+
+    graph = construct_native_gearnet_graph(normalized)
+    carrier = np.asarray([record.biological_index for record in normalized], dtype=np.int64)
+    carrier_tuple = _validate_carrier(carrier.tolist(), table_size=len(biological_table.records))
+    node_ids = np.asarray(biological_table.node_ids_for(carrier_tuple), dtype=np.str_)
+    return GearNetPreparedInput(
+        graph=graph,
+        carrier=carrier,
+        biological_table=biological_table,
+        node_ids=node_ids,
+    )
+
+
 __all__ = [
     "BiologicalIdentityTable",
     "BiologicalResidueIdentity",
@@ -435,6 +456,7 @@ __all__ = [
     "build_biological_identity_table",
     "build_synthetic_pdb",
     "construct_gearnet_input",
+    "construct_native_gearnet_input",
     "load_selected_biological_structure",
     "select_gearnet_transport_records",
     "temporary_synthetic_pdb",

@@ -78,7 +78,12 @@ def _input_metadata(source: str = "C:/structures/protein.pdb"):
     )
 
 
-def _artifact(output_mode: str = "both", *, source: str = "C:/structures/protein.pdb"):
+def _artifact(
+    output_mode: str = "both",
+    *,
+    source: str = "C:/structures/protein.pdb",
+    encoder_version: str = GEARNET_EDGE_ENCODER_VERSION,
+):
     request = StructuralExecutionConfig(device="cpu", precision="fp32")
     resolved = ResolvedExecution(device="cpu", precision="fp32")
     return build_learned_artifact(
@@ -88,7 +93,7 @@ def _artifact(output_mode: str = "both", *, source: str = "C:/structures/protein
         input_metadata=_input_metadata(source),
         encoder_metadata={
             "implementation": GEARNET_EDGE_IMPLEMENTATION,
-            "version": GEARNET_EDGE_ENCODER_VERSION,
+            "version": encoder_version,
         },
         provenance_environment={
             "execution": build_execution_provenance(request, resolved),
@@ -124,7 +129,7 @@ def _cache_key(
 def test_frozen_gearnet_model_checkpoint_and_adapter_identity():
     assert GEARNET_EDGE_REPRESENTATION_NAME == "gearnet_edge"
     assert GEARNET_EDGE_BACKEND_ID == "gearnet-edge"
-    assert GEARNET_EDGE_ENCODER_VERSION == "1"
+    assert GEARNET_EDGE_ENCODER_VERSION == "2"
     assert GEARNET_EDGE_IMPLEMENTATION == (
         "eris.core.learned.backends.gearnet.backend.GearNetEdgeBackend"
     )
@@ -217,7 +222,7 @@ assert learned_registry.names() == ['gearnet_edge']
 info = learned_registry.get_info('gearnet_edge')
 assert info.backend_id == 'gearnet-edge'
 assert info.implementation == 'eris.core.learned.backends.gearnet.backend.GearNetEdgeBackend'
-assert info.encoder_version == '1'
+assert info.encoder_version == '2'
 blocked = {'torch', 'torchdrug', 'torch_scatter', 'torch_cluster', 'rdkit'}
 loaded = sorted(blocked.intersection(sys.modules))
 if loaded:
@@ -311,7 +316,7 @@ def test_gearnet_artifact_metadata_is_complete_by_output_mode(
     assert artifact.meta["coordinate_source"] == "model_specific"
     assert artifact.meta["encoder"] == {
         "implementation": GEARNET_EDGE_IMPLEMENTATION,
-        "version": "1",
+        "version": "2",
     }
     assert artifact.meta["model"] == GEARNET_EDGE_MODEL_DESCRIPTOR.to_dict()
     assert artifact.meta["input"]["model_index"] == 2
@@ -352,7 +357,7 @@ def test_gearnet_cache_identity_includes_scientific_contract_dimensions():
 
     assert baseline != _cache_key(fingerprint=changed_fingerprint)
     assert baseline != _cache_key(model=changed_checkpoint)
-    assert baseline != _cache_key(encoder_version="2")
+    assert baseline != _cache_key(encoder_version="1")
     assert baseline != _cache_key(
         implementation="eris.core.learned.backends.gearnet.backend.OtherAdapter"
     )
@@ -418,3 +423,28 @@ def test_gearnet_cache_hit_refreshes_only_input_locator_and_preserves_generation
     assert refreshed.meta["provenance"] == artifact.meta["provenance"]
     assert refreshed.meta["model"] == artifact.meta["model"]
     assert refreshed.data is artifact.data
+
+
+def test_legacy_encoder_version_cannot_satisfy_native_cache_identity():
+    config = _config()
+    artifact = _artifact(encoder_version="1")
+    registry = EmbedderRegistry()
+    info = register_gearnet_edge(registry)
+    parameters = config.to_dict()
+    fingerprint = compute_config_fingerprint(config.representation_name, parameters)
+
+    assert info.encoder_version == "2"
+    assert not _matches_cache_identity(
+        artifact,
+        structure_input=StructureInput(
+            source="C:/structures/protein.pdb", model_index=2, chain_id="A"
+        ),
+        info=info,
+        config=config,
+        model=GEARNET_EDGE_MODEL_DESCRIPTOR,
+        source_sha256="a" * 64,
+        parser_hint=".pdb",
+        parameters=parameters,
+        config_fingerprint=fingerprint,
+        execution_request=StructuralExecutionConfig(device="cpu", precision="fp32"),
+    )
