@@ -9,7 +9,7 @@ from importlib import metadata
 
 from eris.core.learned.registry import BackendAvailability
 
-GEARNET_PYTHON_REQUIREMENT = ">=3.10,<3.14"
+GEARNET_PYTHON_REQUIREMENT = ">=3.11,<3.13"
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ def probe_gearnet_availability() -> BackendAvailability:
     """Check the frozen dependency stack without instantiating or running GearNet."""
 
     python_version = _current_python_version()
-    if not (python_version >= (3, 10) and python_version < (3, 14)):
+    if not (python_version >= (3, 11) and python_version < (3, 13)):
         actual = ".".join(str(part) for part in python_version)
         return BackendAvailability(
             available=False,

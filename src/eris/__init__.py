@@ -11,7 +11,7 @@ from eris.discovery import (
 )
 from eris.exceptions import RepresentationNotFoundError
 
-__version__ = distribution_version("eris")
+__version__ = distribution_version("eris-lib")
 
 # M7 workflow entry points.  These imports expose the existing canonical boundaries;
 # implementation remains in the pipelines/export modules.

@@ -9,7 +9,7 @@ point clouds, graphs, contact maps, distograms, voxel grids, and GearNet-Edge em
 
 ## Installation
 
-Eris supports Python 3.10-3.13 (`>=3.10,<3.14`). Install from a repository checkout or source
+Eris supports Python 3.11-3.12 (`>=3.11,<3.13`). Install from a repository checkout or source
 distribution:
 
 ```console
@@ -88,7 +88,7 @@ Use `eris representations list` or `eris.get_representation_info(name)` to inspe
 - `global`: one `(3072,)` structure embedding;
 - `both`: both outputs.
 
-Runtime: Python 3.10-3.13, `torch==2.11.0`, CPU, and fp32. The checkpoint is not bundled or
+Runtime: Python 3.11-3.12, `torch==2.11.0`, CPU, and fp32. The checkpoint is not bundled or
 downloaded automatically. Supply `mc_gearnet_edge.pth` through `checkpoint_path` or
 `--checkpoint`.
 

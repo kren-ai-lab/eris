@@ -173,17 +173,17 @@ def test_biological_policy_preserves_identity_and_rejects_invalid_retained_resid
 
 
 def test_native_dependency_boundary_and_current_cache_identity(monkeypatch):
-    assert dependencies.GEARNET_PYTHON_REQUIREMENT == ">=3.10,<3.14"
+    assert dependencies.GEARNET_PYTHON_REQUIREMENT == ">=3.11,<3.13"
     assert [item.requirement for item in dependencies.GEARNET_DEPENDENCY_REQUIREMENTS] == [
         "==2.11.0"
     ]
     assert GEARNET_EDGE_ENCODER_VERSION == "2"
     assert GEARNET_EDGE_IMPLEMENTATION.endswith("GearNetEdgeBackend")
 
-    monkeypatch.setattr(dependencies, "_current_python_version", lambda: (3, 14))
+    monkeypatch.setattr(dependencies, "_current_python_version", lambda: (3, 13))
     unavailable = dependencies.probe_gearnet_availability()
     assert unavailable.available is False
-    assert ">=3.10,<3.14" in unavailable.reason
+    assert ">=3.11,<3.13" in unavailable.reason
 
 
 def test_public_native_production_matches_frozen_embedding_when_checkpoint_is_configured(tmp_path):
