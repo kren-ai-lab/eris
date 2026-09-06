@@ -281,7 +281,7 @@ def _row_from_artifact(root: Path, locator_root: Path, artifact_dir: Path) -> Pa
         artifact = StructureArtifact.load(artifact_dir, strict=True)
     except ArtifactValidationError as error:
         raise PackIndexError(
-            f"Invalid Artifact Schema v2 directory: {_posix_relative(artifact_dir, root)}"
+            f"Invalid Artifact Schema directory: {_posix_relative(artifact_dir, root)}"
         ) from error
 
     meta = artifact.meta
@@ -402,7 +402,7 @@ def pack_artifacts(
     output_path: str | Path,
 ) -> list[PackedIndexRow]:
     """
-    Build a canonical metadata-only packed index for strict-valid Artifact Schema v2 dirs.
+    Build a canonical metadata-only packed index for strict-valid Artifact Schema directories.
 
     The function never rewrites artifact ``meta.json`` or ``data.npz`` files. ``output_path``
     is replaced atomically only after discovery, validation, duplicate checks, and full CSV

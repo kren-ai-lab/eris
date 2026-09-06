@@ -15,7 +15,7 @@ def pack(
     out: Annotated[Path, typer.Option("--out", help="Output index.csv path.")],
 ) -> None:
     """
-    Recursively validate Artifact Schema v2 directories and write a metadata-only index.
+    Recursively validate Artifact Schema directories and write a metadata-only index.
     """
 
     try:

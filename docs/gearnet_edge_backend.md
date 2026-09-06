@@ -171,12 +171,12 @@ features.
 ## Optional dependency boundary
 
 The Eris core remains independent of Torch and compiled PyG extensions and
-supports Python 3.10–3.13 (`>=3.10,<3.14`). The optional native GearNet-Edge backend supports
+supports Python 3.11–3.12 (`>=3.11,<3.13`). The optional native GearNet-Edge backend supports
 the same Python range:
 
 | dependency | frozen requirement |
 | --- | --- |
-| Python | `>=3.10,<3.14` |
+| Python | `>=3.11,<3.13` |
 | PyTorch | `==2.11.0` |
 
 The CPU wheel label `torch==2.11.0+cpu` satisfies this contract.
@@ -243,6 +243,15 @@ The current operational contract is CPU/fp32 only. Parameters and buffers are ch
 loading, and the model is placed in `eval()` mode so BatchNorm and other training-sensitive
 modules use inference behavior. Parameters retain their normal `requires_grad` values.
 
+### Checkpoint reference
+
+Eris uses the official `mc_gearnet_edge.pth` checkpoint from
+[Zenodo record 10.5281/zenodo.7723075](https://doi.org/10.5281/zenodo.7723075). The verified
+checkpoint SHA-256 is
+`6dc11e2db6eff3c90f90672af227c647125adb7476de18a2bb860457bdb598ec`. Eris provides the native
+PyTorch runtime adapter; it did not train or create the checkpoint, and TorchDrug is not a
+production runtime dependency.
+
 ## Verified M5.4 deterministic inference
 
 The internal backend delegates biological preprocessing and checkpoint loading to the M5.3 and
@@ -269,7 +278,7 @@ The native runtime reproduces frozen upstream reference arrays within the GMR.3 
 evidence for the frozen CPU/fp32 stack, not a universal determinism promise for future platforms,
 accelerators, or precisions.
 
-## Artifact Schema v2 identity and provenance
+## Artifact identity and provenance
 
 The frozen learned representation and Eris adapter identity is:
 
@@ -283,7 +292,7 @@ The frozen learned representation and Eris adapter identity is:
 Adapter version `2` versions the native Eris GearNet contract and prevents reuse of pre-native
 artifacts. It is independent of the Eris package version, Artifact Schema
 version, upstream source revision, and checkpoint
-revision. The Schema v2 `model` block records architecture `GearNet-Edge` and the official
+revision. The Artifact Schema `model` block records architecture `GearNet-Edge` and the official
 checkpoint identifier, SHA-256, Zenodo record revision, and source. Local checkpoint paths,
 checkpoint-cache paths, and temporary transport paths are never model identity.
 
@@ -305,7 +314,7 @@ Generation provenance records requested and resolved execution through the gener
 For the frozen backend both resolved device and precision are `cpu` and `fp32`. Effective precision
 participates in learned cache identity; device does not.
 
-Schema v2 and M4 do not define an authoritative dependency-version block. Python and Torch remain
+The Artifact Schema and M4 do not define an authoritative dependency-version block. Python and Torch remain
 documented operational compatibility information rather than being inserted into model identity or
 a new schema field. Extending runtime environment capture requires a later general convention
 rather than a GearNet-only schema.
@@ -341,7 +350,7 @@ The production smoke uses the production Registry and generic `StructuralEmbedde
 real `StructureInput`. With the official verified checkpoint and the frozen CPU/fp32 stack, the
 cache-miss path covers availability, backend construction, execution resolution, checkpoint
 verification/cache, Gemmi biological selection, native graph construction, strict model loading,
-inference, Artifact Schema v2 assembly, validation, persistence, and artifact-cache write.
+inference, Artifact Schema assembly, validation, persistence, and artifact-cache write.
 
 For output mode `both`, the validated artifact contains finite float32 `node_embedding` with shape
 `(N, 3072)`, finite float32 `global_embedding` with shape `(3072,)`, and unique Unicode `node_ids`

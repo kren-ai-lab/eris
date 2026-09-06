@@ -44,7 +44,7 @@ def embed(
         typer.Option("--no-cache", help="Disable artifact cache for this run."),
     ] = False,
 ) -> None:
-    """Embed one structure file into a learned Schema v2 artifact."""
+    """Embed one structure file into a learned Eris artifact."""
 
     embed_kwargs = {
         "input": input,

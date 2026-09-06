@@ -33,7 +33,7 @@ def encode(
         typer.Option("--params", help="JSON object with representation parameters."),
     ] = None,
 ) -> None:
-    """Encode one structure file into a Schema v2 artifact."""
+    """Encode one structure file into an Eris artifact."""
 
     encode_kwargs = {
         "input": input,

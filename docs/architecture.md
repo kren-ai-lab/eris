@@ -110,15 +110,15 @@ definition as the single source of truth. The same definition must drive:
 The canonical typed configuration is the implemented authority; Registry metadata, defaults,
 help, artifact parameters, and fingerprints derive from it.
 
-## Artifact Schema v2 conceptual contract
+## Artifact Schema conceptual contract
 
 Canonical disk persistence remains:
 
 - `data.npz`;
 - `meta.json`.
 
-Schema v2 is the first stable public artifact schema. Schema v1 is pre-release and is not a
-required public compatibility contract.
+The current Artifact Schema is the stable public artifact contract. Serialized artifacts retain
+`schema_version = 2`.
 
 The conceptual top-level fields are:
 
@@ -182,7 +182,7 @@ Every local embedding row must map unambiguously to a biological entity.
 
 The internal learned runtime is implemented around a separate lazy learned Registry, backend
 execution-capability resolution, verified checkpoint cache, `StructuralEmbedderRunner`, learned
-Artifact Schema v2 builder, and the shared artifact cache. Backends return their prepared model
+Artifact Schema builder, and the shared artifact cache. Backends return their prepared model
 input together with the parser-confirmed structure format; the runner preserves biological node
 mapping, generation execution provenance, and model/checkpoint identity.
 
@@ -203,8 +203,8 @@ Explicit artifacts must contain enough Eris package and environment information 
 the representation. Learned artifacts additionally require model, backend, and checkpoint
 provenance, including the checkpoint SHA-256.
 
-Artifact Schema v2 is implemented and is the canonical active runtime artifact contract. Its
-detailed executable contract is documented in `docs/artifact_schema_v2.md`.
+Artifact Schema is implemented as the canonical active runtime artifact contract. Its detailed
+executable contract is documented in `docs/artifact_schema.md`.
 
 ## Public Python API
 

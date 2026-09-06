@@ -1,12 +1,13 @@
-# Eris Artifact Schema v2
+# Eris Artifact Schema
 
-Artifact Schema v2 is the canonical active runtime artifact contract for Eris v0.1. It
-describes explicit and learned structural representations with one Registry-independent
-metadata and array contract. All ten canonical explicit encoders produce complete, strict-valid
-Schema v2 artifacts directly from `BaseEncoder.encode()`.
+The Artifact Schema is the canonical active runtime artifact contract for Eris v0.1. It describes
+explicit and learned structural representations with one Registry-independent metadata and array
+contract. All ten canonical explicit encoders produce complete, strict-valid Eris artifacts
+directly from `BaseEncoder.encode()`.
 
 The canonical on-disk form is `meta.json` plus `data.npz`. `StructureArtifact` validates,
-finalizes, saves, and loads Schema v2; Schema v1 is unsupported by these public operations.
+finalizes, saves, and loads Eris artifacts. The serialized `schema_version` field remains the
+integer `2`.
 
 ## Top-level contract
 
@@ -301,17 +302,16 @@ cannot silently depend on NumPy types.
 
 Every data key follows `^[a-z][a-z0-9_]*$`, and every value is a `numpy.ndarray`. Allowed dtype
 kinds are signed integer, unsigned integer, float, Boolean, and Unicode string. Object,
-structured/record, complex, datetime, timedelta, and byte-string arrays are rejected. Schema v2
-therefore has no pickle-dependent array payload.
+structured/record, complex, datetime, timedelta, and byte-string arrays are rejected. Eris
+artifacts therefore have no pickle-dependent array payload.
 
 The same array-safety policy is enforced in memory and at persistence boundaries.
 
 ## Loading and disk integrity
 
-Persisted Schema v2 artifacts are always loaded with strict validation, regardless of the
-historical `validate` and `strict` arguments retained in the method signature. NPZ data is opened
+Persisted Eris artifacts are always loaded with strict validation. NPZ data is opened
 with `allow_pickle=False`, and its member names must exactly match the names declared by
-`outputs`. Schema v1 and versionless artifacts are rejected rather than loaded.
+`outputs`. Versionless artifacts are rejected rather than loaded.
 
 `outputs` is the semantic ordering authority. Physical ZIP member order is not contractual; a
 loader reconstructs the runtime data mapping in `outputs` order after confirming exact member
@@ -324,13 +324,13 @@ deliberate limitations:
 - an NPZ archive is not guaranteed to be byte-identical across equivalent writes;
 - staging and replacement protect each file independently, but replacing `data.npz` and
   `meta.json` is not a pair-level transactional atomic operation;
-- Schema v2 has no checksum for the complete numeric payload, so structural validation cannot
+- The Artifact Schema has no checksum for the complete numeric payload, so structural validation cannot
   detect different valid numeric values with identical keys, shapes, dtypes, counts, and other
   validated semantic metadata.
 
-## Schema v2 cache identity
+## Artifact cache identity
 
-The active Schema v2 cache key hashes a canonical mapping containing separate
+The active Artifact Schema cache key hashes a canonical mapping containing separate
 `cache_contract = 2` and `artifact_schema_version = 2` fields, representation name, encoder
 implementation and version, config fingerprint, input source SHA-256, parser hint, and structured
 chain/model selection. An optional canonical model mapping participates when present. Learned
@@ -358,7 +358,7 @@ and chain selection, then validates the refreshed artifact. The persisted cache 
 rewritten merely to refresh the locator. Learned cache hits preserve the original model-source and
 execution-generation provenance.
 
-Schema v2 cache entries live under the `v2/<key>/` namespace and use canonical
+Artifact cache entries live under the `v2/<key>/` namespace and use canonical
 `data.npz`/`meta.json` files. Flat pre-v2 entries are not part of the current cache namespace.
 Stale, corrupt, or invalid v2 entries are cache misses; they are never migrated or automatically
 deleted.
@@ -405,26 +405,9 @@ It uses `representation_family = learned`, `representation_type = embedding`,
 `granularity = mixed`, `coordinate_source = model_specific`, a populated `model`, an empty
 `feature_keys` mapping, and `counts.n_nodes = N`.
 
-## Schema v1 hard cut
-
-Schema v1 is a pre-release internal format and has no public v0.1 compatibility guarantee. The
-active runtime policy is:
-
-- new encodes and saves produce Schema v2 only;
-- Schema v1 load, validate, finalize, and save are explicitly rejected as legacy, including
-  `save(validate=False)`;
-- no transparent migration or automatic provenance reconstruction is performed;
-- versionless metadata is unsupported;
-- artifacts should be regenerated from their source and canonical config.
-
-The sole legacy boundary is a clear unsupported-format error. No active Schema v1 validation,
-finalization, save, load, or migration implementation remains. Batch processing validates an
-existing artifact before skipping it, so a v1, corrupt, or incomplete output cannot silently
-satisfy a request.
-
 ## Encode CLI boundary
 
-`eris encode` saves the strict-valid Schema v2 artifact returned by the public API. Historical
+`eris encode` saves the strict-valid Eris artifact returned by the public API. Historical
 `--node-emb` and `--node-emb-key` options were removed because they mutated payload arrays after
 schema construction. Learned embeddings use the separate `eris embed` learned-representation path;
 they are not injected into explicit artifacts.

@@ -9,8 +9,13 @@ point clouds, graphs, contact maps, distograms, voxel grids, and GearNet-Edge em
 
 ## Installation
 
-Eris supports Python 3.11-3.12 (`>=3.11,<3.13`). Install from a repository checkout or source
-distribution:
+Eris supports Python 3.11-3.12 (`>=3.11,<3.13`). From PyPI, install:
+
+```console
+python -m pip install eris-lib
+```
+
+For a repository checkout or source distribution, install locally:
 
 ```console
 python -m pip install .
@@ -109,10 +114,11 @@ eris --help
 
 | Command | Purpose |
 | --- | --- |
-| `encode` | Write one explicit representation as a Schema v2 artifact. |
-| `embed` | Write one learned representation as a Schema v2 artifact. |
+| `encode` | Write one explicit representation as an Eris artifact. |
+| `embed` | Write one learned representation as an Eris artifact. |
 | `batch encode` | Encode one representation for each manifest row. |
 | `batch embed` | Embed one representation for each manifest row. |
+| `batch from-folder` | Encode matching structure files from a folder. |
 | `pack` | Validate artifacts and write a metadata-only index. |
 | `info show` | Print artifact metadata. |
 | `info validate` | Validate an artifact directory. |
@@ -174,18 +180,20 @@ artifact/
 - `data.npz` contains the numerical representation.
 - `meta.json` records the input, representation, parameters, outputs, shapes, features, and provenance.
 
-Artifacts use Eris StructureArtifact Schema v2.
+Artifacts use the Eris Artifact Schema. Serialized metadata retains `schema_version: 2`.
 
 ## Batch and downstream use
 
-`eris.batch_encode()` and `eris.batch_embed()` process CSV manifests and record per-row success
-or failure. `eris.pack()` creates an index that can be loaded with `eris.datasets.ErisFolderDataset`.
+`eris.batch_encode()` and `eris.batch_embed()` process manifests with the canonical fields
+`id`, `path`, `chain`, and `model`, and record per-row success or failure. The CLI also supports
+`eris batch from-folder FOLDER --pattern "*.pdb"` for deterministic folder discovery.
+`eris.pack()` creates an index that can be loaded with `eris.datasets.ErisFolderDataset`.
 
 Use `eris.to_torch()` or `eris.to_pyg()` for downstream export. PyG export is available for graph artifacts; Eris does not infer graph topology from other representation types.
 
 ## Learn more
 
-- [`docs/artifact_schema_v2.md`](docs/artifact_schema_v2.md): Artifact Schema v2 contract.
+- [`docs/artifact_schema.md`](docs/artifact_schema.md): Artifact Schema contract.
 - [`docs/gearnet_edge_backend.md`](docs/gearnet_edge_backend.md): GearNet-Edge runtime and checkpoint contract.
 - [`DEVELOPMENT.md`](DEVELOPMENT.md): local development information.
 
@@ -196,5 +204,8 @@ Eris is released under the [MIT License](LICENSE).
 ## Acknowledgements
 
 GearNet-Edge uses the official Multiview Contrast checkpoint `mc_gearnet_edge.pth` from
-[Zenodo record 10.5281/zenodo.7723075](https://doi.org/10.5281/zenodo.7723075) and follows the
-[GearNet](https://github.com/DeepGraphLearning/GearNet) model reference.
+[Zenodo record 10.5281/zenodo.7723075](https://doi.org/10.5281/zenodo.7723075). The verified
+checkpoint SHA-256 is
+`6dc11e2db6eff3c90f90672af227c647125adb7476de18a2bb860457bdb598ec`. Eris provides a native
+PyTorch runtime for this checkpoint; Eris did not train or create it, and TorchDrug is not a
+production runtime dependency.

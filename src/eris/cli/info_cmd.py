@@ -63,7 +63,7 @@ def show(
     artifact_dir: Annotated[Path, typer.Argument(...)],
 ) -> None:
     """
-    Print canonical Artifact Schema v2 metadata after strict validation.
+    Print canonical Artifact Schema metadata after strict validation.
     """
 
     artifact = _load_artifact(artifact_dir)
@@ -113,8 +113,8 @@ def validate(
     artifact_dir: Annotated[Path, typer.Argument(...)],
 ) -> None:
     """
-    Validate a canonical Artifact Schema v2 directory.
+    Validate a canonical Artifact Schema directory.
     """
 
     artifact = _load_artifact(artifact_dir)
-    typer.echo(f"Artifact is valid (Schema v2): {artifact.meta['representation_name']}")
+    typer.echo(f"Artifact is valid: {artifact.meta['representation_name']}")

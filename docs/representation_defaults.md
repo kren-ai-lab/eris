@@ -5,7 +5,8 @@ Eris v0.1 representations. It is the reference for M2.2–M2.8. Where earlier Re
 runtime behavior, or documentation differs, the values below are the canonical v0.1 decision.
 
 M2.2 encodes these values in typed canonical configuration, and M2.3 makes the Registry derive
-its defaults and parameter metadata from that authority. This document is not Artifact Schema v2.
+its defaults and parameter metadata from that authority. This document is not the Artifact Schema
+contract.
 
 ## Global rules
 

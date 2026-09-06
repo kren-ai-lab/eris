@@ -74,7 +74,7 @@ def _load_successful_artifacts(
         except (ArtifactValidationError, OSError, ValueError) as error:
             raise ManifestValidationError(
                 f"{_row_prefix(index)}: artifact_dir must contain a strict-valid "
-                f"Artifact Schema v2 artifact: {artifact_dir}"
+                f"Eris artifact: {artifact_dir}"
             ) from error
 
         meta = artifact.meta
@@ -115,8 +115,8 @@ def batch_export(
     Batch export previously encoded successful artifacts from a canonical M7 result manifest.
 
     ``manifest_path`` must use ``BatchResultRow`` fields. Failed rows are counted explicitly
-    and never treated as artifacts. Successful rows must point to strict-valid Artifact
-    Schema v2 directories whose representation identity matches the result row.
+    and never treated as artifacts. Successful rows must point to strict-valid Artifact Schema
+    directories whose representation identity matches the result row.
     """
     exporter, out_name = _exporter_for(format)
     rows = read_manifest(manifest_path, BatchResultRow)
