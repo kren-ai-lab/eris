@@ -20,35 +20,6 @@ def _row_location(row_index: int | None) -> str:
     return f"row {row_index}"
 
 
-def _raw_field(
-    row: Mapping[str, Any],
-    field: str,
-    *,
-    aliases: tuple[str, ...] = (),
-    row_index: int | None = None,
-    normalizer,
-) -> Any:
-    values = [(field, row[field])] if field in row else []
-    values.extend((alias, row[alias]) for alias in aliases if alias in row)
-
-    if not values:
-        return None
-
-    normalized = [
-        (name, normalizer(value, field=field, row_index=row_index)) for name, value in values
-    ]
-    _, first_value = normalized[0]
-
-    for alias_name, alias_value in normalized[1:]:
-        if alias_value != first_value:
-            location = _row_location(row_index)
-            raise ManifestValidationError(
-                f"{location}: field '{field}' conflicts with alias '{alias_name}'"
-            )
-
-    return first_value
-
-
 def _required_string(value: Any, *, field: str, row_index: int | None = None) -> str:
     if not isinstance(value, str):
         location = _row_location(row_index)
@@ -156,43 +127,20 @@ class StructureManifestRow(BaseManifestRow):
     def from_dict(
         cls, d: Mapping[str, Any], *, row_index: int | None = None
     ) -> StructureManifestRow:
-        sid = _raw_field(
-            d,
-            "id",
-            aliases=("sample_id",),
-            row_index=row_index,
-            normalizer=_required_string,
-        )
-        path = _raw_field(
-            d,
-            "path",
-            aliases=("input",),
-            row_index=row_index,
-            normalizer=_required_text_path,
-        )
-        chain = _raw_field(
-            d,
-            "chain",
-            aliases=("chain_id",),
-            row_index=row_index,
-            normalizer=_optional_string,
-        )
-        model = _raw_field(
-            d,
-            "model",
-            aliases=("model_index",),
-            row_index=row_index,
-            normalizer=_model,
-        )
-
-        if sid is None:
+        unexpected = sorted(set(d) - set(cls.field_order))
+        if unexpected:
             location = _row_location(row_index)
-            raise ManifestValidationError(f"{location}: field 'id' is required")
-        if path is None:
-            location = _row_location(row_index)
-            raise ManifestValidationError(f"{location}: field 'path' is required")
+            fields = ", ".join(cls.field_order)
+            raise ManifestValidationError(
+                f"{location}: unexpected field(s) {', '.join(unexpected)!r}; "
+                f"use canonical fields: {fields}"
+            )
+        sid = _required_string(d.get("id"), field="id", row_index=row_index)
+        path = _required_text_path(d.get("path"), field="path", row_index=row_index)
+        chain = _optional_string(d.get("chain"), field="chain", row_index=row_index)
+        model = _model(d.get("model"), field="model", row_index=row_index)
 
-        return cls(id=sid, path=path, chain=chain, model=0 if model is None else model)
+        return cls(id=sid, path=path, chain=chain, model=model)
 
     def to_dict(self) -> dict[str, Any]:
         return {

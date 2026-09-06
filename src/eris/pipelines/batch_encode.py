@@ -87,17 +87,12 @@ def _resolve_representation(
 
 def _resolve_artifact_root(
     artifact_root: str | Path | None,
-    *,
-    out: str | Path | None,
 ) -> Path:
-    if artifact_root is not None and out is not None and Path(artifact_root) != Path(out):
-        raise ConfigError("artifact_root cannot conflict with legacy out")
-    root = artifact_root if artifact_root is not None else out
-    if root is None:
+    if artifact_root is None:
         raise ConfigError("artifact_root is required")
-    if not isinstance(root, (str, Path)):
+    if not isinstance(artifact_root, (str, Path)):
         raise TypeError("artifact_root must be a string or pathlib.Path")
-    return Path(root)
+    return Path(artifact_root)
 
 
 def _normalize_explicit_params(
@@ -469,13 +464,12 @@ def batch_encode(
     results_path: str | Path | None = None,
     manifest_path: str | Path | None = None,
     encoders: Sequence[str] | None = None,
-    out: str | Path | None = None,
     no_cache: bool | None = None,
 ) -> list[BatchResultRow]:
     """Run one explicit representation over a structure manifest."""
 
     representation_name = _resolve_representation(representation, encoders=encoders)
-    artifact_root_path = _resolve_artifact_root(artifact_root, out=out)
+    artifact_root_path = _resolve_artifact_root(artifact_root)
     structure_rows = _coerce_rows(rows, manifest_path=manifest_path)
     explicit_params = _normalize_explicit_params(representation_name, params)
     effective_use_cache = use_cache if no_cache is None else not no_cache
@@ -528,7 +522,7 @@ def batch_embed(
     _coerce_bool(use_cache, "use_cache")
 
     representation_name = representation.strip()
-    artifact_root_path = _resolve_artifact_root(artifact_root, out=None)
+    artifact_root_path = _resolve_artifact_root(artifact_root)
     structure_rows = _coerce_rows(rows, manifest_path=manifest_path)
 
     return _run_batch(

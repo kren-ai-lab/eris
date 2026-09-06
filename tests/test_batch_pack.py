@@ -26,7 +26,12 @@ from eris.core.learned.execution import (
 )
 from eris.core.learned.types import StructuralEmbeddingResult
 from eris.pipelines.batch_encode import batch_embed, batch_encode
-from eris.pipelines.manifest import BatchResultRow, StructureManifestRow, read_manifest
+from eris.pipelines.manifest import (
+    BatchResultRow,
+    ManifestValidationError,
+    StructureManifestRow,
+    read_manifest,
+)
 
 PDB = Path("tests/data/1AQ2.pdb")
 OTHER_PDB = Path("tests/data/3EC1.pdb")
@@ -137,6 +142,51 @@ def test_batch_encode_success_preserves_order_layout_and_strict_v2(tmp_path: Pat
         artifact = StructureArtifact.load(target, strict=True)
         assert artifact.meta["representation_name"] == "residue_contact_map"
         assert artifact.meta["representation_family"] == "explicit"
+
+
+def test_manifest_accepts_only_canonical_structure_fields(tmp_path: Path) -> None:
+    manifest = tmp_path / "structures.json"
+    manifest.write_text(
+        '[{"id": "protein", "path": "protein.pdb", "chain": "A", "model": 1}]\n',
+        encoding="utf-8",
+    )
+
+    rows = read_manifest(manifest, StructureManifestRow)
+
+    assert rows == [StructureManifestRow(id="protein", path="protein.pdb", chain="A", model=1)]
+
+
+@pytest.mark.parametrize("alias", ["sample_id", "input", "chain_id", "model_index"])
+def test_manifest_rejects_legacy_structure_field_aliases(tmp_path: Path, alias: str) -> None:
+    manifest = tmp_path / "structures.json"
+    fields = {"id": "protein", "path": "protein.pdb", "chain": "A", "model": 1}
+    fields[alias] = fields.pop(
+        {
+            "sample_id": "id",
+            "input": "path",
+            "chain_id": "chain",
+            "model_index": "model",
+        }[alias]
+    )
+    manifest.write_text(f"[{fields!r}]\n".replace("'", '"'), encoding="utf-8")
+
+    with pytest.raises(ManifestValidationError, match="unexpected field"):
+        read_manifest(manifest, StructureManifestRow)
+
+
+def test_batch_encode_uses_artifact_root_only(tmp_path: Path) -> None:
+    with pytest.raises(TypeError, match="unexpected keyword argument 'out'"):
+        batch_encode(
+            [StructureManifestRow(id="protein", path=str(PDB))],
+            representation="residue_contact_map",
+            out=tmp_path,
+        )
+
+
+def test_batch_embed_uses_artifact_root_only() -> None:
+    import inspect
+
+    assert "out" not in inspect.signature(batch_embed).parameters
 
 
 def test_batch_encode_delegates_to_public_api_and_propagates_config(monkeypatch, tmp_path):
