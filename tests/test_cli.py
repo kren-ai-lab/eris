@@ -231,6 +231,69 @@ def test_required_representation_and_out_are_enforced(tmp_path):
     assert "--out" in missing_out.output
 
 
+def test_batch_from_folder_delegates_sorted_rows(monkeypatch, tmp_path):
+    import eris.cli.batch as batch_cli
+
+    folder = tmp_path / "structures"
+    folder.mkdir()
+    (folder / "b.pdb").write_text("", encoding="ascii")
+    (folder / "a.pdb").write_text("", encoding="ascii")
+    captured = {}
+
+    def fake_batch_encode(**kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(batch_cli.eris, "batch_encode", fake_batch_encode)
+
+    result = runner.invoke(
+        app,
+        [
+            "batch",
+            "from-folder",
+            str(folder),
+            "--representation",
+            "residue_knn_graph",
+            "--out",
+            str(tmp_path / "artifacts"),
+            "--pattern",
+            "*.pdb",
+            "--params",
+            '{"k":8}',
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert [row.id for row in captured["rows"]] == ["a", "b"]
+    assert captured["representation"] == "residue_knn_graph"
+    assert captured["params"] == {"k": 8}
+
+
+def test_batch_from_folder_rejects_duplicate_stems(tmp_path):
+    folder = tmp_path / "structures"
+    (folder / "one").mkdir(parents=True)
+    (folder / "two").mkdir()
+    (folder / "one" / "protein.pdb").write_text("", encoding="ascii")
+    (folder / "two" / "protein.pdb").write_text("", encoding="ascii")
+
+    result = runner.invoke(
+        app,
+        [
+            "batch",
+            "from-folder",
+            str(folder),
+            "--recursive",
+            "--representation",
+            "residue_knn_graph",
+            "--out",
+            str(tmp_path / "artifacts"),
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "duplicate id 'protein'" in result.output
+
+
 @pytest.mark.parametrize(
     ("args", "expected"),
     [
