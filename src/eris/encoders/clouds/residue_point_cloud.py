@@ -76,6 +76,7 @@ class ResiduePointCloudCA(BaseResidueEncoder):
             mode=self.config.residue_center,
             altloc=self.config.altloc,
             missing_ca=self.config.missing_residue_center,
+            plddt_source=self.config.plddt_source,
         )
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:

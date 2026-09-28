@@ -16,7 +16,7 @@ def build_node_attr(
     bfactor_ca: Optional[np.ndarray] = None,
     has_ca: Optional[np.ndarray] = None,
     # contract
-    mode: str = "onehot+aa_index+physchem+aaindex_basic+plddt_ca+bfactor_ca+flags",
+    mode: str = "onehot+physchem+bfactor_ca",
     missing: str = "zero",
     return_keys: bool = False,
 ) -> Union[np.ndarray, Tuple[np.ndarray, List[str]]]:

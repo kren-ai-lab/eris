@@ -31,7 +31,9 @@ The residue extraction defaults are:
 - amino acids only: `True`;
 - alternate-location policy: `"first"`;
 - missing residue-center policy: `"skip"` by default, with `"error"` available for strict
-  explicit residue encoding.
+  explicit residue encoding;
+- `plddt_source="none"`; use `"bfactor"` only when the CA `b_iso` field is explicitly known to
+  contain pLDDT.
 
 With `"skip"`, omitted residues remain traceable through the artifact's
 `omitted_residue_ids` output and `n_omitted_residues` count. These policies are represented
@@ -69,8 +71,16 @@ The following are not part of canonical representation configuration:
 
 ### Residue node features
 
-- Mode: `onehot+physchem+plddt_ca+bfactor_ca`.
-- Default emitted width: 38.
+- Mode: `onehot+physchem+bfactor_ca`.
+- Default emitted width: 37.
+- `bfactor_ca` is the raw CA B-factor and is never implicitly normalized.
+- `plddt_ca` is opt-in. Its default `normalization="none"` preserves the 0–100 scale;
+  `normalization="unit_interval"` explicitly divides by 100.
+
+The parameterized `aaindex` token reads AAIndex1 records from the `aaindex` provider. It requires
+one or more accession IDs, preserves their requested order, and serializes the provider name,
+provider version, source database, normalization, unknown-residue policy, and missing-value policy.
+Its keys are `aaindex.<ACCESSION>`.
 
 ### Edge features
 
@@ -82,8 +92,10 @@ The following are not part of canonical representation configuration:
 
 ### Voxel channels
 
-- Requested default: `occupancy+density+aa_onehot+plddt+bfactor`.
-- Default physical width: 25.
+- Requested default: `occupancy+density+aa_onehot+bfactor`.
+- Default physical width: 24.
+- Scalar `plddt` and `bfactor` channels default to `normalization="none"`; the opt-in
+  `"unit_interval"` mode divides by 100.
 
 Requested token order is not necessarily physical channel order. Physical grid channel ordering
 remains defined by feature Registry/spec ordering.
@@ -108,7 +120,7 @@ remains defined by feature Registry/spec ordering.
 | `scale` | `None` |
 | `residue_center` | `ca` |
 | residue extraction | global residue defaults |
-| `node_attr_mode` | `onehot+physchem+plddt_ca+bfactor_ca` |
+| `node_attr_mode` | `onehot+physchem+bfactor_ca` |
 | numerical output | fixed `float32` |
 
 ### `atom_knn_graph`
@@ -145,7 +157,7 @@ No public `include_self_loops` option exists for `atom_knn_graph` in v0.1.
 | `cutoff` | `12.0 Å` |
 | `symmetric` | `True` |
 | `include_self_loops` | `False` |
-| `node_attr_mode` | `onehot+physchem+plddt_ca+bfactor_ca` |
+| `node_attr_mode` | `onehot+physchem+bfactor_ca` |
 | `edge_attr_mode` | `dist+rbf+seq+local` |
 | `rbf_k` | `16` |
 | `rbf_dmax` | `20.0 Å` |
@@ -170,7 +182,7 @@ separation is represented.
 | residue extraction | global residue defaults |
 | `cutoff` | `8.0 Å` |
 | `include_self_loops` | `False` |
-| `node_attr_mode` | `onehot+physchem+plddt_ca+bfactor_ca` |
+| `node_attr_mode` | `onehot+physchem+bfactor_ca` |
 | `edge_attr_mode` | `dist+rbf+seq+local` |
 | `rbf_k` | `16` |
 | `rbf_dmax` | `20.0 Å` |
@@ -253,13 +265,13 @@ The 36 bins produce 37 bin edges.
 | `voxel_size` | `None` |
 | `fit` | `True` |
 | `margin` | `4.0 Å` |
-| `channels` | `occupancy+density+aa_onehot+plddt+bfactor` |
+| `channels` | `occupancy+density+aa_onehot+bfactor` |
 | `sigma` | `1.0` voxel unit |
 | `pool` | `"max"` |
-| `clamp` | `True` |
+| `clamp` | `False` |
 | `dtype` | `float32` |
 
-The default physical tensor layout is `(C, X, Y, Z)` with `C=25`. `float16` may remain a
+The default physical tensor layout is `(C, X, Y, Z)` with `C=24`. `float16` may remain a
 supported non-default option.
 
 ## Dtype rules

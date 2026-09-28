@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Any, List, Set, Optional, Tuple
+from typing import Dict, Any, List, Optional
 import numpy as np
 
 from eris.features.utils import parse_mode
@@ -10,7 +10,7 @@ def _select_features(
     registry: Dict[str, Any],
     *,
     kind: str,
-    allow_params: bool,
+    allow_unvalidated_params: bool,
 ):
     toks = parse_mode(mode)
     token_names = [token for token, _ in toks]
@@ -28,15 +28,14 @@ def _select_features(
     if duplicates:
         raise ValueError(f"Duplicate {kind} tokens: {duplicates}")
 
-    if not allow_params:
-        for token, params in toks:
-            if params:
-                raise ValueError(
-                    f"Feature '{token}' does not support parameters: "
-                    f"{sorted(str(param) for param in params)}"
-                )
-
-    selected = [(registry[token], params) for token, params in toks]
+    selected = []
+    for token, params in toks:
+        spec = registry[token]
+        if allow_unvalidated_params and getattr(spec, "params_fn", None) is None:
+            normalized_params = spec.normalize_params(params, allow_unvalidated=True)
+        else:
+            normalized_params = spec.normalize_params(params)
+        selected.append((spec, normalized_params))
     selected.sort(key=lambda item: item[0].order)
     return selected
 
@@ -46,7 +45,7 @@ def validate_feature_mode(mode: Any, registry: Dict[str, FeatureSpec]) -> None:
         mode,
         registry,
         kind="feature",
-        allow_params=False,
+        allow_unvalidated_params=False,
     )
 
 
@@ -69,7 +68,7 @@ def build_from_registry(
         mode,
         registry,
         kind="feature",
-        allow_params=False,
+        allow_unvalidated_params=False,
     )
 
     feats: List[np.ndarray] = []
@@ -173,7 +172,7 @@ def build_from_registry_voxel(
         mode,
         registry,
         kind="voxel",
-        allow_params=True,
+        allow_unvalidated_params=True,
     )
 
     G = int(grid_size)

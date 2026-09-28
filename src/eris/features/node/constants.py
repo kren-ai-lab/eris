@@ -430,18 +430,6 @@ PHYSCHEM_LOOKUPS = [
 PHYSchem_KEYS = [f"physchem.{name}" for name, _ in PHYSCHEM_LOOKUPS]
 
 
-AAINDEX_BASIC_SUBIDX = [
-    0,  # hydrophobicity_kd
-    4,  # volume
-    7,  # polarity
-    8,  # flexibility
-    6,  # boman
-    2,  # hydrophilicity
-]
-
-AAINDEX_BASIC_KEYS = [PHYSchem_KEYS[i] for i in AAINDEX_BASIC_SUBIDX]
-
-
 # -------------------------
 # Old Features
 # -------------------------
@@ -491,20 +479,6 @@ PHYSchem_old: Dict[str, List[float]] = {
     "Y": [-1.3, 193.6, 6.2, 0.0, 1.0, 0.0, 1.0, 1.0],
     "X": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
 }
-
-# --- AAindex basic subset (fixed)
-# Here we choose a small subset of the above proxies (6 dims) to keep it stable.
-AAINDEX_BASIC_KEYS_old = [
-    "aaindex.hydrophobicity_kd",
-    "aaindex.volume",
-    "aaindex.polarity",
-    "aaindex.charge",
-    "aaindex.aromatic",
-    "aaindex.aliphatic",
-]
-
-AAINDEX_BASIC_SUBIDX_OLD = [0, 1, 2, 3, 4, 5]
-
 
 # -------------------------
 # Atom Features

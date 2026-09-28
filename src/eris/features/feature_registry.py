@@ -1,6 +1,30 @@
 from dataclasses import dataclass
-from typing import Callable, Dict, Any, List, Set, Optional, Tuple
+from typing import Callable, Dict, Any, List, Set, Optional
 import numpy as np
+
+
+ParamsFn = Callable[[Dict[str, Any]], Dict[str, Any]]
+
+
+def _normalize_feature_params(
+    token: str,
+    params: Dict[str, Any],
+    params_fn: Optional[ParamsFn],
+    *,
+    allow_unvalidated: bool = False,
+) -> Dict[str, Any]:
+    if params_fn is None:
+        if params and not allow_unvalidated:
+            raise ValueError(
+                f"Feature '{token}' does not support parameters: "
+                f"{sorted(str(param) for param in params)}"
+            )
+        return dict(params)
+
+    normalized = params_fn(dict(params))
+    if not isinstance(normalized, dict):
+        raise TypeError(f"Parameter normalizer for feature '{token}' must return a dict")
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -14,6 +38,10 @@ class FeatureSpec:
     keys_fn: Callable[
         [Dict[str, Any], Dict[str, Any], Dict[str, Any]], List[str]
     ]  # (data, ctx, params) -> keys
+    params_fn: Optional[ParamsFn] = None
+
+    def normalize_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return _normalize_feature_params(self.token, params, self.params_fn)
 
 
 @dataclass(frozen=True)
@@ -35,6 +63,20 @@ class VoxelFeatureSpec:
         int,
     ]
     keys_fn: Callable[[Dict[str, Any], Dict[str, Any], Dict[str, Any]], List[str]]
+    params_fn: Optional[ParamsFn] = None
+
+    def normalize_params(
+        self,
+        params: Dict[str, Any],
+        *,
+        allow_unvalidated: bool = False,
+    ) -> Dict[str, Any]:
+        return _normalize_feature_params(
+            self.token,
+            params,
+            self.params_fn,
+            allow_unvalidated=allow_unvalidated,
+        )
 
 
 RESIDUE_NODE_REGISTRY: Dict[str, FeatureSpec] = {}

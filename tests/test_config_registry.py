@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, fields
+from importlib import metadata
 
 import pytest
 
@@ -43,10 +44,11 @@ RESIDUE_SELECTION = {
     "amino_acids_only": True,
     "altloc": "first",
     "missing_residue_center": "skip",
+    "plddt_source": "none",
 }
 GEOMETRY = {"center": True, "scale": None}
 ATOM_NODE_MODE = ["elem", "role", "bfactor", "occ"]
-RESIDUE_NODE_MODE = ["onehot", "physchem", "plddt_ca", "bfactor_ca"]
+RESIDUE_NODE_MODE = ["onehot", "physchem", "bfactor_ca"]
 EDGE_MODE = ["dist", "rbf", "seq", "local"]
 
 
@@ -139,10 +141,15 @@ EXPECTED_DEFAULTS = {
         "voxel_size": None,
         "fit": True,
         "margin": 4.0,
-        "channels": ["occupancy", "density", "aa_onehot", "plddt", "bfactor"],
+        "channels": [
+            "occupancy",
+            "density",
+            "aa_onehot",
+            {"bfactor": {"normalization": "none"}},
+        ],
         "sigma": 1.0,
         "pool": "max",
-        "clamp": True,
+        "clamp": False,
         "dtype": "float32",
     },
 }
@@ -196,6 +203,7 @@ def test_granularity_and_coordinate_source_are_independent():
         lambda: AtomKNNGraphConfig(cutoff=float("nan")),
         lambda: ResidueKNNGraphConfig(knn_mode="invalid"),
         lambda: ResiduePointCloudConfig(residue_center="invalid"),
+        lambda: ResiduePointCloudConfig(plddt_source="automatic"),
         lambda: ResidueVoxelGridConfig(pool="invalid"),
         lambda: ResidueVoxelGridConfig(dtype="uint8"),
         lambda: ResidueVoxelGridConfig(grid_size=0),
@@ -285,6 +293,57 @@ def test_nested_feature_parameter_order_is_canonical():
     assert first == second
     assert first.to_dict() == second.to_dict()
     assert first.to_json() == second.to_json()
+
+
+def test_parameterized_residue_features_are_canonical_and_provider_pinned():
+    first = FeatureMode.from_value(
+        [
+            {
+                "aaindex": {
+                    "unknown": "nan",
+                    "ids": ["kytj820101"],
+                    "missing": "nan",
+                    "normalization": "none",
+                }
+            }
+        ],
+        kind="residue_node",
+    )
+    second = FeatureMode.from_value(
+        [{"aaindex": {"ids": ["KYTJ820101"]}}],
+        kind="residue_node",
+    )
+
+    assert first == second
+    assert first.to_list() == [
+        {
+            "aaindex": {
+                "ids": ["KYTJ820101"],
+                "missing": "nan",
+                "normalization": "none",
+                "provider": "aaindex",
+                "provider_version": metadata.version("aaindex"),
+                "source": "AAIndex1",
+                "unknown": "nan",
+            }
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [{"onehot": {"invalid": True}}],
+        [{"aaindex": {}}],
+        [{"aaindex": {"ids": []}}],
+        [{"aaindex": {"ids": ["KYTJ820101", "kytj820101"]}}],
+        [{"aaindex": {"ids": ["NOT_A_REAL_ID"]}}],
+        [{"aaindex": {"ids": ["KYTJ820101"], "extra": True}}],
+    ],
+)
+def test_residue_feature_parameters_fail_during_config_construction(value):
+    with pytest.raises((TypeError, ValueError)):
+        FeatureMode.from_value(value, kind="residue_node")
 
 
 @pytest.mark.parametrize(

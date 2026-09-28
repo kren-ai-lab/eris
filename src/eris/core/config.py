@@ -213,9 +213,12 @@ class FeatureMode:
 
         tokens: list[FeatureToken] = []
         for name, params in parsed:
-            if kind != "grid" and params:
-                raise ValueError(f"feature '{name}' does not support parameters")
-            frozen_params = _freeze_json(params)
+            spec = registry[name]
+            if kind == "grid" and getattr(spec, "params_fn", None) is None:
+                normalized_params = spec.normalize_params(params, allow_unvalidated=True)
+            else:
+                normalized_params = spec.normalize_params(params)
+            frozen_params = _freeze_json(normalized_params)
             if not isinstance(frozen_params, _FrozenMapping):
                 raise TypeError(f"parameters for feature '{name}' must be a mapping")
             tokens.append(FeatureToken(name=name, params=frozen_params))
@@ -232,7 +235,7 @@ def _atom_node_mode_default() -> FeatureMode:
 
 def _residue_node_mode_default() -> FeatureMode:
     return FeatureMode.from_value(
-        "onehot+physchem+plddt_ca+bfactor_ca",
+        "onehot+physchem+bfactor_ca",
         kind="residue_node",
     )
 
@@ -243,7 +246,7 @@ def _edge_mode_default() -> FeatureMode:
 
 def _grid_mode_default() -> FeatureMode:
     return FeatureMode.from_value(
-        "occupancy+density+aa_onehot+plddt+bfactor",
+        "occupancy+density+aa_onehot+bfactor",
         kind="grid",
     )
 
@@ -364,6 +367,13 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
             choices=("skip", "error"),
         ),
     )
+    plddt_source: Literal["none", "bfactor"] = field(
+        default="none",
+        metadata=_metadata(
+            "Explicit source used to interpret residue pLDDT values.",
+            choices=("none", "bfactor"),
+        ),
+    )
 
     @property
     def coordinate_source(self) -> str:
@@ -393,6 +403,11 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
                 self.missing_residue_center,
                 ("skip", "error"),
             ),
+        )
+        object.__setattr__(
+            self,
+            "plddt_source",
+            _normalize_choice("plddt_source", self.plddt_source, ("none", "bfactor")),
         )
 
 
@@ -795,7 +810,7 @@ class ResidueVoxelGridConfig(_ResidueSelectionConfig):
         metadata=_metadata("Voxel accumulation mode.", choices=("max", "sum", "mean")),
     )
     clamp: bool = field(
-        default=True,
+        default=False,
         metadata=_metadata("Clamp the final grid to the unit interval."),
     )
     dtype: Literal["float32", "float16"] = field(

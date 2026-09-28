@@ -200,32 +200,27 @@ def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
     Returns:
         np.ndarray shape (3,) or None if center cannot be computed
         bfactor_ca: float
-        plddt_ca: float
     """
     # CA-based signals stay anchored to CA for backward compatibility
     ca_atom = _select_atom_altloc(res["CA"], altloc) if "CA" in res else None
 
     if ca_atom is not None:
-        b = float(ca_atom.b_iso)
-        bfactor_ca = b
-        plddt_ca = b if 0.0 <= b <= 100.0 else float("nan")
+        bfactor_ca = float(ca_atom.b_iso)
     else:
         bfactor_ca = float("nan")
-        plddt_ca = float("nan")
 
     if mode == "ca":
         if ca_atom is None:
-            return None, bfactor_ca, plddt_ca
+            return None, bfactor_ca
         p = ca_atom.pos
         return (
             np.asarray([float(p.x), float(p.y), float(p.z)], dtype=np.float32),
             bfactor_ca,
-            plddt_ca,
         )
 
     atoms = _selected_atoms_from_residue(res, altloc)
     if not atoms:
-        return None, bfactor_ca, plddt_ca
+        return None, bfactor_ca
 
     coords = np.asarray(
         [[float(a.pos.x), float(a.pos.y), float(a.pos.z)] for a in atoms], dtype=np.float32
@@ -233,15 +228,15 @@ def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
 
     if mode == "mean":
         center = coords.mean(axis=0).astype(np.float32)
-        return center, bfactor_ca, plddt_ca
+        return center, bfactor_ca
 
     if mode == "com":
         masses = np.asarray([_atomic_mass(a) for a in atoms], dtype=np.float32)
         msum = float(masses.sum())
         if msum <= 0.0:
-            return None, bfactor_ca, plddt_ca
+            return None, bfactor_ca
         center = (coords * masses[:, None]).sum(axis=0) / msum
-        return center.astype(np.float32), bfactor_ca, plddt_ca
+        return center.astype(np.float32), bfactor_ca
 
     raise ValueError(f"Invalid residue_center: {mode!r}. Use 'ca', 'mean' or 'com'.")
 
@@ -270,6 +265,7 @@ def extract_residue_bundle(
     altloc: str = "first",
     missing_residue: str = "skip",
     mode: str = "ca",
+    plddt_source: str = "none",
 ) -> Dict[str, np.ndarray]:
     """
     Extract per-residue coordinates and basic residue-level signals.
@@ -313,6 +309,10 @@ def extract_residue_bundle(
     if mode not in {"ca", "mean", "com"}:
         raise ValueError(f"Invalid residue_center: {mode!r}. Use 'ca', 'mean' or 'com'.")
 
+    plddt_source = (plddt_source or "none").strip().lower()
+    if plddt_source not in {"none", "bfactor"}:
+        raise ValueError(f"Invalid plddt_source: {plddt_source!r}. Use 'none' or 'bfactor'.")
+
     coords: List[List[float]] = []
     ids: List[str] = []
     resnames: List[str] = []
@@ -341,7 +341,17 @@ def extract_residue_bundle(
         previous_residue_number = int(res.seqid.num)
         previous_sequence_position = sequence_position
 
-        center, bfactor_ca, plddt_ca = _compute_residue_center(res, mode=mode, altloc=altloc)
+        center, bfactor_ca = _compute_residue_center(res, mode=mode, altloc=altloc)
+        if plddt_source == "none" or not np.isfinite(bfactor_ca):
+            plddt_ca = float("nan")
+        elif 0.0 <= bfactor_ca <= 100.0:
+            plddt_ca = bfactor_ca
+        else:
+            raise StructureLoadError(
+                f"CA B-factor interpreted as pLDDT for residue {rid} must be within "
+                f"[0, 100], got {bfactor_ca}. Use plddt_source='none' for ordinary "
+                "crystallographic B-factors."
+            )
 
         if center is None:
             if missing_policy == "skip":
@@ -419,6 +429,7 @@ def load_and_extract_residue(
     mode: str = "ca",
     altloc: str = "first",
     missing_ca: str = "skip",
+    plddt_source: str = "none",
 ) -> LoadedStructureData:
     def _extract(ch):
         return extract_residue_bundle(
@@ -427,6 +438,7 @@ def load_and_extract_residue(
             altloc=altloc,
             missing_residue=missing_ca,
             mode=mode,
+            plddt_source=plddt_source,
         )
 
     return load_select_and_extract(inp, _extract)

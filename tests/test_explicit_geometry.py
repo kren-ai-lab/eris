@@ -96,7 +96,7 @@ ARRAY_BASELINES = {
     ),
     "residue_point_cloud": (
         *RESIDUE_PREFIX_BASELINE,
-        ("node_attr", (534, 38), "float32"),
+        ("node_attr", (534, 37), "float32"),
         *RESIDUE_AUX_BASELINE,
     ),
     "atom_knn_graph": (
@@ -111,7 +111,7 @@ ARRAY_BASELINES = {
     ),
     "residue_knn_graph": (
         *RESIDUE_PREFIX_BASELINE,
-        ("node_attr", (534, 38), "float32"),
+        ("node_attr", (534, 37), "float32"),
         ("edge_index", (2, 9646), "int64"),
         ("edge_dist", (9646,), "float32"),
         ("edge_attr", (9646, 19), "float32"),
@@ -120,7 +120,7 @@ ARRAY_BASELINES = {
     ),
     "residue_contact_graph": (
         *RESIDUE_PREFIX_BASELINE,
-        ("node_attr", (534, 38), "float32"),
+        ("node_attr", (534, 37), "float32"),
         ("edge_index", (2, 5396), "int64"),
         ("edge_dist", (5396,), "float32"),
         ("edge_attr", (5396, 19), "float32"),
@@ -150,7 +150,7 @@ ARRAY_BASELINES = {
         *RESIDUE_AUX_BASELINE,
     ),
     "residue_voxel_grid": (
-        ("grid", (25, 64, 64, 64), "float32"),
+        ("grid", (24, 64, 64, 64), "float32"),
         ("grid_size", (1,), "int32"),
         ("voxel_size", (1,), "float32"),
         ("origin", (3,), "float32"),
@@ -166,7 +166,7 @@ CLOUD_DIGESTS = {
     },
     "residue_point_cloud": {
         "pos": "54a3d3c574f404a5cbb6d034def52abf5b64d1096121df673501ed715f3474d3",
-        "node_attr": "25151b8bc48a0cec4000fa1a97ec75a2c14dcc04b8e10de51a9fbe32c591c220",
+        "node_attr": "e4f890bb892fefd20b759387b2e4fa6cefcf6906178bb5f76f7887fa68035964",
     },
 }
 

@@ -10,6 +10,29 @@ _AA_ONEHOT_KEYS = [f"aa_onehot.{aa}" for aa in AA_VOCAB]
 _AA_INDEX_KEY = ["aa_index"]
 
 
+def _normalize_scalar_params(token: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    unknown = sorted(set(params) - {"normalization"})
+    if unknown:
+        raise ValueError(f"Unknown {token} voxel parameters: {unknown}")
+    normalization = params.get("normalization", "none")
+    if not isinstance(normalization, str):
+        raise TypeError(f"{token} voxel parameter 'normalization' must be a string")
+    normalization = normalization.strip().lower()
+    if normalization not in {"none", "unit_interval"}:
+        raise ValueError(
+            f"{token} voxel parameter 'normalization' must be one of: none, unit_interval"
+        )
+    return {"normalization": normalization}
+
+
+def normalize_plddt_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    return _normalize_scalar_params("plddt", params)
+
+
+def normalize_bfactor_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    return _normalize_scalar_params("bfactor", params)
+
+
 # -------------------------
 # occupancy
 # -------------------------
@@ -142,9 +165,12 @@ def _accumulate_scalar(
     - mean: sum pooling + counts (counts_ch required)
     """
     if pool == "max":
+        maxima: Dict[Tuple[int, int, int], float] = {}
         for (i, j, k), val in zip(ijk, values):
-            if val > grid_ch[i, j, k]:
-                grid_ch[i, j, k] = val
+            coordinate = (int(i), int(j), int(k))
+            maxima[coordinate] = max(maxima.get(coordinate, float("-inf")), float(val))
+        for (i, j, k), val in maxima.items():
+            grid_ch[i, j, k] = val
     else:
         for (i, j, k), val in zip(ijk, values):
             grid_ch[i, j, k] += val
@@ -193,7 +219,7 @@ def add_plddt_fn(
         ijk=data["ijk"],
         values=data["plddt"],
         pool=ctx["pool"],
-        normalize=params.get("normalize", (0.0, 100.0)),
+        normalize=(0.0, 100.0) if params["normalization"] == "unit_interval" else None,
     )
 
 
@@ -213,6 +239,7 @@ register_grid_voxel_feature(
         fill_fn=add_plddt_fn,
         keys_fn=plddt_keys,
         n_channels_fn=plddt_n_channels,
+        params_fn=normalize_plddt_params,
     )
 )
 
@@ -237,7 +264,7 @@ def add_bfactor_fn(
         ijk=data["ijk"],
         values=data["bfactor_ca"],
         pool=ctx["pool"],
-        normalize=params.get("normalize", (0.0, 100.0)),
+        normalize=(0.0, 100.0) if params["normalization"] == "unit_interval" else None,
     )
 
 
@@ -257,6 +284,7 @@ register_grid_voxel_feature(
         fill_fn=add_bfactor_fn,
         keys_fn=bfactor_keys,
         n_channels_fn=bfactor_n_channels,
+        params_fn=normalize_bfactor_params,
     )
 )
 
