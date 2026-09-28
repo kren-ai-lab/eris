@@ -82,6 +82,10 @@ one or more accession IDs, preserves their requested order, and serializes the p
 provider version, source database, normalization, unknown-residue policy, and missing-value policy.
 Its keys are `aaindex.<ACCESSION>`.
 
+The `external` token injects a validated `.npz` matrix through the same `node_attr` registry path.
+It uses exact canonical residue-ID alignment and content-based cache identity; see
+[External residue numerical features](external_residue_features.md) for its payload contract.
+
 ### Edge features
 
 - Mode: `dist+rbf+seq+local`.

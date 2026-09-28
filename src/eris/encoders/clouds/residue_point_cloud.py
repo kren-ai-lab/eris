@@ -88,6 +88,9 @@ class ResiduePointCloudCA(BaseResidueEncoder):
             strc["aa_index"],
             plddt_ca=strc["plddt"],
             bfactor_ca=strc["bfactor_ca"],
+            residue_ids=strc["residue_ids"],
+            chain_id=strc.chain_id,
+            model_index=strc.model_index,
             mode=self.config.node_attr_mode.to_list(),
             return_keys=True,
         )

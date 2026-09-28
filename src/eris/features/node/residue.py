@@ -15,6 +15,9 @@ def build_node_attr(
     plddt_ca: Optional[np.ndarray] = None,
     bfactor_ca: Optional[np.ndarray] = None,
     has_ca: Optional[np.ndarray] = None,
+    residue_ids: Optional[np.ndarray] = None,
+    chain_id: Optional[str] = None,
+    model_index: Optional[int] = None,
     # contract
     mode: str = "onehot+physchem+bfactor_ca",
     missing: str = "zero",
@@ -40,10 +43,16 @@ def build_node_attr(
         "has_ca": has_ca,
         "n": n,
     }
+    if residue_ids is not None:
+        data["residue_ids"] = ensure_1d(residue_ids, n, "residue_ids")
 
     feat_ctx = {
         "missing": missing,
     }
+    if chain_id is not None:
+        feat_ctx["chain_id"] = chain_id
+    if model_index is not None:
+        feat_ctx["model_index"] = model_index
 
     return build_from_registry(
         data=data,

@@ -228,6 +228,14 @@ class FeatureMode:
     def to_list(self) -> list[Any]:
         return [token.to_value() for token in self.tokens]
 
+    def to_fingerprint_list(self, *, kind: _FeatureKind) -> list[Any]:
+        registry = _FEATURE_REGISTRIES[kind]
+        projected: list[Any] = []
+        for token in self.tokens:
+            params = registry[token.name].project_fingerprint_params(_thaw_json(token.params))
+            projected.append(token.name if not params else {token.name: params})
+        return projected
+
 
 def _atom_node_mode_default() -> FeatureMode:
     return FeatureMode.from_value("elem+role+bfactor+occ", kind="atom_node")
@@ -277,6 +285,10 @@ class CanonicalRepresentationConfig:
             config_field.name: _json_compatible(getattr(self, config_field.name))
             for config_field in fields(self)
         }
+
+    def to_fingerprint_dict(self) -> dict[str, Any]:
+        """Return canonical scientific parameters used for config/cache identity."""
+        return self.to_dict()
 
     def to_json(self) -> str:
         return json.dumps(
@@ -441,6 +453,11 @@ class _ResidueNodeFeatureConfig(_ResidueSelectionConfig):
             "node_attr_mode",
             FeatureMode.from_value(self.node_attr_mode, kind="residue_node"),
         )
+
+    def to_fingerprint_dict(self) -> dict[str, Any]:
+        parameters = super().to_fingerprint_dict()
+        parameters["node_attr_mode"] = self.node_attr_mode.to_fingerprint_list(kind="residue_node")
+        return parameters
 
 
 def _validate_edge_feature_fields(config: Any) -> None:

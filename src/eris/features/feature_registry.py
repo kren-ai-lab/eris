@@ -39,9 +39,18 @@ class FeatureSpec:
         [Dict[str, Any], Dict[str, Any], Dict[str, Any]], List[str]
     ]  # (data, ctx, params) -> keys
     params_fn: Optional[ParamsFn] = None
+    fingerprint_params_fn: Optional[ParamsFn] = None
 
     def normalize_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         return _normalize_feature_params(self.token, params, self.params_fn)
+
+    def project_fingerprint_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        if self.fingerprint_params_fn is None:
+            return dict(params)
+        projected = self.fingerprint_params_fn(dict(params))
+        if not isinstance(projected, dict):
+            raise TypeError(f"Fingerprint projection for feature '{self.token}' must return a dict")
+        return projected
 
 
 @dataclass(frozen=True)

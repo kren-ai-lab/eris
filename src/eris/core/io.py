@@ -23,10 +23,21 @@ class LoadedStructureData(dict[str, np.ndarray]):
     """Extracted arrays with the parser-confirmed coordinate format as typed side data."""
 
     input_format: str
+    chain_id: str
+    model_index: int
 
-    def __init__(self, data: dict[str, np.ndarray], *, input_format: str) -> None:
+    def __init__(
+        self,
+        data: dict[str, np.ndarray],
+        *,
+        input_format: str,
+        chain_id: str,
+        model_index: int,
+    ) -> None:
         super().__init__(data)
         self.input_format = input_format
+        self.chain_id = chain_id
+        self.model_index = model_index
 
 
 _GEMMI_INPUT_FORMATS = {
@@ -409,7 +420,12 @@ def load_select_and_extract(
         st = load_structure(Path(inp.source))
         ch = select_chain(st, inp.chain_id, inp.model_index)
         data = extractor(ch)
-        return LoadedStructureData(data, input_format=_parsed_input_format(st))
+        return LoadedStructureData(
+            data,
+            input_format=_parsed_input_format(st),
+            chain_id=ch.name,
+            model_index=inp.model_index,
+        )
     except Exception:
         logger.exception(
             "Failed to load structure",

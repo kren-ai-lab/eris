@@ -15,6 +15,12 @@ from eris.features.node.constants import (
 
 from eris.features.utils import onehot, safe_float
 from eris.features.feature_registry import FeatureSpec, register_residue_node_feature
+from eris.features.node.external import (
+    external_feature_keys,
+    external_feature_values,
+    normalize_external_params,
+    project_external_fingerprint_params,
+)
 
 # --- canonical ordering (NO CAMBIAR en releases)
 _AA_ONEHOT_KEYS = [f"aa_onehot.{aa}" for aa in AA_VOCAB]
@@ -369,5 +375,23 @@ register_residue_node_feature(
         requires={"aa_index", "has_ca"},
         fn=flags_fn,
         keys_fn=flags_keys,
+    )
+)
+
+
+# -------------------------
+# external
+# -------------------------
+
+
+register_residue_node_feature(
+    FeatureSpec(
+        token="external",
+        order=80,
+        requires={"residue_ids", "chain_id", "model_index"},
+        fn=external_feature_values,
+        keys_fn=external_feature_keys,
+        params_fn=normalize_external_params,
+        fingerprint_params_fn=project_external_fingerprint_params,
     )
 )

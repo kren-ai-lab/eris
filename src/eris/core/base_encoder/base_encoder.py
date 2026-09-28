@@ -159,6 +159,7 @@ class BaseEncoder(ABC):
         data: dict[str, np.ndarray],
         *,
         parameters: dict[str, Any],
+        extensions: dict[str, dict[str, Any]] | None = None,
     ):
         """Build prospective strict-valid v2 metadata without activating it in encode()."""
         from eris.core.artifact_schema_v2 import (
@@ -211,6 +212,7 @@ class BaseEncoder(ABC):
             output_declarations=self.output_declarations_v2,
             feature_keys=self._feature_keys_v2(data, ctx),
             counts=self._counts_v2(data),
+            extensions=extensions,
         )
 
     def _matches_cache_identity_v2(
@@ -259,6 +261,7 @@ class BaseEncoder(ABC):
         *,
         inp: StructureInput,
         source_sha256: str,
+        extensions: dict[str, dict[str, Any]] | None,
     ) -> StructureArtifact:
         from eris.core.artifact_schema_v2 import build_input_metadata
 
@@ -270,16 +273,33 @@ class BaseEncoder(ABC):
             model_index=inp.model_index,
             chain_id=inp.chain_id,
         )
+        if extensions is not None:
+            refreshed_extensions = deepcopy(meta.get("extensions", {}))
+            refreshed_extensions.update(deepcopy(extensions))
+            meta["extensions"] = refreshed_extensions
         refreshed = StructureArtifact(data=artifact.data, meta=meta)
         refreshed.validate(strict=True)
         return refreshed
+
+    def _validate_runtime_config_dependencies(self, parameters: dict[str, Any]) -> None:
+        """Validate mutable resources referenced by canonical configuration."""
+
+    def _artifact_extensions(
+        self,
+        parameters: dict[str, Any],
+    ) -> dict[str, dict[str, Any]] | None:
+        """Return invocation provenance that does not participate in identity."""
+        return None
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
         from eris.core.artifact_schema_v2 import compute_config_fingerprint
         from eris.core.hashing import sha256_file
 
         source_sha256 = sha256_file(Path(inp.source))
-        parameters = self.config.to_dict()
+        invocation_parameters = self.config.to_dict()
+        self._validate_runtime_config_dependencies(invocation_parameters)
+        parameters = self.config.to_fingerprint_dict()
+        extensions = self._artifact_extensions(invocation_parameters)
         config_fingerprint = compute_config_fingerprint(
             self.config.representation_name,
             parameters,
@@ -309,10 +329,12 @@ class BaseEncoder(ABC):
                 parameters=parameters,
                 config_fingerprint=config_fingerprint,
             ):
+                self._validate_runtime_config_dependencies(invocation_parameters)
                 return self._refresh_cache_hit_source_v2(
                     artifact,
                     inp=inp,
                     source_sha256=source_sha256,
+                    extensions=extensions,
                 )
 
         ctx = EncodingContext(inp=inp, source_sha256=source_sha256)
@@ -324,7 +346,12 @@ class BaseEncoder(ABC):
         for contract in self.contracts():
             contract.validate(data)
 
-        meta = self._build_metadata_v2(ctx, data, parameters=parameters)
+        meta = self._build_metadata_v2(
+            ctx,
+            data,
+            parameters=parameters,
+            extensions=extensions,
+        )
         output_names = [output["name"] for output in meta["outputs"]]
         data = {name: data[name] for name in output_names}
         artifact = StructureArtifact(data=data, meta=meta)
