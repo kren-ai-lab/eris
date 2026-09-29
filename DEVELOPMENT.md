@@ -1,14 +1,11 @@
 # Eris development
 
-This guide covers local contributor setup and validation. Scientific and persistence contracts
-are documented under `docs/`.
-
 ## Environment
 
-`pyproject.toml` is the authority for the current development Python range and dependencies. It
-currently declares Python `>=3.11,<3.13`.
+`pyproject.toml` is the authority for package metadata, Python compatibility, and dependencies.
+The supported development range is Python `>=3.11,<3.13`.
 
-Create and activate an isolated Python 3.11 or 3.12 environment, then install the project with
+Create and activate an isolated Python 3.11 or 3.12 environment, then install Eris and its
 development tools:
 
 ```console
@@ -16,45 +13,44 @@ python -m pip install -e ".[dev]"
 python -m pip check
 ```
 
-The import package and CLI command are both `eris`. The distribution name currently present in
-package metadata is `eris-lib`; final public naming is release-policy work, not a local development
-assumption.
+The distribution name is `eris-lib`; the import package and CLI command are `eris`. Public naming
+is still subject to release hardening.
 
-## Optional dependency groups
+## Optional environments
 
-Install only the optional integration being developed or tested:
+Install only the integration being developed or tested:
 
 ```console
 python -m pip install -e ".[gearnet]"
 python -m pip install -e ".[pyg]"
 ```
 
-- `gearnet` provides the frozen native GearNet-Edge PyTorch runtime. The verified checkpoint must
-  be supplied separately and is never downloaded automatically.
-- `pyg` provides PyTorch and PyTorch Geometric for graph export.
-- A core import must remain usable without either optional group.
+- `gearnet` installs the pinned PyTorch runtime. Supply the verified checkpoint separately; Eris
+  never downloads it.
+- `pyg` installs PyTorch and PyTorch Geometric for graph export.
+- `import eris` must work without either optional group and must not import their runtimes.
 
-See `docs/gearnet_edge_backend.md` for the exact learned-runtime contract.
+The GearNet CPU installation and checkpoint contract are in
+[`docs/gearnet_edge_backend.md`](docs/gearnet_edge_backend.md).
 
-## Tests
+## Tests and checks
 
-Run the smallest relevant scope first:
+Run focused tests while developing:
 
 ```console
 python -m pytest -q tests/test_residue_features.py
 ```
 
-Then run related regression modules. For cross-cutting changes or a handoff gate, run the full
-suite:
+For cross-cutting changes or a handoff gate, run the tracked suite with a writable pytest base:
 
-```console
-python -m pytest -q
+```powershell
+$pt = "$env:USERPROFILE\eris-pytest-temp"
+Remove-Item $pt -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path $pt | Out-Null
+python -m pytest -q --basetemp "$pt\base" -p no:cacheprovider
 ```
 
-Optional dependency or checkpoint tests may skip when their documented runtime is unavailable.
-Do not treat a skip as certification of that integration.
-
-## Static checks
+Run the static and environment checks:
 
 ```console
 python -m ruff check .
@@ -63,18 +59,16 @@ python -m pip check
 git diff --check
 ```
 
-Keep `import eris` free of eager Torch, TorchDrug, PyG, RDKit, or GearNet numerical-runtime
-imports. Packaging-boundary tests enforce this contract.
+Optional dependency or checkpoint tests may skip when their documented runtime is unavailable. A
+skip is not certification of that integration. `tests/test_packaging_boundaries.py` verifies the
+core lazy-import boundary.
 
-## Normal workflow
+## Workflow
 
-1. Verify the active branch, HEAD, and expected worktree.
-2. Read the permanent contract relevant to the change.
-3. Implement one focused change without altering unrelated behavior.
-4. Run focused tests, then proportionate regression/static checks.
-5. Review `git diff`, `git diff --check`, and `git status --short`.
-6. Commit or publish only when explicitly authorized.
+Development happens on `dev`; `jr_revision` is a frozen historical branch. Do not switch branches
+or modify history as part of ordinary changes. Before editing, inspect the branch, HEAD, and
+worktree. Preserve unrelated tracked and untracked work.
 
-The repository does not claim release certification merely because local checks pass. CI matrices,
-built-distribution installation, publishing, and supported-environment certification remain
-separate release-hardening gates.
+Read the relevant contract under `docs/`, make a focused change, run proportionate tests and
+checks, then review `git diff`, `git diff --check`, and `git status --short`. Local validation does
+not replace clean-install, built-distribution, CI-matrix, or release-environment certification.

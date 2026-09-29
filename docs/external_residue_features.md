@@ -1,91 +1,110 @@
-# External residue numerical features
+# External residue features
 
-Eris accepts externally computed residue-level numerical features through the normal residue
-`node_attr` feature pipeline. The v0.1 token is `external`; it does not run a model, download data,
-or create a separate embedding tensor.
+The residue feature token `external` adds a validated numerical matrix to the normal
+`node_attr` pipeline. It does not run a model, download data, or create a separate embedding
+output.
 
-## NPZ payload
+## NPZ schema
 
-The input must be a `.npz` archive readable with `np.load(path, allow_pickle=False)`. Required
-fields are:
+The source must be a `.npz` archive readable with `np.load(path, allow_pickle=False)`.
 
-| Field | Contract |
-| --- | --- |
-| `values` | Real numeric matrix `(N, D)`, with `N,D >= 1`; consumed as contiguous `float32`. |
-| `residue_ids` | Unique string vector `(N,)` in canonical Eris residue order/identity. |
-| `source_name` | Non-empty scalar identifier used in public feature keys. |
-| `chain_id` | Scalar string naming the structure chain used to build the payload. |
-| `model_index` | Scalar integer naming the structure model used to build the payload. |
+| Field | Required | Contract |
+| --- | --- | --- |
+| `values` | yes | real numeric matrix `(N,D)` with `N,D >= 1`; converted to contiguous `float32` |
+| `residue_ids` | yes | unique string vector `(N,)` |
+| `source_name` | yes | non-empty scalar string used in public feature keys |
+| `chain_id` | yes | scalar string for the source chain |
+| `model_index` | yes | scalar integer greater than or equal to zero |
+| `feature_keys` | no | unique non-empty string vector of length `D` |
+| `source_version` | no | scalar string |
+| `source_model` | no | scalar string |
 
-Optional scalar strings are `source_version` and `source_model`. Optional `feature_keys` is a
-unique, non-empty string vector of length `D`. If omitted, Eris generates `"0"` through
-`str(D - 1)`.
-
-`source_name` and source-local feature keys must start with an ASCII letter or digit and may then
-contain ASCII letters, digits, underscores, or hyphens. Public keys are:
+If `feature_keys` is absent, Eris generates `"0"` through `str(D - 1)`. `source_name` and each
+feature key must start with an ASCII letter or digit and may otherwise contain ASCII letters,
+digits, underscores, or hyphens. Public keys are:
 
 ```text
 external.<source_name>.<feature_key>
 ```
 
-Object arrays, pickle payloads, complex/string/boolean value matrices, malformed scalars, unknown
-archive fields, and non-`.npz` files are rejected.
+Unknown archive fields, object arrays, pickle payloads, malformed scalars, and Boolean, string,
+complex, or out-of-range `values` fail.
 
 ## Residue identity and alignment
 
-Each residue ID must use the existing canonical form:
+Each row uses the canonical residue ID:
 
 ```text
 <chain_id>:<residue_number>:<insertion_code>:<residue_name>
 ```
 
-For example, `A:42::GLY` and `A:42:A:GLY` are different residues. The only v0.1 alignment policy is
-`strict_residue_id`. External rows may be shuffled, but Eris reorders them solely by exact residue
-ID. Missing, extra, or duplicate IDs, chain/model mismatches, insertion-code differences, and
-residue-name differences fail. Eris does not truncate, pad, match by row position, or perform
-sequence alignment.
+Examples:
 
-Alignment uses the exact retained node set. If structure extraction omits a residue but the `.npz`
-still contains it, that external row is extra and encoding fails.
+```text
+A:42::GLY
+A:42:A:GLY
+```
 
-## Content identity
+The only alignment policy is `strict_residue_id`. Rows may be shuffled; Eris reorders them by
+exact ID. Missing, extra, duplicate, or malformed IDs fail. Chain, model, insertion-code, and
+residue-name mismatches also fail.
 
-At configuration time Eris validates the payload and records its resolved absolute path, source
-metadata, chain/model identity, feature dimension and keys, alignment policy, and a canonical
-`content_sha256`. The hash covers the canonical contiguous `float32` values and all scientific
-metadata, not the `.npz` container bytes or path. Equivalent payloads at different paths therefore
-share a content hash.
+Alignment uses the exact residue nodes retained by structure extraction. If extraction omits a
+residue that remains in the NPZ, that row is extra. Eris never truncates, pads, matches by position,
+or performs sequence alignment.
 
-The resolved descriptor has two serialized views. `config.to_dict()` retains the absolute path for
-invocation provenance. The scientific projection used by artifact `parameters`, the configuration
-fingerprint, and cache identity excludes only `path`; it retains `content_sha256`, source metadata,
-chain/model identity, feature dimension and keys, and alignment. The artifact records the actual
-invocation path under `extensions.org.eris.external_features`. Relocating an identical payload can
-therefore reuse the same cache entry without losing the path used for that invocation.
+## Source metadata and content hash
 
-Eris reloads and verifies the payload before cache lookup, again after a valid cache hit before it
-is returned, and again during feature construction on a cache miss. Changing a file after
-configuration resolution therefore fails instead of using stale identity, including mutation
-during cache lookup.
+Configuration resolution validates the payload and records:
 
-## Hybrid and high-dimensional node features
+- resolved absolute invocation path;
+- source name, version, and model;
+- chain and model identity;
+- feature dimension and ordered keys;
+- alignment policy;
+- canonical `content_sha256`.
 
-`external` composes with the other residue features in the normal registry. For example,
-`onehot + physchem + aaindex + bfactor_ca + external` produces one `node_attr` matrix and one
-ordered `node_attr_keys` list; it does not create a separate embedding output. External widths such
-as 512 or 1024 are supported without padding, truncation, or a feature-width limit and flow through
-residue graphs, artifacts, Torch export, PyG export, and folder datasets.
+The hash covers contiguous little-endian `float32` values, ordered residue IDs and feature keys,
+source metadata, chain/model identity, dimensions, and alignment policy. It does not hash NPZ
+container bytes or the path. Scientifically identical payloads at different paths share a content
+hash.
 
-Physical `node_attr` block ordering follows canonical feature-registry `FeatureSpec.order`, not the
-order in which callers write feature tokens. Within each parameterized block, the feature's own
-contract preserves its canonical key ordering, including AAIndex accessions and external columns.
+The resolved config has two views:
 
-Once an artifact has been encoded and saved, its numerical arrays and metadata are self-contained.
-Loading, packing, dataset access, and Torch/PyG export do not reopen or revalidate the source
-external `.npz`. The source file is required only while resolving or encoding a configuration and
-while checking encoder-cache reuse.
+- `config.to_dict()` retains `path` so the encoder can open and validate the payload;
+- the scientific parameter/fingerprint projection removes only `path`.
 
-## Minimal example
+Artifacts record the actual invocation path and content hash under
+`extensions.org.eris.external_features`. The content hash and all other scientific descriptor
+fields remain in artifact `parameters`.
+
+Eris reloads and verifies the payload before cache lookup, after a cache hit, and during feature
+construction on a miss. Mutation after configuration resolution fails.
+
+## Hybrid use
+
+`external` composes with other residue features:
+
+```python
+node_attr_mode = [
+    "onehot",
+    "physchem",
+    {"aaindex": {"ids": ["KYTJ820101"]}},
+    "bfactor_ca",
+    {"external": {"path": "protein_A.npz"}},
+]
+```
+
+All selected blocks become one contiguous `node_attr (N,F)` matrix and one ordered
+`node_attr_keys` list. Physical block order follows `FeatureSpec.order`; external column order
+follows the validated `feature_keys` vector. There is no fixed external width, padding, or
+truncation.
+
+External features flow through residue point clouds and graphs, Artifact Schema v2, packing,
+datasets, Torch export, and graph-only PyG export. Once saved, an artifact is self-contained;
+loading and downstream operations do not reopen the source NPZ.
+
+## Minimal producer and encode example
 
 ```python
 import numpy as np
@@ -98,6 +117,7 @@ np.savez(
     residue_ids=np.asarray(["A:1::ALA", "A:2::GLY"]),
     source_name=np.asarray("custom_descriptor_v2"),
     source_version=np.asarray("1.0"),
+    feature_keys=np.asarray(["score_a", "score_b"]),
     chain_id=np.asarray("A"),
     model_index=np.asarray(0, dtype=np.int64),
 )
@@ -115,8 +135,7 @@ artifact = encode(
 
 ## Per-row batch parameters
 
-The Python API accepts explicit per-row overrides without changing the canonical structure
-manifest fields (`id`, `path`, `chain`, and `model`):
+Python `batch_encode()` accepts shallow overrides keyed by manifest row ID:
 
 ```python
 from eris import batch_encode
@@ -130,16 +149,12 @@ batch_encode(
         "protein_A": {
             "node_attr_mode": [
                 "onehot",
-                "physchem",
-                {"aaindex": {"ids": ["KYTJ820101"]}},
                 {"external": {"path": "A.npz"}},
             ]
         },
         "protein_B": {
             "node_attr_mode": [
                 "onehot",
-                "physchem",
-                {"aaindex": {"ids": ["KYTJ820101"]}},
                 {"external": {"path": "B.npz"}},
             ]
         },
@@ -147,9 +162,18 @@ batch_encode(
 )
 ```
 
-For each row, Eris copies the global `params` and applies that row's mapping with a shallow
-top-level update. A row-specific `node_attr_mode` therefore replaces the global value entirely;
-nested feature parameters are not recursively merged. Every override key must match a manifest row
-ID. The batch CLI continues to expose only global `--params`; `params_by_id` is currently a Python
-API feature.
+Each row starts with a copy of global `params` and receives one top-level `dict.update()`.
+Nested feature settings are not recursively merged. Every override key must match a manifest row
+ID. The batch CLI exposes only global `--params`.
 
+## Failure conditions
+
+Encoding fails for:
+
+- missing, unreadable, non-NPZ, or pickle-dependent sources;
+- missing, unknown, malformed, or incorrectly typed fields;
+- non-finite conversion overflow or invalid matrix shape;
+- duplicate keys or residue IDs;
+- payload/structure chain or model mismatch;
+- missing or extra residue identities;
+- descriptor or content changes after resolution.

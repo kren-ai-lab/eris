@@ -1,195 +1,114 @@
-# Eris Artifact Schema
+# Artifact Schema v2
 
-The Artifact Schema is the canonical active runtime artifact contract for Eris v0.1. It describes
-explicit and learned structural representations with one Registry-independent metadata and array
-contract. All ten canonical explicit encoders produce complete, strict-valid Eris artifacts
-directly from `BaseEncoder.encode()`.
+Every persisted Eris representation is a directory containing:
 
-The canonical on-disk form is `meta.json` plus `data.npz`. `StructureArtifact` validates,
-finalizes, saves, and loads Eris artifacts. The serialized `schema_version` field remains the
-integer `2`.
+```text
+artifact/
+|-- meta.json
+`-- data.npz
+```
 
-## Top-level contract
+`StructureArtifact` in `src/eris/core/artifacts.py` validates, saves, and loads this form.
+`src/eris/core/artifact_schema_v2.py` is the executable schema authority. The serialized
+`schema_version` is the integer `2`.
 
-The following fields are all required, and no other top-level fields are accepted except the
-two optional fields listed below:
+## Metadata
 
-| field | contract |
+No undeclared top-level fields are accepted.
+
+| Field | Contract |
 | --- | --- |
-| `schema_version` | Integer exactly equal to `2`. |
-| `representation_name` | Non-empty public representation identifier. |
-| `representation_family` | `explicit` or `learned`. |
-| `representation_type` | Family-compatible type. |
-| `granularity` | Represented biological entity. |
-| `coordinate_source` | Source/meaning of structural coordinates. |
-| `encoder` | Required producer implementation identity. |
-| `input` | Required source identity and selection. |
-| `parameters` | Canonical scientific configuration projection. |
-| `provenance` | Required Eris/config provenance and optional execution context. |
-| `outputs` | Ordered declarations corresponding exactly to array keys. |
-| `feature_keys` | Authoritative ordered feature semantics. |
-| `shapes` | Exact array shapes by output name. |
-| `dtypes` | Exact canonical NumPy dtype strings by output name. |
-| `counts` | Generic non-negative integer summaries. |
+| `schema_version` | exactly `2` |
+| `representation_name` | non-empty public identifier |
+| `representation_family` | `explicit` or `learned` |
+| `representation_type` | `cloud`, `graph`, `matrix`, or `grid` for explicit; `embedding` for learned |
+| `granularity` | `atom`, `residue`, `structure`, or `mixed` |
+| `coordinate_source` | `atom`, `ca`, `residue_mean`, `residue_com`, or `model_specific` |
+| `encoder` | producer implementation and version |
+| `input` | source content and selected model/chain |
+| `parameters` | canonical scientific configuration |
+| `provenance` | Eris version and configuration fingerprint |
+| `outputs` | ordered declarations matching every NPZ array |
+| `feature_keys` | authoritative ordered feature semantics |
+| `shapes` | exact shape for every output |
+| `dtypes` | exact NumPy dtype string for every output |
+| `counts` | non-negative integer summaries |
+| `model` | required for learned artifacts; forbidden for explicit artifacts |
+| `extensions` | optional namespaced metadata |
 
-Optional top-level fields are:
+An explicit atom artifact uses `coordinate_source="atom"`. An explicit residue artifact uses
+`ca`, `residue_mean`, or `residue_com`. GearNet learned artifacts use `model_specific`.
 
-- `model`, required conditionally for learned artifacts and forbidden for explicit artifacts;
-- `extensions`, for namespaced metadata which does not alter the core contract.
+## Producer and model identity
 
-Unknown top-level fields are rejected. Extensions cannot replace a missing required field.
-
-## Identity vocabularies
-
-`representation_family` has exactly two values:
-
-- `explicit`;
-- `learned`.
-
-Family and type must agree:
-
-- explicit: `cloud`, `graph`, `matrix`, or `grid`;
-- learned: `embedding`.
-
-`granularity` is one of `atom`, `residue`, `structure`, or `mixed`. It never contains `ca`.
-
-`coordinate_source` is one of:
-
-- `atom`;
-- `ca`;
-- `residue_mean`;
-- `residue_com`;
-- `model_specific`.
-
-An explicit atom representation uses `coordinate_source = atom`. An explicit residue
-representation records `ca`, `residue_mean`, or `residue_com` according to canonical config.
-Learned preprocessing may use `model_specific`. A global learned representation uses
-`granularity = structure` and a mixed learned representation uses `granularity = mixed`, both
-with `coordinate_source = model_specific` when model preprocessing owns coordinate semantics.
-
-M3.1 does not add speculative `backbone` or `all_atom` coordinate-source values.
-
-## Encoder and model
-
-`encoder` is required for both families and has the exact form:
+`encoder` is required for both families:
 
 ```json
 {
-  "implementation": "eris.encoders.graphs.ResidueKNNGraph",
-  "version": "0.1.0"
+  "implementation": "eris.encoders.graphs.residue_knn_graph.ResidueKNNGraph",
+  "version": "0.1.2"
 }
 ```
 
-Both values are non-empty strings. `implementation` is a dotted import-path-like producer
-identity. The representation name is not duplicated in this block.
-
-An explicit artifact must not contain `model`. A learned artifact must contain it:
+Learned artifacts also require:
 
 ```json
 {
-  "architecture": "structural-model-name",
+  "architecture": "GearNet-Edge",
   "checkpoint": {
-    "identifier": "checkpoint-name",
-    "revision": "optional-revision",
-    "source": "optional-source-locator",
-    "sha256": "optional-lowercase-sha256"
+    "identifier": "mc_gearnet_edge.pth",
+    "revision": "Zenodo record v2",
+    "source": "https://zenodo.org/records/7723075",
+    "sha256": "6dc11e2db6eff3c90f90672af227c647125adb7476de18a2bb860457bdb598ec"
   }
 }
 ```
 
-`architecture` and `checkpoint.identifier` are required non-empty strings. `revision` and
-`source` are optional strings. When present, `sha256` is exactly 64 lowercase hexadecimal
-characters. Unknown model or checkpoint fields are rejected. This common contract does not
-implement GearNet or any learned backend.
+`checkpoint.identifier` is required. Revision, source, and SHA-256 are optional at the generic
+schema level.
 
-## Input
+## Input identity
 
-The required input block is:
+The required `input` block is:
 
 ```json
 {
-  "source": "locator/to/or/name/of/input",
+  "source": "protein.pdb",
   "source_sha256": "64-lowercase-hex-characters",
   "format": "pdb",
   "model_index": 0,
-  "chain_id": null
+  "chain_id": "A"
 }
 ```
 
-`source` and `format` are non-empty strings. `source_sha256` hashes the input source and is a
-lowercase SHA-256 value. `model_index` is an integer greater than or equal to zero; a Boolean is
-not an integer for this contract. `chain_id` is a string or `null`.
+`source` is the invocation locator. `source_sha256` identifies the input bytes. `format` is the
+parser-confirmed format, not an unchecked filename inference. `model_index` is an integer greater
+than or equal to zero; `chain_id` is a string or `null`.
 
-Only these additional input keys are permitted in v0.1:
+The only optional input keys are string-valued `original_filename`, `structure_id`, and
+`source_database`.
 
-- `original_filename`;
-- `structure_id`;
-- `source_database`.
+## Scientific parameters and invocation provenance
 
-Their values are strings. Assembly identity and parsed-content hashes are not part of M3.1.
+`parameters` contains the canonical scientific configuration that determines representation
+content. It accepts JSON mappings, lists, strings, Booleans, integers, finite floats, and `null`.
+Mapping keys must be strings. NumPy values, arrays, `Path` objects, NaN, and infinities are
+rejected.
 
-## Parameters: scientific configuration versus invocation provenance
+Invocation details that do not alter scientific output do not belong in `parameters` or its
+fingerprint. External residue features demonstrate this split:
 
-`parameters` is a JSON-compatible mapping containing the producer's canonical **scientific
-configuration projection**. For configurations without invocation-only fields, this is normally
-identical to `encoder.config.to_dict()`. A configuration may, however, retain invocation details
-needed at execution time while projecting them out of artifact parameters and the configuration
-fingerprint when they do not alter the scientific result.
+- scientific parameters retain content hash, source metadata, feature keys and dimension,
+  chain/model identity, and alignment policy;
+- the local NPZ path is recorded under `extensions.org.eris.external_features`.
 
-The external residue-feature path is the implemented v0.1 example. Its resolved configuration
-retains the absolute path so the encoder can validate and open the requested payload, but the path
-does not define scientific or cache identity. Artifact parameters instead retain the external
-payload's `content_sha256`, source metadata, feature keys and dimension, chain/model identity, and
-alignment policy. The invocation path is recorded separately under the namespaced
-`extensions.org.eris.external_features` provenance extension.
-
-This distinction is a producer serialization rule within the existing Artifact Schema v2; it does
-not add or change Schema v2 fields. It also does not allow producers to omit scientifically
-meaningful values from `parameters`.
-
-The projection records the canonical request, including `null` when the user intentionally
-delegates an effective value to runtime computation. It does not duplicate config validation or
-scientific parameter semantics. Mapping keys are strings; nested mappings/lists, strings,
-Booleans, integers, finite floats, and `null` are supported. NumPy values, NumPy arrays, `Path`,
-NaN, and infinities are prohibited in parameters.
-
-For example, a binned representation can retain the request:
-
-```json
-{"edges": null, "n_bins": 32}
-```
-
-while declaring a computed `bin_edges` array in `outputs`. Similarly, a voxel request can keep
-`voxel_size: null` while the effective voxel size is an output or an explicitly specified
-extension in a later producer contract. Runtime-effective results must not overwrite the
-canonical requested parameters.
-
-## Provenance
-
-The required minimum is exactly the Eris package version and config fingerprint:
-
-```json
-{
-  "eris_version": "0.1.0",
-  "config_fingerprint": "64-lowercase-hex-characters"
-}
-```
-
-Optional fields are:
-
-- `environment`: a finite JSON mapping; known useful keys include `python_version`, `platform`,
-  and `dependencies`, but none is required;
-- `created_at`: a UTC ISO-8601 string ending in `Z`;
-- `invocation`: a JSON-compatible mapping or string.
-
-Python/platform are not required core provenance. There is no full `pip freeze` or hardware
-inventory requirement. Input hash belongs to `input.source_sha256`; encoder implementation
-version belongs to `encoder.version`; learned checkpoint identity belongs to `model`.
+Do not omit values that change scientific output. Requested values remain canonical even when an
+encoder computes an effective runtime value; for example, voxel `voxel_size=null` remains in
+`parameters` while the effective spacing is stored as an output.
 
 ## Configuration fingerprint
 
-`compute_config_fingerprint(representation_name, parameters)` calculates lowercase SHA-256 over
-the UTF-8 canonical JSON representation of exactly:
+`compute_config_fingerprint(representation_name, parameters)` hashes canonical UTF-8 JSON for:
 
 ```json
 {
@@ -198,230 +117,113 @@ the UTF-8 canonical JSON representation of exactly:
 }
 ```
 
-Canonical JSON is produced with:
+Canonical JSON uses sorted keys, compact separators, UTF-8 characters, and rejects NaN. The
+fingerprint changes with the public representation name or scientific parameters. It excludes
+payload arrays, timestamps, environment, package/encoder versions, input identity, and
+invocation-only paths.
 
-```python
-json.dumps(
-    value,
-    sort_keys=True,
-    separators=(",", ":"),
-    ensure_ascii=False,
-    allow_nan=False,
-)
-```
+The fingerprint is not a complete cache key.
 
-The fingerprint is deterministic and insensitive to mapping insertion order. It changes when
-the representation name or canonical scientific parameters change. It does not depend on schema
-version, encoder/package version, invocation-only locators, payload arrays, timestamps,
-environment, or cache settings. A content hash or other canonical resource identity included in
-`parameters` does participate even when the path used to locate that resource does not.
+## Outputs and arrays
 
-`config_fingerprint` is not a complete artifact identity and is not itself a cache key. The active
-v2 cache boundary combines it with schema/cache contract versions, representation and encoder
-identity, source SHA-256, parser hint, and input selection. This independent v2 identity does not
-replace `BaseEncoder.fingerprint()`, which remains available as a distinct legacy/Registry
-contract but is not used by active encoding cache lookup.
-
-## Outputs
-
-`outputs` is a non-empty ordered list. Every declaration requires `name` and `role`:
+`outputs` is a non-empty ordered list. Each declaration has a unique `name` and a non-empty
+`role`; optional fields are `granularity`, `layout`, and `description`.
 
 ```json
-[
-  {
-    "name": "node_attr",
-    "role": "node_features",
-    "granularity": "residue",
-    "layout": "NF",
-    "description": "Optional human-readable description"
-  }
-]
+{
+  "name": "node_attr",
+  "role": "node_features",
+  "granularity": "residue",
+  "layout": "NF"
+}
 ```
 
-Names are unique and match `^[a-z][a-z0-9_]*$`. Each name corresponds to exactly one array, and
-the set of output names equals the set of `data` keys. `role` is a non-empty extensible string;
-M3.1 intentionally does not define a globally closed role vocabulary. Optional `granularity`
-uses the core granularity vocabulary, `layout` is a non-empty string, and `description` is a
-string. Shapes and dtypes are not duplicated inside output declarations.
+Output names match `^[a-z][a-z0-9_]*$` and correspond exactly to keys in `data.npz`.
+`shapes` and `dtypes` have the same key set. Physical ZIP member order is irrelevant; loaders
+restore runtime array order from `outputs`.
 
-Core roles with generic strict invariants include `edge_index`, `edge_distance`,
-`node_features`, `edge_features`, `graph_features`, `matrix`, `grid`, `node_embedding`,
-`global_embedding`, `node_ids`, and `valid_mask`. Other role names remain valid and can be
-specified by later representation contracts.
+Every value is a NumPy array. Allowed dtype kinds are signed integer, unsigned integer, float,
+Boolean, and Unicode string. Object, structured, complex, datetime, timedelta, and byte-string
+arrays are rejected. Loading always uses `allow_pickle=False`.
 
-## Authoritative feature keys
+## Feature keys
 
-`feature_keys` is always present and is never inferred. `{}` is valid, including for learned
-embeddings whose dimensions have no individual semantic names. The only core-known fields are:
+`feature_keys` is always present and never inferred. It may contain:
 
 - `node_attr_keys`;
 - `edge_attr_keys`;
 - `graph_attr_keys`;
 - `grid_channels`.
 
-Each value is an ordered `list[str]`. In strict validation, cardinality agrees with the
-corresponding `node_features`, `edge_features`, `graph_features`, or `grid` role when the field
-is present. Legacy layout fields such as `matrix_key`, `matrix_attr_keys`, `grid_key`, and
-`grid_layout` are rejected. Output identity and layout belong to `outputs`, not `feature_keys`.
-Embedding dimension labels are not generated.
+Each value is an ordered list of strings whose length matches the corresponding feature dimension.
+An empty mapping is correct for outputs such as learned embeddings whose dimensions have no
+individual semantic labels. Output names and layouts belong in `outputs`, not `feature_keys`.
 
-## Shapes, dtypes, and counts
+## Provenance
 
-`shapes` maps every output name to a list of non-negative integer dimensions. A scalar ndarray
-has shape `[]`. `dtypes` maps every output name to `str(array.dtype)`. Both mappings have exactly
-the same keys as `outputs` and `data`; strict validation checks their values against each array.
-
-`counts` maps non-empty string names to non-negative plain integers. It stays generic rather
-than duplicating every shape. Representative values are:
-
-- graph: `n_nodes`, `n_edges`, `n_self_loops`;
-- learned node output: `n_nodes`;
-- global learned output: `{}`.
-
-Strict validation checks counts only where a generic role establishes their meaning. Scientific
-topology, contact, binning, and other representation-specific semantics are outside this module.
-
-## Extensions
-
-`extensions` is an optional mapping of non-empty namespace strings to finite JSON mappings:
+Required provenance is:
 
 ```json
 {
-  "org.example.analysis": {
-    "score": 0.5
-  }
+  "eris_version": "0.1.0",
+  "config_fingerprint": "64-lowercase-hex-characters"
 }
 ```
 
-The core validator verifies namespace/value structure but does not interpret extension semantics.
-An explicit representation using external residue features records the invocation path and
-content hash under `extensions.org.eris.external_features`; this is provenance for the invocation,
-not a second scientific-identity definition.
+Optional `environment`, `created_at`, and `invocation` fields may record generation context.
+Input hash belongs in `input`, producer version in `encoder`, and learned checkpoint identity in
+`model`.
 
-## JSON normalization
+## Counts and extensions
 
-`normalize_metadata()` creates a new JSON-safe value without mutating the input:
+`counts` maps non-empty names to non-negative plain integers, for example `n_nodes`, `n_edges`,
+or `n_omitted_residues`. Strict validation checks counts where an output role establishes their
+meaning.
 
-- mapping keys must be strings;
-- tuples become lists;
-- NumPy scalar values become corresponding Python scalars during controlled normalization;
-- `None`, Boolean, integer, finite float, and string values are preserved;
-- NumPy arrays and `Path` values are rejected;
-- NaN and positive or negative infinity are rejected.
+`extensions` maps non-empty namespace strings to finite JSON mappings. Extensions may record
+producer-specific provenance but cannot replace a required field or alter the core schema.
 
-The stricter parameters rule rejects NumPy scalars as well as arrays so canonical config output
-cannot silently depend on NumPy types.
+## Strict validation
 
-## Array and NPZ safety policy
+`validate_schema_v2(meta, data, strict=True)` verifies:
 
-Every data key follows `^[a-z][a-z0-9_]*$`, and every value is a `numpy.ndarray`. Allowed dtype
-kinds are signed integer, unsigned integer, float, Boolean, and Unicode string. Object,
-structured/record, complex, datetime, timedelta, and byte-string arrays are rejected. Eris
-artifacts therefore have no pickle-dependent array payload.
+- exact top-level and nested fields;
+- family/type, granularity, coordinate-source, producer, input, and model compatibility;
+- exact output/data key coverage, shapes, dtypes, counts, and feature-key cardinality;
+- the configuration fingerprint;
+- array safety and generic role invariants;
+- learned embedding shape, finiteness, node-ID alignment, and optional valid-mask alignment.
 
-The same array-safety policy is enforced in memory and at persistence boundaries.
+Generic role invariants include `edge_index (2,E)`, aligned edge features, `node_features (N,F)`,
+square matrices, four-dimensional grids, `node_embedding (N,D)`, and
+`global_embedding (D,)`. Learned node embeddings require aligned unique Unicode `node_ids`.
+Representation-specific scientific validation remains with the producer.
 
-## Loading and disk integrity
+## Persistence limits
 
-Persisted Eris artifacts are always loaded with strict validation. NPZ data is opened
-with `allow_pickle=False`, and its member names must exactly match the names declared by
-`outputs`. Versionless artifacts are rejected rather than loaded.
+Schema validation provides structural integrity, not a complete numeric payload checksum:
 
-`outputs` is the semantic ordering authority. Physical ZIP member order is not contractual; a
-loader reconstructs the runtime data mapping in `outputs` order after confirming exact member
-coverage. Shapes, dtypes, feature cardinality, counts, learned alignment, and other generic v2
-integrity rules are then checked by the strict schema validator.
+- equivalent NPZ writes need not be byte-identical;
+- `data.npz` and `meta.json` are staged and replaced independently, not atomically as a pair;
+- different numeric values can pass when all validated metadata and array invariants still match.
 
-This provides structural integrity, not cryptographic generation identity. Persistence has three
-deliberate limitations:
-
-- an NPZ archive is not guaranteed to be byte-identical across equivalent writes;
-- staging and replacement protect each file independently, but replacing `data.npz` and
-  `meta.json` is not a pair-level transactional atomic operation;
-- The Artifact Schema has no checksum for the complete numeric payload, so structural validation cannot
-  detect different valid numeric values with identical keys, shapes, dtypes, counts, and other
-  validated semantic metadata.
+Versionless and non-v2 artifacts are rejected rather than migrated.
 
 ## Artifact cache identity
 
-The active Artifact Schema cache key hashes a canonical mapping containing separate
-`cache_contract = 2` and `artifact_schema_version = 2` fields, representation name, encoder
-implementation and version, config fingerprint, input source SHA-256, parser hint, and structured
-chain/model selection. An optional canonical model mapping participates when present. Learned
-runtime calls also add an optional execution identity containing only resolved/requested-equivalent
-precision. When execution is omitted, the canonical payload and existing explicit keys are
-unchanged.
+The v2 cache key combines:
 
-`parser_hint` is derived only from the normalized parser-relevant suffix. It is path-independent:
-`.PDB` and `.pdb` are equivalent, while `.pdb`, `.ent`, `.cif`, `.mmcif`, and their compressed
-forms remain conservatively distinct. An unknown terminal suffix is preserved in normalized form;
-no suffix uses the explicit value `<no-suffix>`.
+- `cache_contract=2` and `artifact_schema_version=2`;
+- representation and encoder identity;
+- configuration fingerprint;
+- input SHA-256 and parser-relevant suffix;
+- model and chain selection;
+- learned model identity and effective precision where applicable.
 
-Input source locator, Eris package version, confirmed input format, representation type,
-granularity, coordinate source, and the full parameter mapping are excluded. The source SHA
-identifies bytes, selection identifies the requested structure subset, `parser_hint` prevents
-cross-parser cache reuse, and `config_fingerprint` identifies canonical requested parameters.
-Learned checkpoint source locators and execution devices are also excluded; scientific model
-identity and precision participate instead.
+Source paths, checkpoint paths, checkpoint mirrors, execution device, package version, and
+timestamps are excluded. A hit for identical content at another source path refreshes only the
+current `input.source`. Learned hits preserve original generation execution and checkpoint-source
+provenance.
 
-On an explicit cache miss, `input.format` is the format confirmed by Gemmi; learned preprocessing
-returns its parser-confirmed format with the prepared backend input. On a hit, the cached confirmed
-format is preserved; it is never inferred from the suffix. Because the source locator is excluded
-from the key, a valid hit rebuilds only `input` with the current invocation's `source`, hash, model,
-and chain selection, then validates the refreshed artifact. The persisted cache entry is not
-rewritten merely to refresh the locator. Learned cache hits preserve the original model-source and
-execution-generation provenance.
-
-Artifact cache entries live under the `v2/<key>/` namespace and use canonical
-`data.npz`/`meta.json` files. Flat pre-v2 entries are not part of the current cache namespace.
-Stale, corrupt, or invalid v2 entries are cache misses; they are never migrated or automatically
-deleted.
-
-## Basic and strict validation
-
-`validate_schema_v2(meta, data, strict=False)` returns a normalized metadata copy. Basic
-validation enforces JSON structure, exact fields, identity compatibility, encoder/input/
-provenance/model structures, ordered output declarations, output/data equality, array safety,
-feature-key structure, and shapes/dtypes/counts mapping structure.
-
-With `strict=True`, it additionally verifies exact shapes and dtypes, feature-key cardinality,
-the config fingerprint against `representation_name` plus `parameters`, and generic role
-invariants:
-
-- `edge_index`: integer `(2, E)`;
-- `edge_distance`: `(E,)` and aligned with `edge_index` when both exist;
-- `node_features`: `(N, F)`;
-- `edge_features`: `(E, F)` and aligned with `edge_index` when both exist;
-- `graph_features`: one-dimensional;
-- `matrix`: two-dimensional and square;
-- `grid`: four-dimensional;
-- `node_embedding`: finite floating `(N, D)` with positive `N` and `D`;
-- `global_embedding`: finite floating `(D,)` with positive `D`;
-- `node_ids`: one-dimensional Unicode with non-empty values and unique learned-node identity;
-- `valid_mask`: one-dimensional Boolean aligned to `node_embedding`.
-
-A learned `node_embedding` requires aligned `node_ids`. The validator does not require explicit
-residue identifiers to be globally unique, does not import Registry, and does not perform
-scientific validation.
-
-## Learned embedding contract example
-
-A strict-valid mixed learned artifact can declare these arrays:
-
-| output | role | canonical shape/dtype |
-| --- | --- | --- |
-| `node_embedding` | `node_embedding` | `(N, D)`, floating |
-| `global_embedding` | `global_embedding` | `(D,)`, floating |
-| `node_ids` | `node_ids` | `(N,)`, Unicode |
-| `valid_mask` | `valid_mask` | `(N,)`, Boolean |
-
-It uses `representation_family = learned`, `representation_type = embedding`,
-`granularity = mixed`, `coordinate_source = model_specific`, a populated `model`, an empty
-`feature_keys` mapping, and `counts.n_nodes = N`.
-
-## Encode CLI boundary
-
-`eris encode` saves the strict-valid Eris artifact returned by the public API. Historical
-`--node-emb` and `--node-emb-key` options were removed because they mutated payload arrays after
-schema construction. Learned embeddings use the separate `eris embed` learned-representation path;
-they are not injected into explicit artifacts.
+Cache entries live under `v2/<key>/`. Invalid, corrupt, or older entries are misses; Eris does not
+migrate or delete them automatically.

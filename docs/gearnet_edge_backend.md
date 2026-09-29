@@ -1,408 +1,250 @@
-# Eris v0.1 — GearNet-Edge Backend Contract
+# GearNet-Edge backend
 
-This document is the authoritative M5.1–M5.6 contract for the required learned structural
-backend in Eris v0.1. It freezes the checkpoint identity, upstream architecture, deterministic
-inference preprocessing, CPU/fp32 execution, output semantics, licensing, provenance, and
-optional runtime boundary. The production backend completes preprocessing, verified model loading,
-inference, Artifact v2 provenance, persistence, and cache reuse through the generic learned runner.
+`gearnet_edge` is the only registered learned representation in Eris v0.1. It uses a native
+optional PyTorch implementation of GearNet-Edge with frozen preprocessing and the official
+Multiview Contrast checkpoint. The backend is inference-only.
 
-## Selected backend and checkpoint
+## Public configuration
 
-The official Eris v0.1 learned backend is the GearNet-family **GearNet-Edge** variant pretrained
-with the **Multiview Contrast** objective. The upstream model is configured as `GearNet` with edge
-message passing, and its official checkpoint is `mc_gearnet_edge.pth`.
+```python
+artifact = eris.embed(
+    "protein.pdb",
+    representation="gearnet_edge",
+    chain_id="A",
+    output_mode="both",
+    checkpoint_path="mc_gearnet_edge.pth",
+    device="cpu",
+    precision="fp32",
+)
+```
 
-The checkpoint identity is frozen as:
+| Parameter | Values | Default |
+| --- | --- | --- |
+| `output_mode` | `node`, `global`, `both` | `both` |
+| `device` | `auto` or `cpu` | `auto` |
+| `precision` | `fp32` | `fp32` |
+| `checkpoint_path` | local verified checkpoint path | none |
 
-| field | value |
+CUDA, FP16, and BF16 are rejected. Eris does not silently fall back or cast. The checkpoint is
+not bundled and is never downloaded automatically.
+
+The equivalent CLI is:
+
+```console
+eris embed protein.pdb --representation gearnet_edge --chain A --output-mode both \
+  --checkpoint mc_gearnet_edge.pth --device cpu --precision fp32 --out artifact_gearnet
+```
+
+## Checkpoint identity
+
+| Field | Value |
 | --- | --- |
-| Zenodo record | v2, DOI [`10.5281/zenodo.7723075`](https://doi.org/10.5281/zenodo.7723075) |
-| filename | `mc_gearnet_edge.pth` |
-| exact size | `80,700,937` bytes |
+| Zenodo record | [10.5281/zenodo.7723075, record v2](https://zenodo.org/records/7723075) |
+| Filename | `mc_gearnet_edge.pth` |
+| Size | 80,700,937 bytes |
 | MD5 | `c35402108f14e43f20feb475918f9c26` |
 | SHA-256 | `6dc11e2db6eff3c90f90672af227c647125adb7476de18a2bb860457bdb598ec` |
 
-The SHA-256 value above is the authoritative byte identity for the official Eris backend. The
-existing M4 checkpoint contract must verify it before loading the checkpoint.
+SHA-256 is the authoritative byte identity. The checkpoint is a `torch.save` ZIP archive
+containing an `OrderedDict` state dictionary with 138 tensors; it does not contain a serialized
+model class.
 
-The file is a modern `torch.save` ZIP archive containing an `OrderedDict` state dictionary with
-138 tensor entries. It does not serialize a model class. This agrees with the official
-[`script/pretrain.py`](https://github.com/DeepGraphLearning/GearNet/blob/main/script/pretrain.py),
-which saves `model.state_dict()`.
+The loader accepts only a `VerifiedCheckpoint`, deserializes with:
 
-Eris v0.1 must not bundle this approximately 80 MB checkpoint in the source repository, wheel,
-or sdist. Checkpoint acquisition remains an explicit caller responsibility; the runtime verifies
-and loads only a supplied local checkpoint.
-
-## Frozen architecture
-
-The architecture is frozen from the official
-[`mc_gearnet_edge.yaml`](https://github.com/DeepGraphLearning/GearNet/blob/main/config/pretrain/mc_gearnet_edge.yaml)
-configuration. Its native Eris implementation was verified against the frozen upstream GearNet
-reference semantics:
-
-| field | value |
-| --- | --- |
-| upstream reference model | `models.GearNet` |
-| implementation class | `GeometryAwareRelationalGraphNeuralNetwork` |
-| `input_dim` | `21` |
-| `hidden_dims` | `[512, 512, 512, 512, 512, 512]` |
-| `concat_hidden` | `true` |
-| `short_cut` | `true` |
-| `batch_norm` | `true` |
-| activation | default `relu` |
-| readout | `sum` |
-| `num_relation` | `7` |
-| `edge_input_dim` | `59` |
-| `num_angle_bin` | `8` |
-| resulting `output_dim` | `3072` |
-
-With `concat_hidden = true`, the six 512-dimensional hidden outputs concatenate to produce the
-3072-dimensional model output.
-
-## Frozen inference preprocessing
-
-Inference uses the upstream residue view and `AlphaCarbonNode`: there is one model node for each
-retained residue with a CA atom. The residue input feature dimension is 21.
-
-The graph construction is:
-
-- `SequentialEdge(max_distance=2)`;
-- `SpatialEdge(radius=10.0, min_distance=5, max_distance=None, max_num_neighbors=32)`;
-- `KNNEdge(k=10, min_distance=5, max_distance=None)`;
-- `edge_feature="gearnet"`.
-
-The relations are five sequential relations, one spatial relation, and one kNN relation, for a
-total of seven. The 59-dimensional GearNet edge feature is composed of:
-
-| component | dimensions |
-| --- | ---: |
-| source residue type | 20 |
-| target residue type | 20 |
-| relation | 7 |
-| sequential distance | 11 |
-| spatial distance | 1 |
-| **total** | **59** |
-
-The frozen graph semantics were derived from TorchDrug's
-[`geometry/graph.py`](https://github.com/DeepGraphLearning/torchdrug/blob/master/torchdrug/layers/geometry/graph.py)
-and edge/node layers in
-[`geometry/function.py`](https://github.com/DeepGraphLearning/torchdrug/blob/master/torchdrug/layers/geometry/function.py).
-
-### Pretraining-only augmentations
-
-The following Multiview Contrast transformations are pretraining augmentations and must not run
-during embedding inference:
-
-- `SubsequenceNode(max_length=50)`;
-- `SubspaceNode(entity_level="residue", min_neighbor=15, min_radius=15.0)`;
-- `IdentityNode`;
-- `RandomEdgeMask(mask_rate=0.15)`.
-
-Inference constructs the deterministic model graph above and runs the frozen GearNet-Edge model;
-it does not construct random contrastive views.
-
-## Production runtime flow
-
-The production backend is native Eris code and follows the frozen path:
-
-```text
-structure → existing Eris biological preprocessing → native tensor graph
-→ native GearNet-Edge model → unchanged upstream checkpoint → node/global embeddings
+```python
+torch.load(path, map_location="cpu", weights_only=True)
 ```
 
-The checkpoint remains upstream-compatible and is strict-loaded unchanged. This runtime supports
-inference only; it does not claim training support.
+It validates the state-dictionary root, keys, shapes, and tensor values before strict model
+loading. There is no unsafe fallback, key rewriting, prefix removal, partial load, or alternate
+architecture.
 
-## Canonical Eris outputs
+## Frozen model architecture
 
-For one input structure, the canonical learned outputs are:
+The implementation follows the official
+[`mc_gearnet_edge.yaml`](https://github.com/DeepGraphLearning/GearNet/blob/main/config/pretrain/mc_gearnet_edge.yaml):
 
-| Eris output | upstream value | shape |
-| --- | --- | --- |
-| `node_embedding` | `output["node_feature"]` | `(N, 3072)` |
-| `global_embedding` | `output["graph_feature"][0]` | `(3072,)` |
+| Field | Value |
+| --- | --- |
+| model | GearNet with edge message passing |
+| native class | `NativeGearNetEdgeModel` |
+| input dimension | 21 |
+| hidden dimensions | six layers of 512 |
+| concatenate hidden layers | true |
+| shortcut | true |
+| batch normalization | true |
+| activation | ReLU |
+| readout | sum |
+| relations | 7 |
+| edge input dimension | 59 |
+| angle bins | 8 |
+| output dimension | 3072 |
 
-`N` is the number of model nodes retained by the frozen preprocessing. The upstream `sum` readout
-produces `output["graph_feature"]` with shape `(1, 3072)`; Eris exposes its first row and must not
-add another pooling operation.
+The implementation lives in `src/eris/core/learned/backends/gearnet/native_model.py`. Six
+concatenated 512-dimensional hidden outputs produce the 3072-dimensional representation.
 
-Every node-embedding row must map exactly to its biological input entity. M5.1 freezes that
-scientific requirement. M5.3 implements concrete `node_ids` through an explicit biological-index
-carrier; the conservative v0.1 policy fails the whole representation rather than emitting a
-`valid_mask` for retained canonical residues without CA.
+## Frozen biological selection
 
-## Conservative v0.1 biological selection, transport and mapping
+Preprocessing is implemented in
+`src/eris/core/learned/backends/gearnet/preprocessing.py`.
 
-GearNet v0.1 uses one CA-based residue node for each accepted residue in the selected model and
-single chain. This is an initial conservative backend contract, not a universal biological rule.
-The accepted residue names are exactly the canonical 20:
+- One selected model and one chain are processed.
+- Accepted residues are ATOM-classified members of the canonical 20 amino acids.
+- MSE and all other modified or nonstandard residues are excluded without conversion.
+- Water, ligands, metals, ions, and other HETATM residues are excluded.
+- Each retained residue must have one finite CA coordinate.
+- CA alternate-location selection is `first`.
+- A missing or unusable CA fails the whole representation; no residue is silently omitted and no
+  `valid_mask` is emitted.
+
+The canonical accepted names are:
 
 ```text
 ALA ARG ASN ASP CYS GLN GLU GLY HIS ILE
 LEU LYS MET PHE PRO SER THR TRP TYR VAL
 ```
 
-Selection combines Gemmi's structural `Residue.het_flag == "A"` ATOM classification with
-`gemmi.find_tabulated_residue(name).is_amino_acid()` and the explicit canonical-20 set. This
-prevents a HETATM residue named `ALA` from passing by name alone. MSE and every other nonstandard
-or modified residue are excluded without chemical conversion; in particular, MSE is not converted
-to MET. Water, ligands, metals, ions, and all other HETATM residues are excluded before CA lookup,
-so a calcium ion whose atom name is `CA` cannot become a model node.
+Preprocessing records an ordered biological identity table before graph construction. Every native
+model node carries its original table index, and final `node_ids` are resolved through that
+carrier. IDs are not reconstructed from output length or compacted positions.
 
-Every accepted canonical residue must have a finite CA coordinate. A missing or unusable CA fails
-the complete representation: there is no silent omission, alternate-atom substitution,
-imputation, or `valid_mask=False`. GearNet v0.1 freezes CA alternate-location selection to
-`altloc = first`; other selector modes are not exposed by `GearNetEdgeConfig`.
+## Frozen graph construction
 
-Eris records an ordered biological identity table before native graph construction. Model-node records selected
-by the v0.1 policy carry an explicit, potentially sparse index into that table. Filtering removes
-records without reordering or compacting their biological indexes. The index is stored as the
-native graph data carries `eris_residue_index` through `AlphaCarbonNode` semantics, residue
-compaction, and frozen graph construction. Final `node_ids` are
-resolved through that carrier and the biological table; they are not reconstructed from output
-length or compacted residue position.
-
-The native runtime consumes the already selected records directly. Its chain and residue numbers
-remain source identifiers. Tests against canonical clean and supplemental spatial references
-demonstrate exact graph equivalence for node features, coordinates, edges, relations, and edge
-features.
-
-## Optional dependency boundary
-
-The Eris core remains independent of Torch and compiled PyG extensions and
-supports Python 3.11–3.12 (`>=3.11,<3.13`). The optional native GearNet-Edge backend supports
-the same Python range:
-
-| dependency | frozen requirement |
+| Component | Parameters |
 | --- | --- |
-| Python | `>=3.11,<3.13` |
-| PyTorch | `==2.11.0` |
+| node layer | alpha carbon |
+| sequential edges | `max_distance=2` |
+| spatial edges | `radius=10.0`, `min_distance=5`, no maximum distance, at most 32 neighbors |
+| kNN edges | `k=10`, `min_distance=5`, no maximum distance |
+| edge feature | `gearnet` |
 
-The CPU wheel label `torch==2.11.0+cpu` satisfies this contract.
+There are five sequential relations, one spatial relation, and one kNN relation.
 
-### CPU production installation
+| Edge feature component | Width |
+| --- | ---: |
+| source residue type | 20 |
+| target residue type | 20 |
+| relation | 7 |
+| sequential distance | 11 |
+| spatial distance | 1 |
+| total | 59 |
 
-CPU is the M5.2 installation baseline for Windows and Linux. Install the environment in this
-order:
+Random edge masking, subsequence selection, subspace selection, and other Multiview Contrast
+augmentations are pretraining-only and never run during embedding inference.
 
-1. Install PyTorch 2.11 from the official CPU index:
+## Inference and outputs
 
-   ```console
-   python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
-   ```
-
-2. Install Eris with its declarative optional dependency group:
-
-   ```console
-   python -m pip install "eris[gearnet]"
-   ```
-
-The separate CPU index is required to select the validated CPU wheel. The Eris extra declares
-only `torch==2.11.0`; it does not install a checkpoint or compiled extension.
-
-The extra does not install or download the checkpoint. Dependency availability also does not
-guarantee checkpoint presence, network availability, or successful GearNet inference.
-
-### Availability semantics
-
-The GearNet dependency probe is explicit and lazy. Core imports and learned Registry discovery do
-not import optional frameworks. When called directly, the probe checks the Python range,
-distribution metadata, public versions, top-level import presence, and an isolated import smoke.
-It does not instantiate GearNet, inspect a GPU, obtain a checkpoint, deliberately compile RSPMM,
-or run a forward pass.
-
-## Precision and accelerator boundary
-
-FP32 on CPU is the only v0.1 GearNet execution contract. The backend advertises only `cpu` and
-`fp32` and rejects CUDA, FP16, and BF16 rather than falling back or casting silently. It does not
-query CUDA availability. Future accelerator or reduced-precision work requires a separately
-validated contract.
-
-## Verified M5.4 model-loading foundation
-
-The internal native loader constructs the exact frozen GearNet-Edge architecture
-and loads the official `mc_gearnet_edge.pth` state dictionary strictly. The verified official
-checkpoint has 138 tensor entries, matches the constructed model without missing, unexpected, or
-shape-mismatched keys, and produces the expected
-`GeometryAwareRelationalGraphNeuralNetwork` with `output_dim = 3072`.
-
-Loading consumes M4's `VerifiedCheckpoint`; it does not accept an arbitrary unverified path or
-rehash the file. Checkpoint paths are opaque, so the extensionless canonical `CheckpointCache`
-path named `checkpoint` is supported. Deserialization uses only:
-
-```python
-torch.load(path, map_location="cpu", weights_only=True)
-```
-
-The state-dictionary root, keys, and tensor values are validated before
-`model.load_state_dict(..., strict=True)`. There is no unsafe deserialization fallback, key
-rewriting, prefix removal, partial load, or alternate architecture fallback.
-
-The current operational contract is CPU/fp32 only. Parameters and buffers are checked after
-loading, and the model is placed in `eval()` mode so BatchNorm and other training-sensitive
-modules use inference behavior. Parameters retain their normal `requires_grad` values.
-
-### Checkpoint reference
-
-Eris uses the official `mc_gearnet_edge.pth` checkpoint from
-[Zenodo record 10.5281/zenodo.7723075](https://doi.org/10.5281/zenodo.7723075). The verified
-checkpoint SHA-256 is
-`6dc11e2db6eff3c90f90672af227c647125adb7476de18a2bb860457bdb598ec`. Eris provides the native
-PyTorch runtime adapter; it did not train or create the checkpoint, and TorchDrug is not a
-production runtime dependency.
-
-## Verified M5.4 deterministic inference
-
-The internal backend delegates biological preprocessing and checkpoint loading to the M5.3 and
-M5.4 foundations. Immediately before inference it revalidates CPU/fp32 execution, eval mode,
-model tensors, graph dimensions, relation count, carrier alignment and uniqueness, and biological
-node-ID alignment. The exact forward is:
+The backend validates CPU/fp32 execution, model state, graph dimensions, relation count, identity
+carrier, and node mapping, then runs:
 
 ```python
 with torch.inference_mode():
     output = model(prepared.graph)
 ```
 
-The prepared integer node features remain unchanged. Eris validates the upstream tensors as
-finite CPU `torch.float32` arrays with shapes `(N, 3072)` and `(1, 3072)`. It converts them directly
-with `.cpu().numpy()` and exposes `graph_feature[0]` as the global embedding. No Eris pooling,
-scientific cast, `detach()`, autocast, manual seed, or output-mode-dependent forward is applied.
-The result is then checked by the authoritative M4 `StructuralEmbeddingResult` validator;
-`valid_mask` is `None` for GearNet v0.1.
+No additional pooling, scientific cast, autocast, manual seed, or output-mode-specific forward is
+applied.
 
-### Determinism evidence
+| Output mode | Arrays | Granularity |
+| --- | --- | --- |
+| `node` | `node_embedding (N,3072)` and `node_ids (N,)` | residue |
+| `global` | `global_embedding (3072,)` | structure |
+| `both` | all three arrays in canonical order | mixed |
 
-The native runtime reproduces frozen upstream reference arrays within the GMR.3 golden gate
-(`rtol=1e-6`, `atol=2e-6`) and is deterministic across repeated CPU/fp32 forwards. This is
-evidence for the frozen CPU/fp32 stack, not a universal determinism promise for future platforms,
-accelerators, or precisions.
+`global_embedding` is `output["graph_feature"][0]` from the model's sum readout.
+`node_embedding` is finite `float32` and maps row-for-row to unique biological `node_ids`.
+`feature_keys` is empty because Eris does not invent names for embedding dimensions.
 
-## Artifact identity and provenance
+## Runtime dependencies
 
-The frozen learned representation and Eris adapter identity is:
+The supported v0.1 contract is:
 
-| field | value |
+| Dependency | Requirement |
+| --- | --- |
+| Python | `>=3.11,<3.13` |
+| PyTorch | `==2.11.0` |
+| device/precision | CPU/fp32 |
+
+For a CPU source checkout, install PyTorch from its CPU index, then Eris:
+
+```console
+python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install ".[gearnet]"
+```
+
+The `gearnet` extra declares PyTorch but no checkpoint or compiled GearNet dependency. TorchDrug is
+not a production dependency.
+
+Dependency probing is explicit and lazy. `import eris` and learned Registry discovery do not
+import Torch. The probe checks the Python range, distribution and public versions, import
+availability, and an isolated import smoke; it does not resolve a checkpoint or run inference.
+
+## Artifact identity and cache behavior
+
+| Field | Value |
 | --- | --- |
 | `representation_name` | `gearnet_edge` |
-| `backend_id` | `gearnet-edge` |
+| backend ID | `gearnet-edge` |
 | implementation | `eris.core.learned.backends.gearnet.backend.GearNetEdgeBackend` |
-| adapter/encoder version | `2` |
+| encoder/adapter version | `2` |
+| model architecture | `GearNet-Edge` |
 
-Adapter version `2` versions the native Eris GearNet contract and prevents reuse of pre-native
-artifacts. It is independent of the Eris package version, Artifact Schema
-version, upstream source revision, and checkpoint
-revision. The Artifact Schema `model` block records architecture `GearNet-Edge` and the official
-checkpoint identifier, SHA-256, Zenodo record revision, and source. Local checkpoint paths,
-checkpoint-cache paths, and temporary transport paths are never model identity.
+Artifact `parameters` records output mode and the frozen biological-selection and graph settings.
+`model` records checkpoint identifier, revision, source, and SHA-256. The input block records
+structure content hash, parser-confirmed format, chain, and model. Generation provenance records
+requested and resolved execution.
 
-### Scientific preprocessing parameters
+Learned cache identity includes representation and adapter identity, preprocessing parameters,
+input content and selection, parser hint, model/checkpoint identity, output mode, and effective
+precision. It excludes structure and checkpoint paths, mirrors, device locator, and temporary
+transport paths.
 
-Artifact `parameters` records the frozen canonical-20 selection, CA coordinate source,
-nonstandard/MSE/hetero/water/ligand/metal/ion exclusions, fail-fast missing-CA behavior, and
-effective `altloc = first` policy. It also records the AlphaCarbon node layer; sequential,
-spatial, and kNN edge settings; GearNet edge features; seven relations; and 21/59 node/edge input
-widths. The selected chain and model index remain in the canonical `input` block rather than being
-duplicated in `parameters`.
+A valid cache hit refreshes only `input.source`. It preserves arrays, biological mappings,
+generation execution, and checkpoint-source provenance and does not probe or instantiate the
+backend.
 
-The Artifact input source is the caller's current structure locator and its SHA-256 is the
-scientific content identity.
+## Frozen behavior
 
-### Execution and runtime provenance
+Changes to any of the following are scientific contract changes:
 
-Generation provenance records requested and resolved execution through the generic M4 mechanism.
-For the frozen backend both resolved device and precision are `cpu` and `fp32`. Effective precision
-participates in learned cache identity; device does not.
+- checkpoint identity or strict loading;
+- model architecture or weights;
+- accepted residues, CA selection, or missing-CA failure policy;
+- graph topology, relations, node features, or edge features;
+- CPU/fp32 inference and output extraction;
+- biological node mapping;
+- artifact and cache identity.
 
-The Artifact Schema and M4 do not define an authoritative dependency-version block. Python and Torch remain
-documented operational compatibility information rather than being inserted into model identity or
-a new schema field. Extending runtime environment capture requires a later general convention
-rather than a GearNet-only schema.
+Do not change these during routine refactoring or release hardening.
 
-### Cache identity and reuse
+## Validation and release certification
 
-Learned artifact cache identity includes representation name, adapter implementation and version,
-canonical preprocessing parameters, input content and selection, parser hint, path-independent
-model/checkpoint identity, and effective precision. It excludes structure and checkpoint locators,
-checkpoint source mirrors, device locator, temporary PDB paths, and Torch extension cache paths.
+Tracked tests cover dependency isolation, frozen preprocessing, native graph construction,
+checkpoint loading, model behavior, learned artifacts, cache reuse, and stored reference data
+under `tests/data/`. The native runtime has reproduced frozen reference arrays within
+`rtol=1e-6` and `atol=2e-6` in the environment where those references were generated.
 
-On a valid cache hit, the runner refreshes only `input.source` to the current structure locator.
-It preserves the original generation execution provenance, model/checkpoint source provenance,
-arrays, mappings, and scientific metadata and does not probe or instantiate the backend.
+Release hardening must still certify:
 
-### Learned output metadata
+- the official checkpoint hash and strict load in each supported release environment;
+- frozen graph and embedding references on the final supported Python/PyTorch matrix;
+- repeated CPU/fp32 determinism in that matrix;
+- clean wheel installation and offline inference.
 
-The learned builder emits `node_embedding` plus `node_ids` for node mode, `global_embedding` for
-global mode, and all three in canonical order for both mode. Shapes are `(N, 3072)`, `(3072,)`,
-and `(N,)`; `feature_keys` is empty because embedding dimensions do not have 3072 invented feature
-names. `valid_mask` is absent for the frozen GearNet policy. Granularity is respectively
-`residue`, `structure`, or `mixed`, while coordinate source is always `model_specific`.
+Passing core tests or skipping checkpoint-dependent tests is not release-environment
+certification.
 
-The production learned Registry contains `gearnet_edge` exactly once, with backend ID
-`gearnet-edge`, adapter version `2`, and `GearNetEdgeConfig`. Registration stores only static
-metadata and lazy callables: importing Eris or inspecting the Registry does not import Torch.
-Availability reports an actionable optional
-dependency error before factory construction or checkpoint access in a core-only environment.
+## License and citation
 
-## Production integration evidence
+- GearNet source: [MIT](https://github.com/DeepGraphLearning/GearNet/blob/main/LICENSE)
+- TorchDrug source used as a semantic reference:
+  [Apache-2.0](https://github.com/DeepGraphLearning/torchdrug/blob/master/LICENSE)
+- checkpoint record: [CC BY 4.0](https://zenodo.org/records/7723075)
 
-The production smoke uses the production Registry and generic `StructuralEmbedderRunner` from a
-real `StructureInput`. With the official verified checkpoint and the frozen CPU/fp32 stack, the
-cache-miss path covers availability, backend construction, execution resolution, checkpoint
-verification/cache, Gemmi biological selection, native graph construction, strict model loading,
-inference, Artifact Schema assembly, validation, persistence, and artifact-cache write.
+Scientific reference: Zhang et al., “Protein Representation Learning by Geometric Structure
+Pretraining,” ICLR 2023, [arXiv:2203.06125](https://arxiv.org/abs/2203.06125).
 
-For output mode `both`, the validated artifact contains finite float32 `node_embedding` with shape
-`(N, 3072)`, finite float32 `global_embedding` with shape `(3072,)`, and unique Unicode `node_ids`
-with shape `(N,)`. Node and global modes preserve their frozen residue and structure granularities
-without running a different scientific forward. Save/load preserves arrays, dtypes, shapes,
-counts, parameters, provenance, model identity, and empty `feature_keys`.
-
-A second request with identical scientific content and precision but a different source locator
-hits the artifact cache before availability, factory construction, execution resolution,
-checkpoint resolution, preprocessing, model loading, or inference. Only `input.source` is
-refreshed. Separate empty artifact and checkpoint caches produce bitwise-equal node embeddings,
-global embeddings, and node IDs, demonstrating independent generation determinism rather than
-cache reuse. A retained canonical residue without CA fails with an actionable preprocessing error
-before model load/forward and leaves no artifact-cache entry.
-
-The production smoke is offline and reads the official checkpoint from an explicit local path
-(conventionally `ERIS_GEARNET_CHECKPOINT`); normal tests do not require the checkpoint or network.
-
-## Licensing
-
-The code and checkpoint licenses are separate:
-
-- GearNet source code: [MIT](https://github.com/DeepGraphLearning/GearNet/blob/main/LICENSE);
-- TorchDrug source code:
-  [Apache-2.0](https://github.com/DeepGraphLearning/torchdrug/blob/master/LICENSE);
-- checkpoint and Zenodo record:
-  [CC BY 4.0](https://zenodo.org/api/records/7723075).
-
-The checkpoint license is taken from its Zenodo record metadata; it is not inferred from either
-source-code license. Any later redistribution must preserve the applicable attribution and
-license obligations.
-
-## Citation and upstream provenance
-
-The scientific project and paper are:
-
-> Zhang, Zuobai; Xu, Minghao; Jamasb, Arian; Chenthamarakshan, Vijil; Lozano,
-> Aurelie; Das, Payel; Tang, Jian. “Protein Representation Learning by Geometric
-> Structure Pretraining.” International Conference on Learning Representations, 2023.
-
-Primary provenance:
-
-- [GearNet official repository](https://github.com/DeepGraphLearning/GearNet);
-- [paper, arXiv:2203.06125](https://arxiv.org/abs/2203.06125);
-- [official Zenodo checkpoint record v2](https://zenodo.org/records/7723075);
-- [TorchDrug official repository](https://github.com/DeepGraphLearning/torchdrug).
-
-The upstream source revisions inspected while freezing this contract were:
-
-- GearNet: `28bf75f5dfb6cd7b9bf4394d153a87f69bddf1a6`;
-- TorchDrug: `6066fbd82360abb5f270cba1eca560af01b8cc90`.
-
-These revisions are reproducibility references for the inspected source. They are not asserted to
-be the historical commits used to train the checkpoint. The checkpoint's scientific identity is
-instead frozen by its official record, filename, architecture/configuration contract, and hashes.
+The inspected upstream revisions were GearNet
+`28bf75f5dfb6cd7b9bf4394d153a87f69bddf1a6` and TorchDrug
+`6066fbd82360abb5f270cba1eca560af01b8cc90`. These identify the source used to freeze semantics,
+not the commits used to train the checkpoint.

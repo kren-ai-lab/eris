@@ -1,372 +1,183 @@
-# Eris v0.1 feature-complete handoff
+# Eris v0.1 developer handoff
 
-## 1. Handoff snapshot
+## Start here
 
-- Development branch: `dev`.
-- Feature implementation baseline when WU4 documentation began:
-  `1c0c36b4d94ed69e28b551882495591c43128601`.
-- Project name: Eris.
-- Current distribution metadata name: `eris-lib`.
-- Python import package and CLI command: `eris`.
-- Version declared in `pyproject.toml`: `0.1.0`.
-- Python range declared in `pyproject.toml`: `>=3.11,<3.13`.
+Read these files in order:
 
-This SHA is the pre-WU4 implementation baseline, not the final handoff commit. The commit produced
-after this documentation work is reviewed and committed becomes the Fernández feature-complete
-candidate.
+1. [`README.md`](../README.md) for installation and public usage.
+2. [`architecture.md`](architecture.md) for package layout, data flow, and extension points.
+3. [`representation_defaults.md`](representation_defaults.md) for explicit scientific defaults.
+4. [`artifact_schema.md`](artifact_schema.md) for persistence and identity contracts.
+5. [`external_residue_features.md`](external_residue_features.md) for the generic residue-feature
+   producer contract.
+6. [`gearnet_edge_backend.md`](gearnet_edge_backend.md) for frozen learned behavior and
+   release-environment certification.
+7. [`DEVELOPMENT.md`](../DEVELOPMENT.md) for setup and validation commands.
 
-Release policy is not fully reconciled. Existing policy documents refer to distribution name
-`eris` and broader Python ranges, while current packaging metadata uses `eris-lib` and
-`>=3.11,<3.13`. WU4 records that disagreement without choosing a final release policy. Diego
-Álvarez owns its resolution during release hardening.
+The main implementation paths are:
 
-## 2. What Eris does
+- `src/eris/api.py` and `src/eris/discovery.py`: public Python API;
+- `src/eris/core/config.py` and `src/eris/core/registry.py`: explicit configs and registration;
+- `src/eris/core/io.py`: structure selection and extraction;
+- `src/eris/features/` and `src/eris/encoders/`: explicit features and representations;
+- `src/eris/core/artifacts.py`, `artifact_schema_v2.py`, and `cache.py`: persistence and identity;
+- `src/eris/core/learned/`: learned runner, checkpoints, artifacts, and GearNet backend;
+- `src/eris/pipelines/`, `datasets/`, and `export/`: batch, pack, dataset, Torch, and PyG workflows;
+- `src/eris/cli/`: CLI adapters.
 
-Eris turns protein three-dimensional structures into deterministic numerical representations for
-machine learning. Version 0.1 accepts PDB and mmCIF inputs, provides ten explicit atom/residue
-representations, persists them as strict Schema v2 artifacts, and supplies batch, cache, dataset,
-Torch, and PyG workflows. A separate native GearNet-Edge backend produces learned residue and
-structure embeddings from a verified external checkpoint.
+## State received
 
-Eris does not generate sequences, run arbitrary external embedding models, infer missing
-scientific identity, or download model checkpoints automatically.
+- Branch: `dev`.
+- Version: `0.1.0`.
+- Distribution metadata name: `eris-lib`.
+- Import package and CLI command: `eris`.
+- Python range in `pyproject.toml`: `>=3.11,<3.13`.
+- Artifact persistence: `StructureArtifact` Schema v2.
+- Explicit representations: ten registered encoders.
+- Learned representations: one registered `gearnet_edge` backend.
+- Checkpoints and external feature files are caller-supplied and never downloaded.
 
-## 3. Architecture
+The scientific implementation is feature-complete for the v0.1 candidate. Publication and
+supported-environment certification are not complete.
 
-The feature-bearing explicit residue path is:
+## Implemented surface
 
-```text
-structure input
-    -> parser-confirmed model and chain selection
-    -> biological residue selection
-    -> residue position
-    -> FeatureMode / FeatureSpec registry
-    -> node_attr + node_attr_keys
-    -> explicit feature-bearing representation
-    -> StructureArtifact
-    -> cache / batch / pack / dataset / export
+### Explicit representations
+
+| Name | Type | Granularity |
+| --- | --- | --- |
+| `atom_point_cloud` | cloud | atom |
+| `residue_point_cloud` | cloud | residue |
+| `atom_knn_graph` | graph | atom |
+| `residue_knn_graph` | graph | residue |
+| `residue_contact_graph` | graph | residue |
+| `residue_distogram` | matrix | residue |
+| `residue_distogram_bins` | matrix | residue |
+| `residue_contact_map` | matrix | residue |
+| `residue_contact_map_bins` | matrix | residue |
+| `residue_voxel_grid` | grid | residue |
+
+Residue coordinates support CA, residue-atom mean, and center of mass with explicit missing-center
+handling. The feature registry includes amino-acid identity, fixed physicochemical values,
+AAIndex1, raw B-factor, explicitly sourced pLDDT, flags, and generic external matrices. Exact
+defaults and dtypes are in [`representation_defaults.md`](representation_defaults.md).
+
+### Persistence and workflows
+
+- Every encoder returns a strict-valid Schema v2 artifact.
+- Cache identity separates scientific content from invocation locators.
+- External residue NPZs align by exact canonical residue identity and use a content hash.
+- `batch_encode()` supports shallow `params_by_id` overrides; the CLI supports global parameters.
+- Batch resume checks config, input, representation, and producer identity.
+- Packing writes a metadata index consumed without rescanning the artifact root.
+- Family-specific collates reject incompatible samples rather than repairing them.
+- Torch export supports all explicit families and learned embeddings.
+- PyG export accepts only explicit graph artifacts with public topology.
+
+### GearNet-Edge
+
+The backend implements frozen canonical-20 CA selection, native graph construction, strict
+official-checkpoint loading, CPU/fp32 inference, biological node IDs, node/global/both outputs,
+Schema v2 provenance, persistence, and cache reuse.
+
+Frozen scientific behavior is specified in
+[`gearnet_edge_backend.md`](gearnet_edge_backend.md). Do not change selection, topology,
+checkpoint identity, model architecture, inference, mapping, or cache identity during release
+hardening.
+
+## Validation at handoff
+
+Validation was run on 2026-09-29 in the local `eris` Conda environment:
+
+- Python `3.12.14`;
+- tracked suite: `374 passed, 4 skipped`, exit 0;
+- collected tracked tests: `378`;
+- Ruff check: passed;
+- Ruff format check: `150 files already formatted`;
+- `pip check`: no broken requirements;
+- lazy-import boundary: `3 passed`;
+- `git diff --check`: passed, with expected LF-to-CRLF working-copy warnings only.
+
+The four skips require `ERIS_GEARNET_CHECKPOINT`, which was not configured. PyTorch was installed;
+`torch_geometric` was not installed. These results do not certify official-checkpoint inference or
+native PyG in a release environment.
+
+Reproduce the tracked suite in PowerShell:
+
+```powershell
+$pt = "$env:USERPROFILE\eris-pytest-temp"
+Remove-Item $pt -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path $pt | Out-Null
+
+python -m pytest -q --basetemp "$pt\base" -p no:cacheprovider
+python -m ruff check .
+python -m ruff format --check .
+python -m pip check
+git diff --check
 ```
 
-The main implementation layers are:
-
-- `src/eris/core/io.py`: structure loading, chain/model selection, and atom/residue extraction;
-- `src/eris/core/config.py` and `src/eris/core/registry.py`: canonical configuration and explicit
-  representation registration;
-- `src/eris/features/`: deterministic node, edge, grid, and graph-statistic features;
-- `src/eris/encoders/`: explicit representation construction;
-- `src/eris/core/artifacts.py`, `artifact_schema_v2.py`, and `cache.py`: validation, persistence,
-  provenance, and reuse;
-- `src/eris/pipelines/`, `datasets/`, and `export/`: batch, pack, dataset, Torch, and PyG flows;
-- `src/eris/core/learned/`: lazy learned-backend registry and GearNet-Edge execution.
-
-Typed canonical configuration is the authority for defaults, validation, serialization, and
-fingerprints. Learned GearNet execution is separate from the explicit feature registry.
-Position-only matrix representations branch after residue positioning, while the voxel grid uses
-the registered grid-channel builder; both share the same Artifact and downstream workflow layers.
-
-## 4. Implemented explicit representations
-
-| Public name | Type | Granularity | Purpose |
-| --- | --- | --- | --- |
-| `atom_point_cloud` | cloud | atom | Atomic coordinates and node features |
-| `residue_point_cloud` | cloud | residue | Residue coordinates and node features |
-| `atom_knn_graph` | graph | atom | Atomic k-nearest-neighbor graph |
-| `residue_knn_graph` | graph | residue | Residue k-nearest-neighbor graph |
-| `residue_contact_graph` | graph | residue | Residue graph from a distance cutoff |
-| `residue_distogram` | matrix | residue | Pairwise residue distances |
-| `residue_distogram_bins` | matrix | residue | Discretized pairwise distances |
-| `residue_contact_map` | matrix | residue | Binary residue contact map |
-| `residue_contact_map_bins` | matrix | residue | Distance-binned contact map |
-| `residue_voxel_grid` | grid | residue | Multi-channel three-dimensional grid |
-
-The Registry key, encoder name, artifact representation name, CLI identifier, and documentation
-identifier are the same. Canonical defaults are listed in
-[representation_defaults.md](representation_defaults.md).
-
-## 5. Residue coordinate policies
-
-Residue representations accept `residue_center` values:
-
-- `ca`: the selected alpha-carbon coordinate;
-- `mean`: the arithmetic mean of selected residue-atom coordinates;
-- `com`: the atomic-mass-weighted center of mass of selected residue atoms.
-
-The default is `ca`. The corresponding artifact `coordinate_source` values are `ca`,
-`residue_mean`, and `residue_com`.
-
-Version 0.1 selects standard amino-acid residues, uses the frozen `altloc="first"` policy, and
-operates on one selected chain and model. If a requested center cannot be constructed,
-`missing_residue_center="skip"` omits that residue and records it in `omitted_residue_ids`; the
-explicit `"error"` policy fails with the affected residue IDs. Eris does not fabricate a center.
-
-## 6. Residue features
-
-The residue feature registry currently provides:
-
-- `onehot`: canonical amino-acid identity;
-- `aa_index`: the canonical numeric amino-acid index;
-- `physchem`: the fixed Eris physicochemical descriptor table;
-- `aaindex`: selected real AAIndex1 records;
-- `plddt_ca`: explicitly sourced CA pLDDT;
-- `bfactor_ca`: raw CA B-factor;
-- `flags`: glycine, proline, unknown-residue, and CA-presence flags;
-- `external`: a validated source-independent numerical matrix.
-
-Features that accept parameters validate and canonicalize them at configuration construction.
-Parameterless features reject unexpected parameters. Numerical feature blocks are emitted as
-`float32` at the node-feature boundary.
-
-Physical block order follows canonical `FeatureSpec.order`, not request-list order. Internal
-column order follows the selected feature's canonical contract. `node_attr_keys` records the exact
-resulting column semantics.
-
-## 7. AAIndex
-
-The public `aaindex` token uses AAIndex1 records from the installed `aaindex` package without
-representation-time network access.
-
-Users supply one or more explicit accession IDs. IDs are canonicalized, duplicates and unknown
-accessions fail, and requested accession order defines the block's column order. Public keys are
-`aaindex.<ACCESSION>`.
-
-The canonical parameters include:
-
-- `ids`;
-- `normalization="none"`;
-- `unknown`: `nan`, `zero`, or `error` for unknown residue `X`;
-- `missing`: `nan`, `zero`, or `error` for unavailable/non-finite record values;
-- provider name, provider version, and `AAIndex1` source identity.
-
-Provider identity/version participate in serialized scientific configuration and therefore in
-configuration/cache identity. No normalization or scientific value replacement is implicit.
-
-## 8. B-factor and pLDDT
-
-`bfactor_ca` is the raw CA `b_iso` value. It is not clipped, divided by 100, or interpreted from
-its numeric range.
-
-`plddt_source="none"` is the generic default and produces no inferred pLDDT. Set
-`plddt_source="bfactor"` only when the input B-factor field is explicitly known to carry pLDDT.
-That interpretation is serialized in canonical configuration. Finite interpreted values outside
-0–100 fail instead of clipping.
-
-The `plddt_ca` feature defaults to `normalization="none"`, preserving the 0–100 scale. The
-explicit `normalization="unit_interval"` option divides by 100. Missing-value behavior follows the
-feature-builder policy: unavailable extracted pLDDT remains `NaN`, normal explicit encoders fill a
-requested `plddt_ca` feature with the builder's default zero policy, and direct builder use may
-request `nan`. Generic residue and voxel defaults do not request pLDDT.
-
-## 9. External residue features
-
-The `external` feature consumes a generic `.npz` archive. Required fields are `values (N,D)`,
-`residue_ids (N,)`, `source_name`, `chain_id`, and `model_index`; `feature_keys`, `source_version`,
-and `source_model` are optional. Values become contiguous `float32` and object/pickle payloads are
-forbidden.
-
-Residue IDs use `<chain>:<number>:<insertion>:<resname>`. Rows may be shuffled, but alignment is
-only by exact canonical identity. Missing, extra, malformed, or duplicate IDs and chain/model
-mismatches fail. Eris does not align sequences, pad, truncate, or match by position.
-
-Scientific identity uses a canonical SHA-256 over values and scientific metadata. It includes
-source metadata, keys, dimensions, chain/model, and alignment policy. The invocation path is
-excluded from scientific/cache identity and retained in the artifact's
-`extensions.org.eris.external_features` provenance. The source is revalidated during resolution,
-encoding, and cache reuse so mutation after resolution fails.
-
-See [external_residue_features.md](external_residue_features.md) for the complete schema and API
-examples. There is no direct Sylphy, Roxy, Ruddy, or model-library integration.
-
-## 10. Hybrid representations
-
-Built-in and external residue blocks use the same Registry pipeline. A request such as
-`onehot + physchem + aaindex + bfactor_ca + external` produces one contiguous:
-
-```text
-node_attr (N, F)
-```
-
-and one exact ordered `node_attr_keys` list. It does not create a separate external embedding
-field or second hybrid encoder. External widths such as 512 and 1024 were validated without a
-fixed feature-width limit, padding, or truncation.
-
-## 11. Edge and graph descriptors
-
-The default explicit graph edge block is `dist + rbf + seq + local`:
-
-- raw edge distance;
-- 16 radial-basis-function channels over the configured distance range;
-- biological sequence separation;
-- a deterministic local-sequence flag.
-
-Explicit graph `graph_attr` is a stable vector of deterministic graph statistics: node, edge, and
-self-loop counts; simple-undirected density; degree summaries; edge-distance summaries; and
-isolated-node fraction. Keys are stored in `graph_attr_keys`.
-
-`graph_attr` is not a learned graph embedding. GearNet-Edge `global_embedding` is a learned
-structure-level representation.
-
-## 12. GearNet-Edge
-
-`gearnet_edge` is the single registered v0.1 learned backend. It uses native Eris PyTorch code,
-frozen preprocessing, the official Multiview Contrast checkpoint identity, CPU/fp32 execution,
-and lazy optional dependencies. The checkpoint is neither bundled nor downloaded automatically.
-
-Supported output modes are:
-
-- `node`: `(N, 3072)` residue embeddings plus `node_ids`;
-- `global`: one `(3072,)` structure embedding;
-- `both`: both outputs.
-
-Frozen graph and embedding references remain in `tests/data/`. Final certification against the
-supported release environment and checkpoint remains Álvarez release-validation work; WU1–WU4 do
-not alter GearNet scientific behavior.
-
-## 13. Artifact, provenance, and cache
-
-Every finalized representation uses `StructureArtifact` Schema v2:
-
-```text
-artifact/
-|-- meta.json
-`-- data.npz
-```
-
-Metadata records representation identity, encoder/model identity, selected input, source SHA-256,
-canonical scientific parameters, configuration fingerprint, output declarations, exact feature
-keys, shapes, dtypes, counts, and optional namespaced extensions.
-
-The active explicit cache identity combines Schema/cache contract versions, representation and
-encoder implementation/version, configuration fingerprint, input bytes, parser hint, and
-chain/model selection. External scientific parameters contain the external content hash and
-metadata but not the invocation path. Mutable external resources are verified before reuse.
-
-After an artifact is finalized and saved, its arrays and metadata are self-contained. Loading,
-packing, dataset access, and Torch/PyG export do not require the original structure or external
-`.npz` file.
-
-## 14. Batch, pack, and dataset
-
-`eris.batch_encode()` processes rows with canonical manifest fields:
-
-```text
-id
-path
-chain
-model
-```
-
-The Python API's `params_by_id` mapping supplies shallow top-level overrides for individual row
-IDs. A row value replaces the corresponding global `params` value; nested dictionaries are not
-recursively merged. Every row configuration is resolved and validated before batch execution
-starts.
-
-Resume identity is derived from the same resolved configuration passed to `eris.encode`. It checks
-scientific parameters, input SHA-256, representation identity, and actual registered encoder
-implementation/version, so an artifact from a stale encoder cannot be resumed.
-
-The CLI currently accepts global `--params` only. `eris.pack()` validates artifacts and creates a
-metadata index. `ErisFolderDataset` consumes that index without rescanning the artifact tree, and
-family-specific collates reject incompatible widths or layouts instead of padding or truncating.
-
-## 15. Torch and PyG
-
-`eris.to_torch()` supports graph, cloud, matrix, grid, and learned artifacts. `eris.to_pyg()`
-supports graph artifacts with public `edge_index` topology and maps `node_attr` to `x`; it never
-infers topology or reconstructs GearNet internals.
-
-High-dimensional hybrid node features and the PyG adapter contract were validated during WU3.
-Native `torch_geometric` is not installed in the current handoff environment, so native PyG
-runtime certification remains Álvarez release-validation scope.
-
-## 16. Validation evidence
-
-WU4 validation was run in the available `eris` Conda environment on Python 3.12. The latest
-results are:
-
-```text
-focused/regression evidence from WU3: 369 passed
-full suite: 434 passed, 5 skipped
-Ruff: passed
-format check (tracked source and WU4 documentation): passed
-pip check: passed
-lazy import check: passed
-git diff --check: passed
-```
-
-The full working-tree suite includes the intentionally untracked PDB/mmCIF equivalence test. The
-tracked repository contains 18 test modules; `tests/test_residue_features.py` permanently protects
-WU1 semantics. Some focused WU2/WU3 validation cases were intentionally temporary and are not
-claimed as tracked tests. The recorded temporary coverage included external alignment/failures,
-source mutation, path relocation, high-dimensional hybrid flow, per-row batch parameters, resume
-identity, artifact independence, and adapter behavior.
-
-Five skips reflect unavailable optional runtime/checkpoint conditions, not observed scientific
-test failures. A whole-worktree format scan also sees untracked task-specification documents that
-are deliberately excluded from this handoff commit; their code-fence formatting is not part of the
-candidate validation.
-
-## 17. Known limitations
-
-- A generic pooled residue representation is not implemented; this remains a non-blocking P1.
-- Native `torch_geometric` runtime certification is pending.
-- Final GearNet supported-environment/checkpoint frozen-reference certification is pending.
-- Row-specific batch overrides are available only through the Python API.
-- External features require exact residue identities; there is no automatic sequence alignment.
-- There is no direct Sylphy, Roxy, or Ruddy integration.
+Run `tests/test_packaging_boundaries.py` separately when checking optional-import isolation.
+
+## Known environment and repository caveats
+
+- `.github/workflows/ci.yml` references test modules absent from this commit:
+  `tests/test_m8_release_boundaries.py`, `tests/test_gearnet_dependencies.py`,
+  `tests/test_gearnet_native_graph.py`, `tests/test_gearnet_native_model.py`, and
+  `tests/test_gearnet_inference.py`. The workflow must be repaired before it can serve as a release
+  gate.
+- The local validation environment lacks `torch_geometric`.
+- The official GearNet checkpoint was not configured for this final editorial run.
+- Row-specific batch overrides are Python-only.
+- External features require exact residue identity; no sequence alignment is implemented.
+- A generic pooled residue representation is not implemented.
 - No generic GNN, Graph2Vec, GIN, GAT, or GraphSAGE family is included.
-- Model checkpoints and external feature payloads are never downloaded automatically.
-- Release distribution naming and the final Python support matrix are unresolved.
+- Distribution name, final public metadata, citation file, and release notes remain release work.
 
-## 18. Álvarez release and hardening scope
+The untracked `tests/test_pdb_cif_equivalence.py` named in the handoff instructions was not present
+in this worktree. No untracked file is part of the handoff candidate.
 
-The following work is intentionally outside Fernández's scientific implementation closure:
+## Release-hardening scope
 
-- reconcile the public distribution name (`eris-lib` versus policy references to `eris`);
-- reconcile and certify the final Python support matrix;
-- repair and run the complete CI matrix;
-- freeze dependency policy and the final public API;
-- build and validate wheel/sdist artifacts;
-- validate a clean install from the built wheel;
-- certify native PyG in the release environment;
-- certify GearNet frozen-reference parity in its supported environment;
-- add or finalize `CITATION.cff` and changelog/release metadata;
-- configure Trusted Publishing and publish to PyPI;
-- create the GitHub Release and Zenodo record.
+1. Repair the CI workflow so every job invokes tests that exist, then run its Python 3.11/3.12
+   matrix.
+2. Decide and verify the public distribution name; update package URLs and release metadata as
+   needed without changing import or CLI names.
+3. Build wheel and sdist artifacts, inspect their contents, and test clean installations.
+4. Run the full suite against installed distributions, not only an editable checkout.
+5. Install native PyG and certify graph export in each supported release environment.
+6. Supply the official GearNet checkpoint, verify its SHA-256, and certify frozen graph/embedding
+   references and repeated CPU/fp32 inference across the supported matrix.
+7. Freeze dependency policy and confirm the final public API and Python support statement.
+8. Add `CITATION.cff` and real release notes/changelog only when release metadata is known.
+9. Configure publishing, publish the chosen distribution, and create the GitHub release and
+   associated archival record.
 
-These tasks should not be interpreted as missing Fernández feature implementation. A concrete
-reproducible scientific or workflow defect discovered during hardening should be reported against
-the frozen candidate rather than hidden by a release-policy change.
+Scientific defects found during hardening should be reported against the candidate. Do not hide a
+selection, identity, topology, or numerical mismatch by changing release policy or coercing data.
 
-## 19. Nicole and Julián independent testing
+## Independent scientific check
 
-Use the environment supplied by Álvarez and test from the public user boundaries:
+Independent scientific and user validation should use a clean environment and exercise public
+boundaries:
 
-1. Install the built candidate cleanly and confirm `import eris`, `eris --version`, and discovery.
-2. Encode representative PDB and mmCIF structures with explicit chain/model selection.
-3. Compare residue `ca`, `mean`, and `com` coordinate policies, including a missing-center case.
-4. Inspect residue point-cloud, residue kNN, and residue contact-graph artifacts.
-5. Inspect contact maps, distograms, binned matrices, and a voxel grid.
-6. Request known AAIndex1 accessions and verify values, keys, unknown, and missing policies.
-7. Supply shuffled external rows and verify exact realignment; then confirm missing, extra,
-   duplicate, wrong-chain, wrong-model, and mutated-source failures.
-8. Encode a hybrid graph combining one-hot, physicochemical, AAIndex, and external columns; inspect
-   `node_attr`, `node_attr_keys`, edge features, and `graph_attr`.
-9. Save/load, pack, dataset-load, and Torch/PyG-export representative artifacts after removing or
-   relocating the original external `.npz`.
-10. Exercise CLI encode/embed/info/export/batch paths, remembering that per-row batch parameters
-    are a Python API feature.
-11. Run GearNet `node`, `global`, and `both` modes with the verified checkpoint and inspect residue
-    identity, shapes, provenance, and frozen-reference agreement.
+1. Encode representative PDB and mmCIF files with explicit chain/model selection.
+2. Compare CA, mean, and center-of-mass residue positions, including missing-center failure/skip.
+3. Inspect representative cloud, graph, matrix, grid, AAIndex, B-factor, and pLDDT outputs.
+4. Test external row reordering plus missing, extra, duplicate, wrong-chain, wrong-model, and
+   mutated-source failures.
+5. Save/load, pack, dataset-load, and Torch/PyG-export artifacts after relocating source files.
+6. Run GearNet `node`, `global`, and `both` modes and compare frozen references.
 
-Unexpected biological-selection or structural-semantic differences should be escalated rather
-than normalized or repaired implicitly.
+Escalate unexpected biological selection, alternate-location, structural-feature, or topology
+semantics instead of normalizing them.
 
-## 20. Handoff criterion
+## Handoff criterion
 
-Fernández's Eris v0.1 feature implementation is complete at the candidate produced by committing
-WU4 on top of the implementation baseline named above. Further scientific code changes should be
-made only for concrete reproducible defects found during independent or release validation.
+The repository is ready for developer handoff when this editorial candidate is reviewed and
+committed on `dev` with unrelated work excluded. It is not ready for publication until the
+release-hardening work above passes.
 
-Documentation completion does not itself certify publication readiness. Álvarez's release and
-hardening gates remain mandatory before any package publication, tag, GitHub Release, or Zenodo
-deposit.
+The next maintainer should first read the permanent contracts, repair the stale CI test paths, and
+reproduce the tracked validation in clean Python 3.11 and 3.12 environments. That establishes a
+trustworthy release baseline before package naming, distribution builds, GearNet/PyG
+certification, or publishing changes begin.

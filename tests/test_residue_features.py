@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import eris
 from eris.core.artifacts import StructureArtifact
 from eris.core.config import ResiduePointCloudConfig, ResidueVoxelGridConfig
 from eris.core.io import StructureLoadError, load_and_extract_residue
@@ -13,7 +14,9 @@ from eris.core.types import StructureInput
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
 from eris.features.node.constants import AA_VOCAB
+from eris.features.node.external import ExternalFeatureError
 from eris.features.node.residue import build_node_attr
+from eris.pipelines.manifest import StructureManifestRow
 
 
 def _write_ca_structure(
@@ -33,6 +36,25 @@ def _write_ca_structure(
 
 def _aa_indices(sequence: str) -> np.ndarray:
     return np.asarray([AA_VOCAB.index(letter) for letter in sequence], dtype=np.int16)
+
+
+def _write_external_features(
+    path: Path,
+    *,
+    values: list[list[float]],
+    residue_ids: list[str],
+    source_name: str = "custom",
+) -> Path:
+    np.savez(
+        path,
+        values=np.asarray(values, dtype=np.float32),
+        residue_ids=np.asarray(residue_ids),
+        source_name=np.asarray(source_name),
+        feature_keys=np.asarray(["score_a", "score_b"]),
+        chain_id=np.asarray("A"),
+        model_index=np.asarray(0, dtype=np.int64),
+    )
+    return path
 
 
 def _aaindex_mode(
@@ -284,3 +306,110 @@ def test_aaindex_composes_and_feature_keys_round_trip(tmp_path: Path) -> None:
     assert loaded.meta["parameters"]["node_attr_mode"][2]["aaindex"][
         "provider_version"
     ] == metadata.version("aaindex")
+
+
+def test_external_features_align_by_exact_residue_id_and_compose(tmp_path: Path) -> None:
+    inp = _write_ca_structure(tmp_path / "protein.pdb", [("ALA", 12.0), ("GLY", 34.0)])
+    external = _write_external_features(
+        tmp_path / "external.npz",
+        values=[[20.0, 21.0], [10.0, 11.0]],
+        residue_ids=["A:2::GLY", "A:1::ALA"],
+    )
+
+    artifact = ResiduePointCloudCA(
+        node_attr_mode=["onehot", {"external": {"path": str(external)}}],
+        use_cache=False,
+    ).encode(inp)
+
+    assert artifact.data["node_attr"].shape == (2, 23)
+    np.testing.assert_array_equal(
+        artifact.data["node_attr"][:, -2:],
+        np.asarray([[10.0, 11.0], [20.0, 21.0]], dtype=np.float32),
+    )
+    assert artifact.meta["feature_keys"]["node_attr_keys"][-2:] == [
+        "external.custom.score_a",
+        "external.custom.score_b",
+    ]
+    descriptor = artifact.meta["parameters"]["node_attr_mode"][1]["external"]
+    assert descriptor["alignment"] == "strict_residue_id"
+    assert descriptor["feature_dim"] == 2
+    assert artifact.meta["extensions"]["org.eris.external_features"]["invocations"] == [
+        {
+            "path": str(external.resolve()),
+            "content_sha256": descriptor["content_sha256"],
+        }
+    ]
+
+
+def test_external_features_reject_incomplete_residue_identity_set(tmp_path: Path) -> None:
+    inp = _write_ca_structure(tmp_path / "protein.pdb", [("ALA", 12.0), ("GLY", 34.0)])
+    external = _write_external_features(
+        tmp_path / "external.npz",
+        values=[[10.0, 11.0]],
+        residue_ids=["A:1::ALA"],
+    )
+
+    with pytest.raises(ExternalFeatureError, match=r"strict_residue_id.*missing=1"):
+        ResiduePointCloudCA(
+            node_attr_mode=[{"external": {"path": str(external)}}],
+            use_cache=False,
+        ).encode(inp)
+
+
+def test_batch_external_params_by_id_preserve_resume_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_source = _write_ca_structure(tmp_path / "first.pdb", [("ALA", 12.0), ("GLY", 34.0)])
+    second_source = _write_ca_structure(tmp_path / "second.pdb", [("ALA", 56.0), ("GLY", 78.0)])
+    first_external = _write_external_features(
+        tmp_path / "first.npz",
+        values=[[1.0, 2.0], [3.0, 4.0]],
+        residue_ids=["A:1::ALA", "A:2::GLY"],
+    )
+    second_external = _write_external_features(
+        tmp_path / "second.npz",
+        values=[[5.0, 6.0], [7.0, 8.0]],
+        residue_ids=["A:1::ALA", "A:2::GLY"],
+    )
+    rows = [
+        StructureManifestRow(id="first", path=first_source.source, chain="A"),
+        StructureManifestRow(id="second", path=second_source.source, chain="A"),
+    ]
+    params_by_id = {
+        "first": {"node_attr_mode": [{"external": {"path": str(first_external)}}]},
+        "second": {"node_attr_mode": [{"external": {"path": str(second_external)}}]},
+    }
+    artifact_root = tmp_path / "artifacts"
+
+    results = eris.batch_encode(
+        rows,
+        representation="residue_point_cloud",
+        artifact_root=artifact_root,
+        params_by_id=params_by_id,
+        use_cache=False,
+    )
+
+    assert [result.status for result in results] == ["success", "success"]
+    first = StructureArtifact.load(artifact_root / "first" / "residue_point_cloud")
+    second = StructureArtifact.load(artifact_root / "second" / "residue_point_cloud")
+    np.testing.assert_array_equal(first.data["node_attr"], [[1.0, 2.0], [3.0, 4.0]])
+    np.testing.assert_array_equal(second.data["node_attr"], [[5.0, 6.0], [7.0, 8.0]])
+    assert (
+        first.meta["provenance"]["config_fingerprint"]
+        != second.meta["provenance"]["config_fingerprint"]
+    )
+
+    def fail_encode(*args: object, **kwargs: object) -> StructureArtifact:
+        raise AssertionError("matching per-row external identities must resume without execution")
+
+    monkeypatch.setattr(eris, "encode", fail_encode)
+    resumed = eris.batch_encode(
+        rows,
+        representation="residue_point_cloud",
+        artifact_root=artifact_root,
+        params_by_id=params_by_id,
+        use_cache=False,
+        resume=True,
+    )
+    assert [result.status for result in resumed] == ["success", "success"]
