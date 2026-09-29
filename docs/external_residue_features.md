@@ -68,6 +68,23 @@ is returned, and again during feature construction on a cache miss. Changing a f
 configuration resolution therefore fails instead of using stale identity, including mutation
 during cache lookup.
 
+## Hybrid and high-dimensional node features
+
+`external` composes with the other residue features in the normal registry. For example,
+`onehot + physchem + aaindex + bfactor_ca + external` produces one `node_attr` matrix and one
+ordered `node_attr_keys` list; it does not create a separate embedding output. External widths such
+as 512 or 1024 are supported without padding, truncation, or a feature-width limit and flow through
+residue graphs, artifacts, Torch export, PyG export, and folder datasets.
+
+Physical `node_attr` block ordering follows canonical feature-registry `FeatureSpec.order`, not the
+order in which callers write feature tokens. Within each parameterized block, the feature's own
+contract preserves its canonical key ordering, including AAIndex accessions and external columns.
+
+Once an artifact has been encoded and saved, its numerical arrays and metadata are self-contained.
+Loading, packing, dataset access, and Torch/PyG export do not reopen or revalidate the source
+external `.npz`. The source file is required only while resolving or encoding a configuration and
+while checking encoder-cache reuse.
+
 ## Minimal example
 
 ```python
@@ -95,4 +112,44 @@ artifact = encode(
     ],
 )
 ```
+
+## Per-row batch parameters
+
+The Python API accepts explicit per-row overrides without changing the canonical structure
+manifest fields (`id`, `path`, `chain`, and `model`):
+
+```python
+from eris import batch_encode
+
+batch_encode(
+    rows=rows,
+    representation="residue_knn_graph",
+    artifact_root="artifacts",
+    params={"k": 8},
+    params_by_id={
+        "protein_A": {
+            "node_attr_mode": [
+                "onehot",
+                "physchem",
+                {"aaindex": {"ids": ["KYTJ820101"]}},
+                {"external": {"path": "A.npz"}},
+            ]
+        },
+        "protein_B": {
+            "node_attr_mode": [
+                "onehot",
+                "physchem",
+                {"aaindex": {"ids": ["KYTJ820101"]}},
+                {"external": {"path": "B.npz"}},
+            ]
+        },
+    },
+)
+```
+
+For each row, Eris copies the global `params` and applies that row's mapping with a shallow
+top-level update. A row-specific `node_attr_mode` therefore replaces the global value entirely;
+nested feature parameters are not recursively merged. Every override key must match a manifest row
+ID. The batch CLI continues to expose only global `--params`; `params_by_id` is currently a Python
+API feature.
 

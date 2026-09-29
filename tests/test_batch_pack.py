@@ -209,18 +209,18 @@ def test_batch_encode_delegates_to_public_api_and_propagates_config(monkeypatch,
     )
 
     assert results[0].status == "success"
-    assert captured == [
-        (
-            "input.pdb",
-            {
-                "representation": "residue_knn_graph",
-                "chain_id": "A",
-                "model_index": 2,
-                "use_cache": False,
-                "k": 8,
-            },
-        )
-    ]
+    assert len(captured) == 1
+    input_path, kwargs = captured[0]
+    resolved_config = kwargs.pop("config")
+    assert input_path == "input.pdb"
+    assert resolved_config.representation_name == "residue_knn_graph"
+    assert resolved_config.k == 8
+    assert kwargs == {
+        "representation": "residue_knn_graph",
+        "chain_id": "A",
+        "model_index": 2,
+        "use_cache": False,
+    }
 
 
 def test_batch_encode_partial_failure_continues_and_writes_results(tmp_path, monkeypatch):

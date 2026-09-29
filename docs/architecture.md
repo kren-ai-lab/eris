@@ -250,6 +250,11 @@ The minimum structure manifest fields are:
 - `chain`;
 - `model`.
 
+Programmatic `batch_encode(..., params_by_id=...)` may associate representation-parameter
+overrides with these row IDs without extending the manifest schema. Overrides are shallow:
+row-specific top-level values replace global `params` values. The batch CLI continues to accept
+only global parameters.
+
 The minimum batch task result fields are:
 
 - `id`;

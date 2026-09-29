@@ -12,7 +12,9 @@ import eris
 from eris.core.artifact_schema_v2 import compute_config_fingerprint
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import parser_hint_from_source, parser_hint_matches_format
+from eris.core.config import CanonicalRepresentationConfig
 from eris.core.hashing import sha256_file
+from eris.core.registry import get_encoder, get_encoder_info, resolve_representation_config
 from eris.exceptions import ConfigError, ExecutionError
 from eris.pipelines.manifest import (
     BatchResultRow,
@@ -110,21 +112,61 @@ def _normalize_explicit_params(
 
 def _explicit_resume_identity(
     representation: str,
-    params: Mapping[str, Any] | None,
+    config: CanonicalRepresentationConfig,
 ) -> _ResumeIdentity:
-    requested = _normalize_explicit_params(representation, params)
-    info = eris.get_representation_info(representation)
-    parameters = dict(info["defaults"])
-    parameters.update(requested)
+    info = get_encoder_info(representation)
+    encoder = get_encoder(representation, config=config, use_cache=False)
+    parameters = config.to_fingerprint_dict()
     return _ResumeIdentity(
         representation_name=representation,
         representation_family="explicit",
-        representation_type=info["type"],
-        granularity=info["granularity"],
-        coordinate_source=info["coordinate_source"],
+        representation_type=info.representation_type,
+        granularity=info.granularity,
+        coordinate_source=config.coordinate_source,
         parameters=parameters,
         config_fingerprint=compute_config_fingerprint(representation, parameters),
+        encoder_implementation=encoder.encoder_implementation,
+        encoder_version=encoder.version,
     )
+
+
+def _resolve_row_explicit_configs(
+    rows: list[StructureManifestRow],
+    *,
+    representation: str,
+    params: Mapping[str, Any] | None,
+    params_by_id: Mapping[str, Mapping[str, Any]] | None,
+) -> dict[str, CanonicalRepresentationConfig]:
+    global_params = _normalize_explicit_params(representation, params)
+    if params_by_id is None:
+        row_overrides: dict[str, Mapping[str, Any]] = {}
+    else:
+        if not isinstance(params_by_id, Mapping):
+            raise TypeError("params_by_id must be a mapping or None")
+        if any(not isinstance(row_id, str) for row_id in params_by_id):
+            raise TypeError("params_by_id keys must be structure row IDs")
+        row_ids = {row.id for row in rows}
+        unknown_ids = sorted(set(params_by_id) - row_ids)
+        if unknown_ids:
+            raise ConfigError(f"params_by_id contains unknown row IDs: {unknown_ids}")
+        invalid_ids = [
+            row_id for row_id, override in params_by_id.items() if not isinstance(override, Mapping)
+        ]
+        if invalid_ids:
+            raise TypeError(
+                f"params_by_id values must be mappings; invalid row IDs: {sorted(invalid_ids)}"
+            )
+        row_overrides = dict(params_by_id)
+
+    config_by_id: dict[str, CanonicalRepresentationConfig] = {}
+    for row in rows:
+        effective = dict(global_params)
+        effective.update(row_overrides.get(row.id, {}))
+        config_by_id[row.id] = resolve_representation_config(
+            representation,
+            params=effective,
+        )
+    return config_by_id
 
 
 def _learned_resume_identity(
@@ -382,7 +424,7 @@ def _run_batch(
     overwrite: bool,
     fail_fast: bool,
     results_path: str | Path | None,
-    identity_factory: Callable[[], _ResumeIdentity],
+    identity_factory: Callable[[StructureManifestRow], _ResumeIdentity],
     execute: Callable[[StructureManifestRow], StructureArtifact],
 ) -> list[BatchResultRow]:
     _coerce_bool(resume, "resume")
@@ -402,7 +444,7 @@ def _run_batch(
                     "to reuse equivalent artifacts or overwrite=True to replace it"
                 )
 
-            identity = identity_factory()
+            identity = identity_factory(row)
             if resume and target.exists():
                 artifact = _load_equivalent_artifact(target, row, identity)
                 if artifact is not None:
@@ -457,6 +499,7 @@ def batch_encode(
     representation: str | None = None,
     artifact_root: str | Path | None = None,
     params: Mapping[str, Any] | None = None,
+    params_by_id: Mapping[str, Mapping[str, Any]] | None = None,
     use_cache: bool = True,
     resume: bool = False,
     overwrite: bool = False,
@@ -466,12 +509,17 @@ def batch_encode(
     encoders: Sequence[str] | None = None,
     no_cache: bool | None = None,
 ) -> list[BatchResultRow]:
-    """Run one explicit representation over a structure manifest."""
+    """Run one explicit representation with optional shallow per-row overrides."""
 
     representation_name = _resolve_representation(representation, encoders=encoders)
     artifact_root_path = _resolve_artifact_root(artifact_root)
     structure_rows = _coerce_rows(rows, manifest_path=manifest_path)
-    explicit_params = _normalize_explicit_params(representation_name, params)
+    explicit_configs_by_id = _resolve_row_explicit_configs(
+        structure_rows,
+        representation=representation_name,
+        params=params,
+        params_by_id=params_by_id,
+    )
     effective_use_cache = use_cache if no_cache is None else not no_cache
     _coerce_bool(effective_use_cache, "use_cache")
 
@@ -484,17 +532,17 @@ def batch_encode(
         overwrite=overwrite,
         fail_fast=fail_fast,
         results_path=results_path,
-        identity_factory=lambda: _explicit_resume_identity(
+        identity_factory=lambda row: _explicit_resume_identity(
             representation_name,
-            explicit_params,
+            explicit_configs_by_id[row.id],
         ),
         execute=lambda row: eris.encode(
             row.path,
             representation=representation_name,
             chain_id=row.chain,
             model_index=row.model,
+            config=explicit_configs_by_id[row.id],
             use_cache=effective_use_cache,
-            **explicit_params,
         ),
     )
 
@@ -534,7 +582,7 @@ def batch_embed(
         overwrite=overwrite,
         fail_fast=fail_fast,
         results_path=results_path,
-        identity_factory=lambda: _learned_resume_identity(
+        identity_factory=lambda row: _learned_resume_identity(
             representation_name,
             output_mode=output_mode,
             device=device,

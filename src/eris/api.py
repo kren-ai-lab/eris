@@ -5,9 +5,12 @@ from typing import Any
 
 from eris.core.artifacts import StructureArtifact
 from eris.core.config import CanonicalRepresentationConfig
-from eris.core.registry import get_encoder
+from eris.core.registry import (
+    get_encoder,
+    resolve_representation_config,
+    validate_resolved_representation_config,
+)
 from eris.core.types import StructureInput
-from eris.discovery import _get_explicit_registration
 from eris.exceptions import ConfigError, ExecutionError, RepresentationNotFoundError
 
 
@@ -72,28 +75,16 @@ def _resolve_config(
     config: CanonicalRepresentationConfig | None,
     params: dict[str, Any],
 ):
-    info = _get_explicit_registration(representation)
-
     if config is not None:
-        if params:
-            names = ", ".join(sorted(params))
-            raise ConfigError(f"config cannot be combined with representation parameters: {names}")
-        if not isinstance(config, info.config_type):
-            raise ConfigError(
-                f"Config for {representation!r} must be an {info.config_type.__name__}"
-            )
-        return config
-
-    allowed = {config_field.name for config_field in info.config_fields()}
-    unknown = sorted(set(params) - allowed)
-    if unknown:
-        names = ", ".join(unknown)
-        raise ConfigError(f"Unknown parameters for {representation!r}: {names}")
-
-    try:
-        return info.config_type(**params)
-    except (TypeError, ValueError) as error:
-        raise ConfigError(f"Invalid parameters for {representation!r}: {error}") from error
+        return validate_resolved_representation_config(
+            representation,
+            config=config,
+            params=params,
+        )
+    return resolve_representation_config(
+        representation,
+        params=params,
+    )
 
 
 def encode(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import types
+from collections.abc import Mapping
 from dataclasses import MISSING, Field, dataclass, fields
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
@@ -9,6 +10,7 @@ from eris.core.config import (
     _CONFIG_TYPES_BY_REPRESENTATION,
     CanonicalRepresentationConfig,
 )
+from eris.exceptions import ConfigError, RepresentationNotFoundError
 
 
 def _render_literal(value: Any) -> str:
@@ -218,6 +220,59 @@ def get_encoder_info(name: str) -> RepresentationInfo:
     if name not in _REGISTRY:
         raise KeyError(f"No encoder info: {name}")
     return _REGISTRY[name]
+
+
+def _representation_info_or_raise(representation: str) -> RepresentationInfo:
+    try:
+        return get_encoder_info(representation)
+    except KeyError as error:
+        raise RepresentationNotFoundError(f"Unknown representation {representation!r}") from error
+
+
+def validate_resolved_representation_config(
+    representation: str,
+    *,
+    config: CanonicalRepresentationConfig,
+    params: Mapping[str, Any] | None = None,
+) -> CanonicalRepresentationConfig:
+    """Validate an already-resolved explicit representation config without rebuilding it."""
+    info = _representation_info_or_raise(representation)
+    requested = {} if params is None else dict(params)
+    if requested:
+        names = ", ".join(sorted(requested))
+        raise ConfigError(f"config cannot be combined with representation parameters: {names}")
+    if not isinstance(config, info.config_type):
+        raise ConfigError(f"Config for {representation!r} must be an {info.config_type.__name__}")
+    return config
+
+
+def resolve_representation_config(
+    representation: str,
+    *,
+    config: CanonicalRepresentationConfig | None = None,
+    params: Mapping[str, Any] | None = None,
+) -> CanonicalRepresentationConfig:
+    """Resolve one explicit representation through its canonical config type."""
+    info = _representation_info_or_raise(representation)
+
+    requested = {} if params is None else dict(params)
+    if config is not None:
+        return validate_resolved_representation_config(
+            representation,
+            config=config,
+            params=requested,
+        )
+
+    allowed = {config_field.name for config_field in info.config_fields()}
+    unknown = sorted(set(requested) - allowed)
+    if unknown:
+        names = ", ".join(unknown)
+        raise ConfigError(f"Unknown parameters for {representation!r}: {names}")
+
+    try:
+        return info.config_type(**requested)
+    except (TypeError, ValueError) as error:
+        raise ConfigError(f"Invalid parameters for {representation!r}: {error}") from error
 
 
 def list_encoder_info() -> list[RepresentationInfo]:
