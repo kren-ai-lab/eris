@@ -19,7 +19,7 @@ RepresentationFamily = Literal["explicit", "learned"]
 RepresentationType = Literal["cloud", "graph", "matrix", "grid", "embedding"]
 Granularity = Literal["atom", "residue", "structure", "mixed"]
 CoordinateSource = Literal["atom", "ca", "residue_mean", "residue_com", "model_specific"]
-JSONValue = Union[  # noqa: UP007 - recursive aliases cannot use | on Python 3.10
+JSONValue = Union[  # noqa: UP007 - explicit Union keeps the recursive alias runtime-safe
     None, bool, int, float, str, list["JSONValue"], dict[str, "JSONValue"]
 ]
 

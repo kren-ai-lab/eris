@@ -126,15 +126,12 @@ Run `tests/test_packaging_boundaries.py` separately when checking optional-impor
   `tests/test_gearnet_inference.py`. The workflow must be repaired before it can serve as a release
   gate.
 - The local validation environment lacks `torch_geometric`.
-- The official GearNet checkpoint was not configured for this final editorial run.
+- The official GearNet checkpoint was not configured for the handoff validation.
 - Row-specific batch overrides are Python-only.
 - External features require exact residue identity; no sequence alignment is implemented.
 - A generic pooled residue representation is not implemented.
 - No generic GNN, Graph2Vec, GIN, GAT, or GraphSAGE family is included.
 - Distribution name, final public metadata, citation file, and release notes remain release work.
-
-The untracked `tests/test_pdb_cif_equivalence.py` named in the handoff instructions was not present
-in this worktree. No untracked file is part of the handoff candidate.
 
 ## Release-hardening scope
 
@@ -173,9 +170,8 @@ semantics instead of normalizing them.
 
 ## Handoff criterion
 
-The repository is ready for developer handoff when this editorial candidate is reviewed and
-committed on `dev` with unrelated work excluded. It is not ready for publication until the
-release-hardening work above passes.
+The repository is ready for developer handoff. Publication still requires the release-hardening
+work listed above.
 
 The next maintainer should first read the permanent contracts, repair the stale CI test paths, and
 reproduce the tracked validation in clean Python 3.11 and 3.12 environments. That establishes a

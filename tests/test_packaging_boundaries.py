@@ -2,13 +2,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
-
-try:
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10
-    import tomli as tomllib
-
 
 ROOT = Path(__file__).resolve().parents[1]
 PDB = ROOT / "tests" / "data" / "1AQ2.pdb"
