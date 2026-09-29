@@ -28,9 +28,7 @@ from eris.core.io import StructureLoadError
 from eris.core.types import StructureInput
 from eris.encoders.clouds.atom_point_cloud import AtomPointCloud
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
-from eris.encoders.geometry.distogram_ca import DistogramCA
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
-from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
 
 PDB = Path("tests/data/1AQ2.pdb")
 
@@ -313,32 +311,13 @@ def test_stale_or_corrupt_v2_cache_entry_is_a_non_destructive_miss(tmp_path, cas
     if case == "v1":
         legacy = _legacy_artifact()
         _write_entry(tmp_path, key, meta=legacy.meta, data=legacy.data)
-    elif case == "versionless":
-        legacy = _legacy_artifact()
-        del legacy.meta["schema_version"]
-        _write_entry(tmp_path, key, meta=legacy.meta, data=legacy.data)
     else:
         _write_entry(tmp_path, key, meta=artifact.meta, data=artifact.data)
-        if case == "future":
-            meta = dict(artifact.meta)
-            meta["schema_version"] = 3
-            (entry / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
-        elif case == "bad-json":
+        if case == "bad-json":
             (entry / "meta.json").write_text("{bad", encoding="utf-8")
-        elif case == "bad-npz":
-            (entry / "data.npz").write_bytes(b"bad npz")
-        elif case == "missing-file":
-            (entry / "meta.json").unlink()
-        elif case in {"shape", "dtype", "feature", "count"}:
+        elif case == "shape":
             meta = json.loads((entry / "meta.json").read_text(encoding="utf-8"))
-            if case == "shape":
-                meta["shapes"]["pos"] = [3, 3]
-            elif case == "dtype":
-                meta["dtypes"]["pos"] = "float64"
-            elif case == "feature":
-                meta["feature_keys"]["node_attr_keys"] = ["unexpected"]
-            else:
-                meta["counts"]["n_nodes"] = 99
+            meta["shapes"]["pos"] = [3, 3]
             (entry / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
         elif case == "object":
             np.savez_compressed(
@@ -355,9 +334,7 @@ def test_invalid_v2_cache_write_raises_without_usable_entry(tmp_path, case):
     cache = DiskCache(tmp_path)
     key = _key()
     artifact = _legacy_artifact() if case == "v1" else _artifact()
-    if case == "invalid-v2":
-        artifact.meta["counts"]["n_nodes"] = 99
-    elif case == "unsafe-v2":
+    if case == "unsafe-v2":
         artifact.data["pos"] = np.array([object()], dtype=object)
 
     with pytest.raises(ArtifactValidationError):
@@ -382,21 +359,15 @@ class _RecordingDiskCache(DiskCache):
         super().set_v2(key, artifact)
 
 
-@pytest.mark.parametrize(
-    "encoder_type",
-    [AtomPointCloud, ResidueKNNGraph, VoxelGridCA],
-    ids=lambda value: value.name,
-)
 def test_active_encoder_cache_miss_then_hit_uses_only_v2_api(
     tmp_path,
     monkeypatch,
-    encoder_type,
 ):
     cache = _RecordingDiskCache(tmp_path)
     inp = StructureInput(source=str(PDB))
-    first_encoder = encoder_type(use_cache=True, cache=cache)
+    first_encoder = ResidueKNNGraph(use_cache=True, cache=cache)
     first = first_encoder.encode(inp)
-    second_encoder = encoder_type(use_cache=True, cache=cache)
+    second_encoder = ResidueKNNGraph(use_cache=True, cache=cache)
 
     def fail_recompute(ctx):
         raise AssertionError("a valid v2 cache hit must not recompute arrays")

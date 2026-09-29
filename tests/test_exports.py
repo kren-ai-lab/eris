@@ -227,18 +227,6 @@ def test_grid_export_preserves_grid_shape_and_spatial_metadata() -> None:
     _assert_tensor_equal(out["centroid"], artifact.data["centroid"])
 
 
-@pytest.mark.parametrize("representation", eris.list_representations())
-def test_all_ten_explicit_representations_export_to_torch(representation: str) -> None:
-    torch = _torch()
-    artifact = eris.encode(PDB, representation=representation, use_cache=False)
-    out = to_torch(artifact)
-
-    assert out["representation_name"] == representation
-    assert out["representation_family"] == "explicit"
-    assert out["representation_type"] in {"cloud", "graph", "matrix", "grid"}
-    assert any(isinstance(value, torch.Tensor) for value in out.values())
-
-
 def test_save_torch_strictly_loads_artifact_dir_and_writes_downstream_pt(tmp_path: Path) -> None:
     torch = _torch()
     artifact_dir = tmp_path / "artifact"

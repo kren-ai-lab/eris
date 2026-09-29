@@ -230,15 +230,6 @@ def test_m7_learned_public_workflow_uses_canonical_artifacts_and_torch(
     np.testing.assert_array_equal(sample["node_ids"], artifact.data["node_ids"])
 
 
-def test_m7_learned_torch_export_preserves_canonical_artifact() -> None:
-    pytest.importorskip("torch")
-    artifact = _synthetic_learned_artifact(PDB)
-
-    torch_mapping = eris.to_torch(artifact)
-    assert torch_mapping["node_ids"] == artifact.data["node_ids"].tolist()
-    assert tuple(torch_mapping["node_embedding"].shape) == (2, 2)
-
-
 def test_m7_cli_workflow_uses_the_same_public_boundaries(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

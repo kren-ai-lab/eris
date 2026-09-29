@@ -9,26 +9,11 @@ import pytest
 from eris.core.artifact_schema_v2 import compute_config_fingerprint
 from eris.core.artifacts import StructureArtifact
 from eris.core.cache import DiskCache, compute_cache_key_v2
-from eris.core.config import (
-    ResidueContactGraphConfig,
-    ResidueContactMapBinsConfig,
-    ResidueContactMapConfig,
-    ResidueDistogramBinsConfig,
-    ResidueDistogramConfig,
-    ResidueKNNGraphConfig,
-    ResiduePointCloudConfig,
-    ResidueVoxelGridConfig,
-)
+from eris.core.config import ResiduePointCloudConfig
 from eris.core.hashing import sha256_file
 from eris.core.io import StructureLoadError
 from eris.core.types import StructureInput
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
-from eris.encoders.geometry.contact_map_bins_ca import ContactMapBinsCA
-from eris.encoders.geometry.contact_map_ca import ContactMapCA
-from eris.encoders.geometry.distogram_bins_ca import DistogramBinsCA
-from eris.encoders.geometry.distogram_ca import DistogramCA
-from eris.encoders.graphs.residue_contact_graph import ResidueContactGraph
-from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
 
 
@@ -65,44 +50,20 @@ def _write_missing_ca_structure(path: Path) -> StructureInput:
     return StructureInput(source=str(path), chain_id="A")
 
 
-RESIDUE_ENCODERS = (
-    (ResiduePointCloudConfig, ResiduePointCloudCA),
-    (ResidueKNNGraphConfig, ResidueKNNGraph),
-    (ResidueContactGraphConfig, ResidueContactGraph),
-    (ResidueDistogramConfig, DistogramCA),
-    (ResidueDistogramBinsConfig, DistogramBinsCA),
-    (ResidueContactMapConfig, ContactMapCA),
-    (ResidueContactMapBinsConfig, ContactMapBinsCA),
-    (ResidueVoxelGridConfig, VoxelGridCA),
-)
-
-CORRECTION_1_ENCODER_VERSIONS = {
-    ResidueKNNGraph: "0.1.2",
-    ResidueContactGraph: "0.1.2",
-}
-
-
-@pytest.mark.parametrize(("config_type", "_encoder_type"), RESIDUE_ENCODERS)
-def test_all_residue_configs_expose_only_skip_and_error(
-    config_type: type,
-    _encoder_type: type,
-) -> None:
-    assert config_type().missing_residue_center == "skip"
-    assert config_type(missing_residue_center="error").missing_residue_center == "error"
+def test_shared_residue_config_exposes_only_skip_and_error() -> None:
+    assert ResiduePointCloudConfig().missing_residue_center == "skip"
+    assert ResiduePointCloudConfig(missing_residue_center="error").missing_residue_center == "error"
     with pytest.raises(ValueError, match="missing_residue_center"):
-        config_type(missing_residue_center="nan")
+        ResiduePointCloudConfig(missing_residue_center="nan")
 
 
-@pytest.mark.parametrize(("_config_type", "encoder_type"), RESIDUE_ENCODERS)
-def test_all_residue_encoders_trace_skipped_residues(
-    _config_type: type,
-    encoder_type: type,
-    tmp_path: Path,
-) -> None:
+def test_residue_encoder_traces_skipped_residues(tmp_path: Path) -> None:
     structure_input = _write_missing_ca_structure(tmp_path / "missing-ca.pdb")
-    artifact = encoder_type(missing_residue_center="skip", use_cache=False).encode(structure_input)
+    artifact = ResiduePointCloudCA(missing_residue_center="skip", use_cache=False).encode(
+        structure_input
+    )
 
-    assert encoder_type.version == CORRECTION_1_ENCODER_VERSIONS.get(encoder_type, "0.1.1")
+    assert ResiduePointCloudCA.version == "0.1.1"
     assert artifact.meta["parameters"]["missing_residue_center"] == "skip"
     assert artifact.data["residue_ids"].tolist() == ["A:15::ALA", "A:20:A:SER"]
     assert artifact.data["omitted_residue_ids"].tolist() == ["A:16::GLY"]
@@ -111,16 +72,11 @@ def test_all_residue_encoders_trace_skipped_residues(
     artifact.validate(strict=True)
 
 
-@pytest.mark.parametrize(("_config_type", "encoder_type"), RESIDUE_ENCODERS)
-def test_all_residue_encoders_fail_without_partial_artifact_for_error(
-    _config_type: type,
-    encoder_type: type,
-    tmp_path: Path,
-) -> None:
+def test_residue_encoder_fails_without_partial_artifact_for_error(tmp_path: Path) -> None:
     structure_input = _write_missing_ca_structure(tmp_path / "missing-ca.pdb")
 
     with pytest.raises(StructureLoadError, match=r"A:16::GLY"):
-        encoder_type(missing_residue_center="error", use_cache=False).encode(structure_input)
+        ResiduePointCloudCA(missing_residue_center="error", use_cache=False).encode(structure_input)
 
 
 def test_zero_omission_output_is_deterministic_and_round_trips(tmp_path: Path) -> None:

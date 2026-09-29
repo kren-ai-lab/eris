@@ -82,6 +82,25 @@ def _edge_feature(artifact, source_id: str, target_id: str, feature_key: str) ->
     return float(artifact.data["edge_attr"][row, column])
 
 
+def test_graph_builders_enforce_knn_and_contact_neighborhoods(tmp_path: Path) -> None:
+    structure_input = _write_structure(
+        tmp_path / "neighborhoods.pdb",
+        [
+            (1, " ", 0.0, "ALA", "CA", "A"),
+            (2, " ", 1.0, "GLY", "CA", "A"),
+            (3, " ", 10.0, "SER", "CA", "A"),
+        ],
+    )
+    knn = ResidueKNNGraph(k=1, cutoff=None, symmetric=True, use_cache=False).encode(structure_input)
+    contact = ResidueContactGraph(cutoff=2.0, use_cache=False).encode(structure_input)
+
+    knn_pairs = {tuple(pair) for pair in knn.data["edge_index"].T.tolist()}
+    contact_pairs = {tuple(pair) for pair in contact.data["edge_index"].T.tolist()}
+    assert knn_pairs == {(0, 1), (1, 0), (1, 2), (2, 1)}
+    assert contact_pairs == {(0, 1), (1, 0)}
+    np.testing.assert_array_equal(contact.data["edge_dist"], [1.0, 1.0])
+
+
 @pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
 def test_residue_graph_sequence_features_preserve_numeric_gaps_and_locality(
     encoder_type: type,

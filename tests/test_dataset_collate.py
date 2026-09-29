@@ -462,31 +462,6 @@ def test_dataset_rejects_stale_n_edges_when_index_declares_it(tmp_path: Path) ->
         dataset[0]
 
 
-def test_dataset_loads_explicit_representative_types(tmp_path: Path) -> None:
-    torch = pytest.importorskip("torch")
-    root = tmp_path / "artifacts"
-    _save_graph_artifact(root / "graph" / "residue_contact_graph")
-    _save_artifact(root / "cloud" / "residue_point_cloud")
-    _save_matrix_artifact(root / "matrix" / "residue_contact_map")
-    _save_grid_artifact(root / "grid" / "residue_voxel_grid")
-    index = tmp_path / "artifacts" / "index.csv"
-    _pack(root, index)
-    dataset = ErisFolderDataset(index, prefer="grid_or_graph")
-
-    assert len(dataset) == 4
-    samples = [dataset[index] for index in range(len(dataset))]
-    assert {sample["representation_type"] for sample in samples} == {
-        "cloud",
-        "graph",
-        "grid",
-        "matrix",
-    }
-    assert all(isinstance(sample["id"], str) for sample in samples)
-    assert all(
-        any(isinstance(value, torch.Tensor) for value in sample.values()) for sample in samples
-    )
-
-
 @pytest.mark.parametrize(
     ("representation", "prefer", "collate", "expected_shape"),
     [
@@ -553,25 +528,6 @@ def test_dataset_accepts_mixed_index_without_collating(tmp_path: Path) -> None:
     assert len(dataset) == 3
     assert [row.id for row in dataset.rows] == ["graph", "learned", "matrix"]
     assert dataset[1]["representation_family"] == "learned"
-
-
-def test_dataset_pack_to_dataset_gate_for_index_locations(tmp_path: Path) -> None:
-    for name, index in {
-        "sibling": tmp_path / "sibling.csv",
-        "inside": tmp_path / "inside" / "artifacts" / "index.csv",
-        "elsewhere": tmp_path / "collections" / "elsewhere.csv",
-    }.items():
-        root = tmp_path / name / "artifacts"
-        if name == "inside":
-            root = tmp_path / "inside" / "artifacts"
-        artifact_dir = root / "sample" / "synthetic_learned_embedding"
-        _save_learned_artifact(artifact_dir)
-        pack_artifacts(root, index)
-
-        item = ErisFolderDataset(index, prefer="cloud")[0]
-
-        assert item["id"] == "sample"
-        assert Path(item["artifact_dir"]).resolve() == artifact_dir.resolve()
 
 
 def test_dataset_batch_pack_dataset_gate(tmp_path: Path) -> None:

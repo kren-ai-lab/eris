@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pytest
 
 from eris.core.artifact_schema_v2 import compute_config_fingerprint, validate_schema_v2
-from eris.core.base_encoder import EncodingContext
 from eris.core.hashing import sha256_file
 from eris.core.io import load_and_extract_residue
 from eris.core.representations.output_declarations import (
@@ -171,33 +169,17 @@ CLOUD_DIGESTS = {
 }
 
 
-def _prospective(encoder: Any, source: Path = PDB):
-    inp = StructureInput(source=str(source))
-    ctx = EncodingContext(inp=inp, source_sha256=sha256_file(source))
-    encoder._prepare_data(ctx)
-    data = encoder._create_data(ctx)
-    for contract in encoder.contracts():
-        contract.validate(data)
-    metadata = encoder._build_metadata_v2(
-        ctx,
-        data,
-        parameters=encoder.config.to_dict(),
-    )
-    return ctx, data, metadata
-
-
-def _expected_feature_keys(ctx: EncodingContext, representation_type: str):
-    if representation_type == "cloud":
-        return {"node_attr_keys": ctx.runtime["node_attr_keys"]}
-    if representation_type == "graph":
-        return {
-            "node_attr_keys": ctx.runtime["node_attr_keys"],
-            "edge_attr_keys": ctx.runtime["edge_attr_keys"],
-            "graph_attr_keys": ctx.runtime["graph_attr_keys"],
-        }
-    if representation_type == "grid":
-        return {"grid_channels": ctx.runtime["channels"]}
-    return {}
+def _write_linear_ca_structure(path: Path) -> StructureInput:
+    lines = [
+        f"ATOM  {serial:5d}  CA  {resname:>3s} A{serial:4d}    "
+        f"{x:8.3f}{0.0:8.3f}{0.0:8.3f}{1.0:6.2f}{10.0:6.2f}           C  "
+        for serial, (resname, x) in enumerate(
+            (("ALA", 0.0), ("GLY", 3.0), ("SER", 10.0)),
+            start=1,
+        )
+    ]
+    path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
+    return StructureInput(source=str(path), chain_id="A")
 
 
 def _expected_counts(data: dict[str, np.ndarray], representation_type: str):
@@ -313,85 +295,30 @@ def test_shared_output_declarations_have_frozen_semantics():
     )
 
 
-@pytest.mark.parametrize("encoder_type", ENCODER_TYPES, ids=lambda value: value.name)
-def test_all_explicit_producers_build_strict_valid_prospective_v2(encoder_type):
-    encoder = encoder_type(use_cache=False)
-    ctx, data, metadata = _prospective(encoder)
-    arrays_before_validation = {name: array.copy() for name, array in data.items()}
-
-    normalized = validate_schema_v2(metadata, data, strict=True)
-
-    assert normalized == metadata
-    assert metadata["representation_name"] == encoder.config.representation_name == encoder.name
-    assert metadata["representation_family"] == encoder.representation_family == "explicit"
-    assert metadata["representation_type"] == encoder.representation.representation_type
-    assert metadata["granularity"] == encoder.config.granularity
-    assert metadata["coordinate_source"] == encoder.config.coordinate_source
-    assert metadata["encoder"] == {
-        "implementation": f"{type(encoder).__module__}.{type(encoder).__qualname__}",
-        "version": encoder.version,
-    }
-    assert metadata["parameters"] == encoder.config.to_dict()
-    assert metadata["input"] == {
-        "source": str(PDB),
-        "source_sha256": sha256_file(PDB),
-        "format": "pdb",
-        "model_index": 0,
-        "chain_id": None,
-    }
-    assert [output["name"] for output in metadata["outputs"]] == [
-        declaration["name"] for declaration in EXPECTED_DECLARATIONS[encoder.name]
-    ]
-    assert metadata["feature_keys"] == _expected_feature_keys(
-        ctx, encoder.representation.representation_type
-    )
-    assert metadata["counts"] == _expected_counts(data, encoder.representation.representation_type)
-    assert (
-        _compact_array_contract(
-            {output["name"]: data[output["name"]] for output in metadata["outputs"]}
-        )
-        == ARRAY_BASELINES[encoder.name]
-    )
-    for name, before in arrays_before_validation.items():
-        np.testing.assert_array_equal(data[name], before)
-
-    for name, expected_digest in CLOUD_DIGESTS.get(encoder.name, {}).items():
-        assert hashlib.sha256(data[name].tobytes()).hexdigest() == expected_digest
-
-
 @pytest.mark.parametrize(("source", "expected"), [(PDB, "pdb"), (MMCIF, "mmcif")])
 def test_loader_threads_gemmi_confirmed_input_format(source: Path, expected: str):
     loaded = load_and_extract_residue(StructureInput(source=str(source)))
 
     assert loaded.input_format == expected
 
-    encoder = ResiduePointCloudCA(use_cache=False)
-    ctx, data, metadata = _prospective(encoder, source)
-    assert ctx.input_format == expected
-    assert metadata["input"]["format"] == expected
-    validate_schema_v2(metadata, data, strict=True)
-
-
-def test_normal_encode_is_strict_valid_schema_v2_without_finalization():
-    artifact = ResiduePointCloudCA(use_cache=False).encode(StructureInput(source=str(PDB)))
-
+    artifact = ResiduePointCloudCA(use_cache=False).encode(StructureInput(source=str(source)))
     artifact.validate(strict=True)
-    assert artifact.meta["schema_version"] == 2
-    assert {
-        "representation_name",
-        "representation_family",
-        "parameters",
-        "provenance",
-        "outputs",
-    } <= artifact.meta.keys()
-    assert {
-        "encoder_name",
-        "encoder_version",
-        "encoder_fingerprint",
-        "type",
-        "level",
-        "params",
-    }.isdisjoint(artifact.meta)
+    assert artifact.meta["input"]["format"] == expected
+
+
+def test_distance_and_contact_maps_preserve_metric_and_cutoff(tmp_path: Path) -> None:
+    inp = _write_linear_ca_structure(tmp_path / "linear.pdb")
+    distogram = DistogramCA(include_self=True, use_cache=False).encode(inp)
+    contact_map = ContactMapCA(cutoff=4.0, include_self=False, use_cache=False).encode(inp)
+
+    np.testing.assert_array_equal(
+        distogram.data["dist"],
+        np.asarray([[0.0, 3.0, 10.0], [3.0, 0.0, 7.0], [10.0, 7.0, 0.0]], np.float32),
+    )
+    np.testing.assert_array_equal(
+        contact_map.data["contact"],
+        np.asarray([[0, 1, 0], [1, 0, 0], [0, 0, 0]], np.uint8),
+    )
 
 
 @pytest.mark.parametrize("encoder_type", ENCODER_TYPES, ids=lambda value: value.name)
@@ -412,6 +339,13 @@ def test_all_explicit_encoders_return_complete_schema_v2(encoder_type):
         "version": encoder.version,
     }
     assert metadata["parameters"] == encoder.config.to_dict()
+    assert metadata["input"] == {
+        "source": str(PDB),
+        "source_sha256": sha256_file(PDB),
+        "format": "pdb",
+        "model_index": 0,
+        "chain_id": None,
+    }
     assert metadata["provenance"]["config_fingerprint"] == compute_config_fingerprint(
         encoder.name,
         encoder.config.to_dict(),
@@ -431,6 +365,8 @@ def test_all_explicit_encoders_return_complete_schema_v2(encoder_type):
         metadata["representation_type"],
     )
     assert _compact_array_contract(artifact.data) == ARRAY_BASELINES[encoder.name]
+    for name, expected_digest in CLOUD_DIGESTS.get(encoder.name, {}).items():
+        assert hashlib.sha256(artifact.data[name].tobytes()).hexdigest() == expected_digest
     assert {
         "encoder_name",
         "encoder_version",
