@@ -1,105 +1,80 @@
-# Eris Development Workflow
+# Eris development
 
-This document defines the development process for Eris. Scientific and structural contracts
-are documented separately in `docs/architecture.md`.
+This guide covers local contributor setup and validation. Scientific and persistence contracts
+are documented under `docs/`.
 
-## Development philosophy
+## Environment
 
-The intended workflow is:
+`pyproject.toml` is the authority for the current development Python range and dependencies. It
+currently declares Python `>=3.11,<3.13`.
 
-> ChatGPT/specification → Codex inspection/implementation → tests → diff review → manual commit
+Create and activate an isolated Python 3.11 or 3.12 environment, then install the project with
+development tools:
 
-The repository, its tests, and its versioned contracts are the source of truth. Conversational
-context can explain intent, but it does not replace repository evidence or an approved
-versioned contract.
-
-Development should begin with inspection, proceed through a narrowly scoped implementation,
-and end with evidence that the requested behavior and surrounding contracts remain coherent.
-
-## Branches
-
-- `jr_revision` is the frozen historical baseline for Eris v0.1.
-- `dev` is the only active development branch for Eris v0.1.
-- `jr_revision` must not be modified.
-- Feature parity must not be maintained between `jr_revision` and `dev`.
-- Agents must not create or switch branches unless explicitly requested.
-
-This is a deliberate adaptation of the original baseline directive. `dev` was created exactly
-from `jr_revision` and is now the sole active v0.1 development line.
-
-## Environment target
-
-The official Eris core target is:
-
-- Python 3.11
-- Python 3.12
-
-The conceptual packaging constraint is:
-
-```text
->=3.11,<3.13
+```console
+python -m pip install -e ".[dev]"
+python -m pip check
 ```
 
-The package metadata enforces this range. Learned backends may support a narrower Python range
-when their frameworks require it, but that does not narrow the supported Python range of Eris core.
+The import package and CLI command are both `eris`. The distribution name currently present in
+package metadata is `eris-lib`; final public naming is release-policy work, not a local development
+assumption.
 
-## Expected core dependency boundary
+## Optional dependency groups
 
-Eris core is intended to remain independent from:
+Install only the optional integration being developed or tested:
 
-- Roxy;
-- Sylphy;
-- Torch;
-- PyTorch Geometric;
-- optional GearNet dependencies.
+```console
+python -m pip install -e ".[gearnet]"
+python -m pip install -e ".[pyg]"
+```
 
-Known intended core runtime dependencies include:
+- `gearnet` provides the frozen native GearNet-Edge PyTorch runtime. The verified checkpoint must
+  be supplied separately and is never downloaded automatically.
+- `pyg` provides PyTorch and PyTorch Geometric for graph export.
+- A core import must remain usable without either optional group.
 
-- `numpy`;
-- `scipy`;
-- `pandas`;
-- `tqdm`;
-- `typer`;
-- `rich`;
-- `gemmi`;
-- `platformdirs`.
+See `docs/gearnet_edge_backend.md` for the exact learned-runtime contract.
 
-These dependencies form the declared core runtime contract. GearNet and PyG remain optional and
-are isolated from core imports.
+## Tests
 
-## Validation workflow
+Run the smallest relevant scope first:
 
-Use the validation ladder in increasing scope:
+```console
+python -m pytest -q tests/test_residue_features.py
+```
 
-1. **Focused:** reproduce the behavior and run the directly relevant test module, for example
-   `python -m pytest -q tests/test_registry.py`.
-2. **Subsystem:** run the tests covering the affected package or contract.
-3. **Integration:** exercise the relevant cross-package flow, such as encoding through artifact
-   persistence or artifact loading through export.
-4. **Full suite:** run `python -m pytest -q` after the focused and integration checks pass.
-5. **Distribution/release:** when applicable, validate build, installation, dependency
-   consistency, package import, and CLI entry points.
+Then run related regression modules. For cross-cutting changes or a handoff gate, run the full
+suite:
 
-The repository declares `python -m pytest -q`, `python -m build`, the `eris` entry point, and
-Ruff pre-commit hooks. The supported core CI matrix covers Python 3.11–3.12; the separate native
-GearNet lane covers the supported range with CPU `torch==2.11.0`. There is no project-wide mypy gate.
+```console
+python -m pytest -q
+```
 
-The canonical local static checks are:
+Optional dependency or checkpoint tests may skip when their documented runtime is unavailable.
+Do not treat a skip as certification of that integration.
+
+## Static checks
 
 ```console
 python -m ruff check .
 python -m ruff format --check .
+python -m pip check
+git diff --check
 ```
 
-Use focused tests during ordinary development. Run the full supported Python 3.11/3.12 suite for
-broad or gate-level changes; `pip check` remains expected at milestone/packaging boundaries. The
-native GearNet runtime is CPU/fp32-only and supports the current package contract.
+Keep `import eris` free of eager Torch, TorchDrug, PyG, RDKit, or GearNet numerical-runtime
+imports. Packaging-boundary tests enforce this contract.
 
-## Git workflow
+## Normal workflow
 
-- Start from a known branch and a clean worktree.
-- Inspect the relevant baseline before editing.
-- Inspect `git diff` and `git diff --check` before handoff.
-- Keep each change and eventual commit functionally coherent.
-- Treat commits as manual review boundaries.
-- Agents do not commit, push, tag, merge, or release unless explicitly instructed.
+1. Verify the active branch, HEAD, and expected worktree.
+2. Read the permanent contract relevant to the change.
+3. Implement one focused change without altering unrelated behavior.
+4. Run focused tests, then proportionate regression/static checks.
+5. Review `git diff`, `git diff --check`, and `git status --short`.
+6. Commit or publish only when explicitly authorized.
+
+The repository does not claim release certification merely because local checks pass. CI matrices,
+built-distribution installation, publishing, and supported-environment certification remain
+separate release-hardening gates.

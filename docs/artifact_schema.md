@@ -24,7 +24,7 @@ two optional fields listed below:
 | `coordinate_source` | Source/meaning of structural coordinates. |
 | `encoder` | Required producer implementation identity. |
 | `input` | Required source identity and selection. |
-| `parameters` | Canonical requested configuration. |
+| `parameters` | Canonical scientific configuration projection. |
 | `provenance` | Required Eris/config provenance and optional execution context. |
 | `outputs` | Ordered declarations corresponding exactly to array keys. |
 | `feature_keys` | Authoritative ordered feature semantics. |
@@ -128,19 +128,30 @@ Only these additional input keys are permitted in v0.1:
 
 Their values are strings. Assembly identity and parsed-content hashes are not part of M3.1.
 
-## Parameters: requested versus effective values
+## Parameters: scientific configuration versus invocation provenance
 
-`parameters` is a JSON-compatible mapping. The producer contract is:
+`parameters` is a JSON-compatible mapping containing the producer's canonical **scientific
+configuration projection**. For configurations without invocation-only fields, this is normally
+identical to `encoder.config.to_dict()`. A configuration may, however, retain invocation details
+needed at execution time while projecting them out of artifact parameters and the configuration
+fingerprint when they do not alter the scientific result.
 
-```text
-parameters == encoder.config.to_dict()
-```
+The external residue-feature path is the implemented v0.1 example. Its resolved configuration
+retains the absolute path so the encoder can validate and open the requested payload, but the path
+does not define scientific or cache identity. Artifact parameters instead retain the external
+payload's `content_sha256`, source metadata, feature keys and dimension, chain/model identity, and
+alignment policy. The invocation path is recorded separately under the namespaced
+`extensions.org.eris.external_features` provenance extension.
 
-It records the canonical request, including `null` when the user intentionally delegates an
-effective value to runtime computation. It does not duplicate config validation or scientific
-parameter semantics. Mapping keys are strings; nested mappings/lists, strings, Booleans,
-integers, finite floats, and `null` are supported. NumPy values, NumPy arrays, `Path`, NaN, and
-infinities are prohibited in parameters.
+This distinction is a producer serialization rule within the existing Artifact Schema v2; it does
+not add or change Schema v2 fields. It also does not allow producers to omit scientifically
+meaningful values from `parameters`.
+
+The projection records the canonical request, including `null` when the user intentionally
+delegates an effective value to runtime computation. It does not duplicate config validation or
+scientific parameter semantics. Mapping keys are strings; nested mappings/lists, strings,
+Booleans, integers, finite floats, and `null` are supported. NumPy values, NumPy arrays, `Path`,
+NaN, and infinities are prohibited in parameters.
 
 For example, a binned representation can retain the request:
 
@@ -200,9 +211,10 @@ json.dumps(
 ```
 
 The fingerprint is deterministic and insensitive to mapping insertion order. It changes when
-the representation name or canonical requested parameters change. It does not depend on schema
-version, encoder/package version, source, paths, arrays, timestamps, environment, or cache
-settings.
+the representation name or canonical scientific parameters change. It does not depend on schema
+version, encoder/package version, invocation-only locators, payload arrays, timestamps,
+environment, or cache settings. A content hash or other canonical resource identity included in
+`parameters` does participate even when the path used to locate that resource does not.
 
 `config_fingerprint` is not a complete artifact identity and is not itself a cache key. The active
 v2 cache boundary combines it with schema/cache contract versions, representation and encoder
@@ -281,8 +293,10 @@ topology, contact, binning, and other representation-specific semantics are outs
 }
 ```
 
-The core validator verifies namespace/value structure but does not interpret extension
-semantics. None of the ten current explicit representations requires an extension.
+The core validator verifies namespace/value structure but does not interpret extension semantics.
+An explicit representation using external residue features records the invocation path and
+content hash under `extensions.org.eris.external_features`; this is provenance for the invocation,
+not a second scientific-identity definition.
 
 ## JSON normalization
 

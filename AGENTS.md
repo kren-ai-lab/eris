@@ -1,94 +1,59 @@
 # AGENTS.md — Eris development rules
 
-## Authority and scope
+## Repository authority
 
-- Work on branch `dev`.
-- `dev` is the only active development line for Eris v0.1.
-- `jr_revision` is the frozen historical/reference baseline for Eris v0.1.
-- Never modify `jr_revision`.
-- Never create or switch branches unless explicitly requested.
-- Never maintain parity or synchronization between `dev` and `jr_revision`, and never copy changes into `jr_revision`.
-- `docs/milestones.md` is the authoritative implementation tracker and wins over historical code or stale documentation.
-- Implement only the requested milestone/work unit. Do not opportunistically start later milestones.
-- If a requested change exposes a genuine contract/design blocker, STOP before changing the frozen contract and report the blocker concisely.
-- Prefer focused changes over broad refactors.
+- Work on `dev`, the active development branch.
+- `jr_revision` is a frozen historical baseline. Never modify it or maintain parity with `dev`.
+- Do not create or switch branches unless explicitly requested.
+- `pyproject.toml` is the development authority for package metadata, Python compatibility, and
+  dependency groups.
+- Permanent technical contracts live in `docs/architecture.md`, `docs/artifact_schema.md`,
+  `docs/representation_defaults.md`, `docs/external_residue_features.md`, and
+  `docs/gearnet_edge_backend.md`.
+- Prefer focused changes; do not expand a requested task into unrelated cleanup or features.
 
 ## Git safety
 
-- Never commit, push, tag, publish, release, merge, or rewrite history unless explicitly requested.
-- Do not stage files unless explicitly asked.
-- At the start of implementation tasks, verify current branch, HEAD subject, and clean/expected worktree.
-- At the end, report `git diff --stat` and `git status --short`.
+- Never stage, commit, push, tag, publish, release, merge, or rewrite history unless explicitly
+  requested.
+- At the start of a change, verify branch, HEAD, and the expected worktree state.
+- Preserve unrelated tracked and untracked user work.
+- Never use destructive history or broad filesystem commands to discard local changes.
+- At handoff, report `git diff --stat` and `git status --short`.
 
-## Frozen project contracts
+## Contract guardrails
 
-- Package/import/CLI name: `eris`.
-- Core Python: `>=3.10,<3.14`.
-- Preserve optional-dependency isolation.
-- `import eris` must not eagerly import Torch, TorchDrug, PyG, RDKit, or GearNet runtime.
-- Artifact persistence is `StructureArtifact` Schema v2 with `meta.json` + `data.npz`.
-- Schema v1 is not a supported public artifact format.
-- Do not change Artifact Schema v2, scientific cache identity, or GearNet scientific behavior unless the requested milestone explicitly requires it.
-- CLI should delegate to the public Python API when an equivalent public API exists.
-- Do not expose internal registries, runners, backends, descriptors, or cache implementation details as public API unless a milestone requires it.
+- Preserve optional-dependency isolation. `import eris` must not eagerly import Torch, TorchDrug,
+  PyG, RDKit, or the GearNet numerical runtime.
+- Artifact persistence is `StructureArtifact` Schema v2 with `meta.json` and `data.npz`.
+- Do not change Artifact Schema v2, scientific cache identity, or GearNet scientific behavior
+  unless the task explicitly requires it.
+- CLI operations should delegate to the equivalent public Python API.
+- Do not expose internal registries, runners, backends, descriptors, or cache internals as public
+  API without an explicit contract change.
+- Keep optional dependencies lazy and feature-local. Do not add runtime network access or
+  automatic checkpoint downloads.
 
 ## Scientific safety
 
-- Do not silently pad, truncate, resize, normalize, infer topology, invent IDs, drop failed samples, or coerce invalid scientific values.
-- Preserve array order and biological/sample identity.
-- Incompatibilities should fail clearly rather than be repaired implicitly.
-- PyG export may only use public graph topology already present in the Artifact.
-- Learned embeddings must never leak or reconstruct GearNet internal topology.
+- Preserve biological/sample identity, array order, deterministic feature order, and exact keys.
+- Do not silently pad, truncate, resize, normalize, clip, infer topology, invent IDs, drop failed
+  samples, or coerce invalid scientific values.
+- Incompatible scientific inputs must fail clearly rather than be repaired implicitly.
+- PyG export may use only public topology already present in an artifact.
+- Learned embeddings must not expose or reconstruct GearNet-internal topology.
+- Escalate unresolved residue/atom selection, chain, heteroatom, water, alternate-location,
+  topology, or structural-feature semantics to Nicole and/or Julián before implementation.
 
-## Scientific decision escalation
+## Implementation and validation
 
-- Do not silently invent unresolved biological or structural semantics; escalate them to Nicole and/or Julián before implementation.
-- Escalation is required for residue or atom selection, heteroatom inclusion, water handling, chain semantics, alternate-location handling, biologically meaningful graph construction, and structural feature interpretation.
-
-## Implementation style
-
-- Reuse canonical contracts/helpers instead of creating parallel parsers, serializers, hashes, or validators.
-- Avoid large framework abstractions for one milestone.
-- Preserve deterministic ordering.
-- Keep optional dependencies lazy and feature-local.
-- Do not add network access unless explicitly required.
-- Do not download model checkpoints automatically.
-- Do not use broad `except BaseException`.
-- Avoid broad `except Exception` when stable project exception types can be used.
-
-## Testing strategy
-
-For a normal work unit:
-
-1. Run focused tests for the subsystem changed.
-2. Run relevant regression tests.
-3. Run `ruff check` on changed Python files.
-4. Run `ruff format --check` on changed Python files.
-5. Run `git diff --check`.
-
-Run the full Python 3.10 suite when:
-- the task explicitly asks for it;
-- the change crosses subsystem boundaries;
-- a milestone gate is being closed;
-- or before a commit when the diff is medium/high risk.
-
-Run Python 3.12 focused/core checks when the change should work across the full core Python range.
-
-Use `pip check` at milestone/commit gates or when dependencies/package metadata changed.
-
-## Output/reporting
-
-Keep reports short. Return only:
-
-1. Files changed.
-2. Important implementation decisions.
-3. Deviations or blockers.
-4. Focused/regression test results.
-5. Full-suite result only if it was run.
-6. `git diff --stat`.
-7. `git status --short`.
-8. Ready to commit: yes/no.
-9. Recommended commit message.
-
-Do not restate the whole prompt or milestone.
-Do not include long inventories unless explicitly requested.
+- Reuse canonical configs, validators, serializers, hashes, and registries rather than creating
+  parallel mechanisms.
+- Preserve deterministic behavior and use stable project exception types where available.
+- Run focused tests for the changed subsystem and relevant regression tests.
+- For cross-cutting, gate-level, or pre-commit work, run the full suite in the available supported
+  environment.
+- Run Ruff check and format checks for affected files, plus `git diff --check`.
+- Run `pip check` when dependencies, packaging, or a handoff/release gate is involved.
+- Keep reports concise: changed files, important decisions, blockers, validation results, diff,
+  worktree status, readiness, and a recommended commit message.

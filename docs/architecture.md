@@ -110,6 +110,53 @@ definition as the single source of truth. The same definition must drive:
 The canonical typed configuration is the implemented authority; Registry metadata, defaults,
 help, artifact parameters, and fingerprints derive from it.
 
+## Explicit residue data flow
+
+Feature-bearing explicit residue representations share one canonical processing path:
+
+```text
+Structure input
+    ↓
+biological residue selection
+    ↓
+position (CA, residue-atom mean, or center of mass)
+    ↓
+FeatureMode / FeatureSpec registry
+    ↓
+node_attr + node_attr_keys
+    ↓
+explicit feature-bearing representation
+    ↓
+StructureArtifact
+    ↓
+cache / batch / pack / dataset / export
+```
+
+The residue feature registry composes five semantic categories without introducing a separate
+hybrid encoder:
+
+- residue identity (`onehot`, `aa_index`, and flags);
+- fixed physicochemical descriptors (`physchem`);
+- selected true AAIndex1 records (`aaindex`);
+- experimental or confidence metadata (`bfactor_ca` and explicitly sourced `plddt_ca`);
+- source-independent external numerical features (`external`).
+
+Selected feature blocks are concatenated into one `node_attr` matrix. Physical block order follows
+canonical `FeatureSpec.order`; the order in which a caller writes tokens does not redefine the
+matrix layout. Within each block, internal columns follow that feature's canonical contract: for
+example, requested AAIndex accessions retain their canonicalized order and external columns follow
+the payload's validated `feature_keys`. The ordered `node_attr_keys` metadata is authoritative for
+the resulting columns.
+
+GearNet-Edge does not use this explicit node-feature composition path. It remains a separate
+learned structural backend with its own frozen preprocessing, model, checkpoint, and embedding
+contract.
+
+Position-only matrix representations branch after residue positioning and do not fabricate a
+`node_attr` payload. The residue voxel grid applies its own registered grid-channel composition to
+the selected residue bundle. Both still finalize through the same Artifact and downstream
+workflow boundaries.
+
 ## Artifact Schema conceptual contract
 
 Canonical disk persistence remains:
@@ -308,6 +355,8 @@ The project identity is:
 - Python package/import: `eris`;
 - CLI command: `eris`.
 
-The desired and configured PyPI distribution name is also `eris`, but external namespace
-availability and ownership remain a release condition for M9. The project must not be renamed to
-`eris-structure`.
+Current distribution metadata in `pyproject.toml` uses `eris-lib`, while existing project-policy
+documents describe `eris` as the desired distribution name. This disagreement is intentionally
+not resolved by the scientific implementation closeout. Final distribution-name reconciliation,
+including PyPI namespace availability and ownership, belongs to release hardening. The import and
+CLI names remain `eris` regardless of that decision.

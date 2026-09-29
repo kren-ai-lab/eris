@@ -1,211 +1,137 @@
 # Eris
 
-Eris converts protein 3D structures into numerical representations for machine learning:
-point clouds, graphs, contact maps, distograms, voxel grids, and GearNet-Edge embeddings.
+Eris converts protein three-dimensional structures into reproducible numerical representations
+for machine learning. It supports explicit structural arrays derived from PDB/mmCIF coordinates
+and learned GearNet-Edge embeddings.
 
-- Explicit representations - structural arrays derived from PDB/mmCIF coordinates.
-- Learned representations - residue-level and structure-level GearNet-Edge embeddings.
-- Artifacts - NumPy arrays stored with parameters and provenance.
+Core capabilities include:
+
+- atom and residue point clouds;
+- atom and residue graphs;
+- contact maps and distograms;
+- residue voxel grids;
+- configurable residue coordinates and deterministic node features;
+- strict, portable artifacts with provenance;
+- batch, pack, dataset, Torch, and PyG workflows;
+- native GearNet-Edge node and global embeddings.
 
 ## Installation
 
-Eris supports Python 3.11-3.12 (`>=3.11,<3.13`). From PyPI, install:
-
-```console
-python -m pip install eris-lib
-```
-
-For a repository checkout or source distribution, install locally:
+Current development metadata supports Python 3.11 and 3.12 (`>=3.11,<3.13`). Public distribution
+naming and publication remain release-hardening work, so install from a repository checkout or
+source distribution:
 
 ```console
 python -m pip install .
 ```
 
-For GearNet-Edge embeddings:
+Optional extras are:
 
 ```console
-python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
-python -m pip install ".[gearnet]"
+python -m pip install ".[gearnet]"  # GearNet-Edge runtime
+python -m pip install ".[pyg]"      # PyTorch Geometric export
+python -m pip install ".[dev]"      # contributor tools
 ```
 
-For PyTorch Geometric export:
-
-```console
-python -m pip install ".[pyg]"
-```
-
-For local development:
-
-```console
-python -m pip install ".[dev]"
-```
+The GearNet checkpoint is not bundled or downloaded automatically.
 
 ## Quick start
 
-Encode a structure as a residue k-nearest-neighbor graph, then generate a GearNet-Edge embedding:
+Python:
 
 ```python
 import eris
 
-graph = eris.encode(
+artifact = eris.encode(
     "protein.pdb",
     representation="residue_knn_graph",
+    chain_id="A",
     k=8,
     output="artifact_knn",
 )
-
-embedding = eris.embed(
-    "protein.pdb",
-    representation="gearnet_edge",
-    output_mode="both",
-    checkpoint_path="mc_gearnet_edge.pth",
-    output="artifact_gearnet",
-)
 ```
 
-`encode()` accepts representation parameters as keyword arguments. `embed()` supports `node`,
-`global`, and `both` output modes.
+Command line:
 
-## Structural representations
+```console
+eris encode protein.pdb --representation residue_knn_graph --params '{"k": 8}' --out artifact_knn
+eris info validate artifact_knn
+```
+
+Use `eris --help`, `eris representations list`, or
+`eris.get_representation_info(name)` for discovery.
+
+## Explicit representations
 
 Eris provides ten explicit structural representations:
 
 | Name | Type | Granularity | Description |
 | --- | --- | --- | --- |
 | `atom_point_cloud` | cloud | atom | Atomic coordinates and features |
-| `residue_point_cloud` | cloud | residue | CA coordinates and residue features |
+| `residue_point_cloud` | cloud | residue | Configurable residue coordinates and features |
 | `atom_knn_graph` | graph | atom | Atomic k-nearest-neighbor graph |
 | `residue_knn_graph` | graph | residue | Residue k-nearest-neighbor graph |
 | `residue_contact_graph` | graph | residue | Residue graph defined by spatial contacts |
-| `residue_distogram` | matrix | residue | Pairwise CA distances |
-| `residue_distogram_bins` | matrix | residue | Discretized pairwise CA distances |
-| `residue_contact_map` | matrix | residue | Binary CA contact map |
+| `residue_distogram` | matrix | residue | Pairwise residue distances |
+| `residue_distogram_bins` | matrix | residue | Discretized pairwise distances |
+| `residue_contact_map` | matrix | residue | Binary residue contact map |
 | `residue_contact_map_bins` | matrix | residue | Distance-binned contact map |
-| `residue_voxel_grid` | grid | residue | Multi-channel 3D residue grid |
+| `residue_voxel_grid` | grid | residue | Multi-channel three-dimensional residue grid |
 
-Use `eris representations list` or `eris.get_representation_info(name)` to inspect parameters.
+Residue representations support alpha-carbon, residue-atom mean, and center-of-mass coordinates.
+Node features can combine amino-acid identity, physicochemical descriptors, true AAIndex1
+records, raw B-factor, explicitly interpreted pLDDT, and generic external residue values. Built-in
+and external blocks compose into one deterministic hybrid `node_attr` matrix.
 
-## GearNet-Edge embeddings
+See [representation defaults](docs/representation_defaults.md) and
+[external residue features](docs/external_residue_features.md) for the scientific contracts.
 
-`gearnet_edge` uses the pretrained GearNet-Edge checkpoint and produces 3072-dimensional embeddings:
+## GearNet-Edge
 
-- `node`: one `(N, 3072)` residue embedding array;
-- `global`: one `(3072,)` structure embedding;
+The learned representation `gearnet_edge` provides:
+
+- `node`: residue embeddings with biological node IDs;
+- `global`: one learned structure embedding;
 - `both`: both outputs.
 
-Runtime: Python 3.11-3.12, `torch==2.11.0`, CPU, and fp32. The checkpoint is not bundled or
-downloaded automatically. Supply `mc_gearnet_edge.pth` through `checkpoint_path` or
-`--checkpoint`.
+It uses the verified external `mc_gearnet_edge.pth` checkpoint through a native, optional PyTorch
+runtime. Runtime, preprocessing, checkpoint, and provenance requirements are documented in the
+[GearNet-Edge backend contract](docs/gearnet_edge_backend.md).
 
-Inspect the registered embedder and model metadata without running inference:
+Deterministic explicit-graph `graph_attr` statistics are not learned GearNet embeddings.
 
-```console
-eris embedders list
-eris embedders info gearnet_edge
-eris models list
-eris models info gearnet_edge
-```
+## Artifacts and workflows
 
-## Command-line interface
-
-```console
-eris --help
-```
-
-| Command | Purpose |
-| --- | --- |
-| `encode` | Write one explicit representation as an Eris artifact. |
-| `embed` | Write one learned representation as an Eris artifact. |
-| `batch encode` | Encode one representation for each manifest row. |
-| `batch embed` | Embed one representation for each manifest row. |
-| `batch from-folder` | Encode matching structure files from a folder. |
-| `pack` | Validate artifacts and write a metadata-only index. |
-| `info show` | Print artifact metadata. |
-| `info validate` | Validate an artifact directory. |
-| `representations list/info` | List or inspect explicit representations. |
-| `embedders list/info` | List or inspect learned embedders. |
-| `models list/info` | List or inspect learned model assets. |
-| `export to-torch/to-pyg` | Export one artifact to Torch or PyG. |
-| `export batch-to-torch/batch-to-pyg` | Export multiple artifacts to Torch or PyG. |
-| `cache info/clear` | Inspect or clear Eris cache namespaces. |
-
-Examples:
-
-```console
-eris representations list
-eris representations info residue_knn_graph
-eris encode protein.pdb --representation residue_knn_graph --params '{"k": 8}' --out artifact_knn
-eris embed protein.pdb --representation gearnet_edge --output-mode both --checkpoint mc_gearnet_edge.pth --device cpu --precision fp32 --out artifact_gearnet
-eris info validate artifact_knn
-eris info show artifact_gearnet
-eris export to-torch --artifact-dir artifact_knn --out graph.pt
-eris export to-pyg --artifact-dir artifact_knn --out graph_pyg.pt
-```
-
-## Notebooks
-
-| Notebook | Covers |
-| --- | --- |
-| [`encoders.ipynb`](notebooks/encoders.ipynb) | Explicit structural representations |
-| [`batch_encode.ipynb`](notebooks/batch_encode.ipynb) | Batch processing |
-| [`export.ipynb`](notebooks/export.ipynb) | Torch and PyG export |
-| [`info.ipynb`](notebooks/info.ipynb) | Artifact inspection |
-| [`cache.ipynb`](notebooks/cache.ipynb) | Cache inspection and clearing |
-
-## Python API
-
-| Function | Purpose |
-| --- | --- |
-| `eris.encode()` | Generate an explicit structural representation |
-| `eris.embed()` | Generate a learned structural embedding |
-| `eris.batch_encode()` | Encode a manifest of structures |
-| `eris.batch_embed()` | Embed a manifest of structures |
-| `eris.pack()` | Index generated artifacts |
-| `eris.to_torch()` | Convert an artifact for PyTorch |
-| `eris.to_pyg()` | Convert a graph artifact for PyG |
-
-Discovery functions are `eris.list_representations()`, `eris.get_representation_info(name)`,
-`eris.list_embedders()`, and `eris.get_embedder_info(name)`.
-
-## Artifacts
-
-Eris stores each generated representation as:
+Representations are returned as `StructureArtifact` objects and can be saved as:
 
 ```text
 artifact/
-├── meta.json
-└── data.npz
+|-- meta.json
+`-- data.npz
 ```
 
-- `data.npz` contains the numerical representation.
-- `meta.json` records the input, representation, parameters, outputs, shapes, features, and provenance.
+The Python API exposes encoding, embedding, batch processing, packing, and Torch/PyG export.
+Artifacts retain exact feature keys and can be loaded independently of their original external
+feature file after finalization.
 
-Artifacts use the Eris Artifact Schema. Serialized metadata retains `schema_version: 2`.
+See the [Artifact Schema](docs/artifact_schema.md) and
+[architecture](docs/architecture.md) for the complete contracts.
 
-## Batch and downstream use
+## Documentation
 
-`eris.batch_encode()` and `eris.batch_embed()` process manifests with the canonical fields
-`id`, `path`, `chain`, and `model`, and record per-row success or failure. The CLI also supports
-`eris batch from-folder FOLDER --pattern "*.pdb"` for deterministic folder discovery.
-`eris.pack()` creates an index that can be loaded with `eris.datasets.ErisFolderDataset`.
+- [Documentation map](docs/index.md)
+- [Architecture](docs/architecture.md)
+- [Representation defaults](docs/representation_defaults.md)
+- [Artifact Schema](docs/artifact_schema.md)
+- [External and hybrid residue features](docs/external_residue_features.md)
+- [GearNet-Edge backend](docs/gearnet_edge_backend.md)
+- [Contributor workflow](DEVELOPMENT.md)
 
-Use `eris.to_torch()` or `eris.to_pyg()` for downstream export. PyG export is available for graph artifacts; Eris does not infer graph topology from other representation types.
-
-## Learn more
-
-- [`docs/artifact_schema.md`](docs/artifact_schema.md): Artifact Schema contract.
-- [`docs/gearnet_edge_backend.md`](docs/gearnet_edge_backend.md): GearNet-Edge runtime and checkpoint contract.
-- [`DEVELOPMENT.md`](DEVELOPMENT.md): local development information.
-
-## License
+## License and acknowledgement
 
 Eris is released under the [MIT License](LICENSE).
 
-## Acknowledgements
-
-GearNet-Edge uses the official Multiview Contrast checkpoint `mc_gearnet_edge.pth` from
-[Zenodo record 10.5281/zenodo.7723075](https://doi.org/10.5281/zenodo.7723075). The verified
-checkpoint SHA-256 is
-`6dc11e2db6eff3c90f90672af227c647125adb7476de18a2bb860457bdb598ec`. Eris provides a native
-PyTorch runtime for this checkpoint; Eris did not train or create it, and TorchDrug is not a
-production runtime dependency.
+GearNet-Edge uses the official Multiview Contrast checkpoint from
+[Zenodo record 10.5281/zenodo.7723075](https://doi.org/10.5281/zenodo.7723075). Eris supplies a
+native runtime for that checkpoint and did not train or create it. Citation and final release
+metadata remain part of release hardening.

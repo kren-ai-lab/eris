@@ -76,6 +76,9 @@ The following are not part of canonical representation configuration:
 - `bfactor_ca` is the raw CA B-factor and is never implicitly normalized.
 - `plddt_ca` is opt-in. Its default `normalization="none"` preserves the 0–100 scale;
   `normalization="unit_interval"` explicitly divides by 100.
+- Unavailable pLDDT remains `NaN` in extracted structure data. If `plddt_ca` is requested by a
+  normal explicit encoder, node-feature construction applies its existing default missing fill of
+  zero; direct builder use may request the `nan` missing policy instead.
 
 The parameterized `aaindex` token reads AAIndex1 records from the `aaindex` provider. It requires
 one or more accession IDs, preserves their requested order, and serializes the provider name,

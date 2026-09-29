@@ -72,6 +72,9 @@ instance/
 # VScode stuff
 .vscode/
 
+# Visual Studio local state
+.vs/
+
 # Sphinx documentation
 docs/_build/
 
