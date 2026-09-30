@@ -90,8 +90,8 @@ hardening.
 Validation was run on 2026-09-29 in the local `eris` Conda environment:
 
 - Python `3.12.14`;
-- tracked suite: `374 passed, 4 skipped`, exit 0;
-- collected tracked tests: `378`;
+- tracked suite: `377 passed, 4 skipped`, exit 0;
+- collected tracked tests: `381`;
 - Ruff check: passed;
 - Ruff format check: `150 files already formatted`;
 - `pip check`: no broken requirements;

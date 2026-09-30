@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from importlib import metadata
+from importlib.util import find_spec
 from pathlib import Path
 
 import numpy as np
@@ -8,10 +9,12 @@ import pytest
 
 import eris
 from eris.core.artifacts import StructureArtifact
+from eris.core.cache import DiskCache
 from eris.core.config import ResiduePointCloudConfig, ResidueVoxelGridConfig
 from eris.core.io import StructureLoadError, load_and_extract_residue
 from eris.core.types import StructureInput
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
+from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
 from eris.features.node.constants import AA_VOCAB
 from eris.features.node.external import ExternalFeatureError
@@ -41,16 +44,19 @@ def _aa_indices(sequence: str) -> np.ndarray:
 def _write_external_features(
     path: Path,
     *,
-    values: list[list[float]],
+    values: list[list[float]] | np.ndarray,
     residue_ids: list[str],
     source_name: str = "custom",
+    feature_keys: list[str] | None = None,
 ) -> Path:
+    if feature_keys is None:
+        feature_keys = ["score_a", "score_b"]
     np.savez(
         path,
         values=np.asarray(values, dtype=np.float32),
         residue_ids=np.asarray(residue_ids),
         source_name=np.asarray(source_name),
-        feature_keys=np.asarray(["score_a", "score_b"]),
+        feature_keys=np.asarray(feature_keys),
         chain_id=np.asarray("A"),
         model_index=np.asarray(0, dtype=np.int64),
     )
@@ -341,19 +347,99 @@ def test_external_features_align_by_exact_residue_id_and_compose(tmp_path: Path)
     ]
 
 
-def test_external_features_reject_incomplete_residue_identity_set(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("residue_ids", "match"),
+    [
+        (["A:1::ALA"], r"strict_residue_id.*missing=1"),
+        (["A:1::ALA", "A:2::GLY", "A:3::SER"], r"strict_residue_id.*extra=1"),
+        (["A:1::ALA", "A:1::ALA"], r"duplicate IDs"),
+    ],
+    ids=["missing", "extra", "duplicate"],
+)
+def test_external_features_reject_invalid_residue_identity_set(
+    tmp_path: Path,
+    residue_ids: list[str],
+    match: str,
+) -> None:
     inp = _write_ca_structure(tmp_path / "protein.pdb", [("ALA", 12.0), ("GLY", 34.0)])
+    values = np.arange(len(residue_ids) * 2, dtype=np.float32).reshape(len(residue_ids), 2)
     external = _write_external_features(
         tmp_path / "external.npz",
-        values=[[10.0, 11.0]],
-        residue_ids=["A:1::ALA"],
+        values=values,
+        residue_ids=residue_ids,
     )
 
-    with pytest.raises(ExternalFeatureError, match=r"strict_residue_id.*missing=1"):
+    with pytest.raises(ExternalFeatureError, match=match):
         ResiduePointCloudCA(
             node_attr_mode=[{"external": {"path": str(external)}}],
             use_cache=False,
         ).encode(inp)
+
+
+def test_high_dimensional_external_hybrid_round_trip_and_identity(tmp_path: Path) -> None:
+    torch = pytest.importorskip("torch")
+    inp = _write_ca_structure(tmp_path / "protein.pdb", [("ALA", 12.0), ("GLY", 34.0)])
+    feature_dim = 512
+    feature_keys = [f"feature_{index:03d}" for index in range(feature_dim)]
+    external_keys = [f"external.embedding.{key}" for key in feature_keys]
+    values = np.arange(2 * feature_dim, dtype=np.float32).reshape(2, feature_dim)
+    external = _write_external_features(
+        tmp_path / "external.npz",
+        values=values,
+        residue_ids=["A:1::ALA", "A:2::GLY"],
+        source_name="embedding",
+        feature_keys=feature_keys,
+    )
+    cache = DiskCache(tmp_path / "cache")
+    node_attr_mode = ["onehot", "bfactor_ca", {"external": {"path": str(external)}}]
+
+    first = ResidueKNNGraph(
+        k=1,
+        node_attr_mode=node_attr_mode,
+        use_cache=True,
+        cache=cache,
+    ).encode(inp)
+    first.finalize()
+    artifact_dir = tmp_path / "artifact"
+    first.save(artifact_dir)
+    loaded = StructureArtifact.load(artifact_dir, strict=True)
+
+    expected_keys = [*[f"aa_onehot.{aa}" for aa in AA_VOCAB], "bfactor_ca", *external_keys]
+    assert loaded.data["node_attr"].shape == (2, len(AA_VOCAB) + 1 + feature_dim)
+    assert loaded.meta["feature_keys"]["node_attr_keys"] == expected_keys
+    np.testing.assert_array_equal(loaded.data["node_attr"][:, -feature_dim:], values)
+    torch_output = eris.to_torch(loaded, prefer="graph")
+    assert isinstance(torch_output["x"], torch.Tensor)
+    np.testing.assert_array_equal(torch_output["x"].cpu().numpy(), loaded.data["node_attr"])
+
+    if find_spec("torch_geometric") is not None:
+        pyg = eris.to_pyg(loaded, prefer="graph")
+        np.testing.assert_array_equal(pyg.x.cpu().numpy(), loaded.data["node_attr"])
+
+    changed_values = values + np.float32(1000.0)
+    _write_external_features(
+        external,
+        values=changed_values,
+        residue_ids=["A:1::ALA", "A:2::GLY"],
+        source_name="embedding",
+        feature_keys=feature_keys,
+    )
+    second = ResidueKNNGraph(
+        k=1,
+        node_attr_mode=node_attr_mode,
+        use_cache=True,
+        cache=cache,
+    ).encode(inp)
+
+    first_descriptor = loaded.meta["parameters"]["node_attr_mode"][2]["external"]
+    second_descriptor = second.meta["parameters"]["node_attr_mode"][2]["external"]
+    assert first_descriptor["content_sha256"] != second_descriptor["content_sha256"]
+    assert (
+        loaded.meta["provenance"]["config_fingerprint"]
+        != second.meta["provenance"]["config_fingerprint"]
+    )
+    np.testing.assert_array_equal(second.data["node_attr"][:, -feature_dim:], changed_values)
+    assert len(list((cache.cache_dir / "v2").iterdir())) == 2
 
 
 def test_batch_external_params_by_id_preserve_resume_identity(
