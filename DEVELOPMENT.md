@@ -43,11 +43,14 @@ python -m pytest -q tests/test_residue_features.py
 
 For cross-cutting changes or a handoff gate, run the tracked suite with a writable pytest base:
 
-```powershell
-$pt = "$env:USERPROFILE\eris-pytest-temp"
-Remove-Item $pt -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $pt | Out-Null
-python -m pytest -q --basetemp "$pt\base" -p no:cacheprovider
+```bash
+pt="${HOME}/eris-pytest-temp"
+rm -rf "$pt"
+mkdir -p "$pt"
+
+python -m pytest -q \
+  --basetemp "$pt/base" \
+  -p no:cacheprovider
 ```
 
 Run the static and environment checks:

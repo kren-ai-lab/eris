@@ -102,14 +102,16 @@ The four skips require `ERIS_GEARNET_CHECKPOINT`, which was not configured. PyTo
 `torch_geometric` was not installed. These results do not certify official-checkpoint inference or
 native PyG in a release environment.
 
-Reproduce the tracked suite in PowerShell:
+Reproduce the tracked suite in Bash:
 
-```powershell
-$pt = "$env:USERPROFILE\eris-pytest-temp"
-Remove-Item $pt -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $pt | Out-Null
+```bash
+pt="${HOME}/eris-pytest-temp"
+rm -rf "$pt"
+mkdir -p "$pt"
 
-python -m pytest -q --basetemp "$pt\base" -p no:cacheprovider
+python -m pytest -q \
+  --basetemp "$pt/base" \
+  -p no:cacheprovider
 python -m ruff check .
 python -m ruff format --check .
 python -m pip check
