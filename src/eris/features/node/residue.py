@@ -16,8 +16,16 @@ def build_node_attr(
     bfactor_ca: Optional[np.ndarray] = None,
     has_ca: Optional[np.ndarray] = None,
     residue_ids: Optional[np.ndarray] = None,
+    chain_id: Optional[np.ndarray] = None,
     chain_ids: Optional[tuple[str, ...]] = None,
     model_index: Optional[int] = None,
+    structural_residue_index: Optional[np.ndarray] = None,
+    backbone_n: Optional[np.ndarray] = None,
+    backbone_ca: Optional[np.ndarray] = None,
+    backbone_c: Optional[np.ndarray] = None,
+    backbone_n_mask: Optional[np.ndarray] = None,
+    backbone_ca_mask: Optional[np.ndarray] = None,
+    backbone_c_mask: Optional[np.ndarray] = None,
     # contract
     mode: str = "onehot+physchem+bfactor_ca",
     missing: str = "zero",
@@ -45,6 +53,31 @@ def build_node_attr(
     }
     if residue_ids is not None:
         data["residue_ids"] = ensure_1d(residue_ids, n, "residue_ids")
+    if chain_id is not None:
+        data["chain_id"] = ensure_1d(chain_id, n, "chain_id")
+    if structural_residue_index is not None:
+        data["structural_residue_index"] = ensure_1d(
+            structural_residue_index,
+            n,
+            "structural_residue_index",
+        ).astype(np.int64)
+    for name, value in (
+        ("backbone_n", backbone_n),
+        ("backbone_ca", backbone_ca),
+        ("backbone_c", backbone_c),
+    ):
+        if value is not None:
+            coordinate = np.asarray(value, dtype=np.float32)
+            if coordinate.shape != (n, 3):
+                raise ValueError(f"{name} must have shape ({n}, 3), got {coordinate.shape}")
+            data[name] = coordinate
+    for name, value in (
+        ("backbone_n_mask", backbone_n_mask),
+        ("backbone_ca_mask", backbone_ca_mask),
+        ("backbone_c_mask", backbone_c_mask),
+    ):
+        if value is not None:
+            data[name] = ensure_1d(value, n, name).astype(bool)
 
     feat_ctx = {
         "missing": missing,

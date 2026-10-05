@@ -2,9 +2,9 @@
 
 This document freezes the scientific and persistence contracts for the final
 Eris v0.1 structural-feature work. The contracts in this document are
-**approved targets, not claims about current runtime support**. Implementation
-work must land in focused work units with tests before these behaviors are
-advertised as available.
+**approved targets**. Multi-chain selection, physical polymer continuity, and
+backbone torsions are implemented; the remaining groups become runtime claims
+only after their focused work units land with tests.
 
 The existing architecture remains authoritative: public APIs build canonical
 configuration, resolve registered implementations, run feature-local optional
@@ -165,6 +165,12 @@ zero value.
 When an angle is undefined, every value derived from it is `NaN`. The mode,
 continuity cutoff, key order, units, and convention are recorded in canonical
 feature parameters and provenance.
+
+The implemented residue feature token is `backbone_geometry`. Its canonical
+parameters are `mode`, `max_peptide_bond_distance`, `torsion_convention`,
+`units`, and `missing_value_policy`. The latter three record the fixed signed
+`atan2` convention, radians, and `NaN` policy rather than offering competing
+scientific behaviors.
 
 ## Side-chain torsions
 

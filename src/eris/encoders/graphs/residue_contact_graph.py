@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 class ResidueContactGraph(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_contact_graph"
-    version: ClassVar[str] = "0.1.2"
+    version: ClassVar[str] = "0.1.3"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_GRAPH_OUTPUTS
 
@@ -137,8 +137,16 @@ class ResidueContactGraph(BaseResidueEncoder):
             plddt_ca=strc["plddt"],
             bfactor_ca=strc["bfactor_ca"],
             residue_ids=strc["residue_ids"],
+            chain_id=strc["chain_id"],
             chain_ids=strc.chain_ids,
             model_index=strc.model_index,
+            structural_residue_index=strc["structural_residue_index"],
+            backbone_n=strc["backbone_n"],
+            backbone_ca=strc["backbone_ca"],
+            backbone_c=strc["backbone_c"],
+            backbone_n_mask=strc["backbone_n_mask"],
+            backbone_ca_mask=strc["backbone_ca_mask"],
+            backbone_c_mask=strc["backbone_c_mask"],
             mode=self.config.node_attr_mode.to_list(),
             return_keys=True,
         )

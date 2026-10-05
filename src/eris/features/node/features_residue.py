@@ -15,6 +15,7 @@ from eris.features.node.constants import (
 
 from eris.features.utils import onehot, safe_float
 from eris.features.feature_registry import FeatureSpec, register_residue_node_feature
+from eris.features.geometry import backbone_torsions
 from eris.features.node.external import (
     external_feature_keys,
     external_feature_values,
@@ -375,6 +376,139 @@ register_residue_node_feature(
         requires={"aa_index", "has_ca"},
         fn=flags_fn,
         keys_fn=flags_keys,
+    )
+)
+
+
+# -------------------------
+# backbone_geometry
+# -------------------------
+
+_BACKBONE_TORSION_CONVENTION = "standard_signed_atan2[-pi,pi)"
+_BACKBONE_TORSION_UNITS = "radians"
+_BACKBONE_MISSING_VALUE_POLICY = "nan"
+
+
+def normalize_backbone_geometry_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    allowed = {
+        "mode",
+        "max_peptide_bond_distance",
+        "torsion_convention",
+        "units",
+        "missing_value_policy",
+    }
+    unknown_params = sorted(set(params) - allowed)
+    if unknown_params:
+        raise ValueError(f"Unknown backbone_geometry parameters: {unknown_params}")
+
+    mode = params.get("mode", "sincos")
+    if not isinstance(mode, str):
+        raise TypeError("backbone_geometry parameter 'mode' must be a string")
+    mode = mode.strip().lower()
+    if mode not in {"sincos", "raw", "both"}:
+        raise ValueError("backbone_geometry parameter 'mode' must be one of: sincos, raw, both")
+
+    distance = params.get("max_peptide_bond_distance", 2.0)
+    if isinstance(distance, bool) or not isinstance(distance, Real):
+        raise TypeError(
+            "backbone_geometry parameter 'max_peptide_bond_distance' must be a real number"
+        )
+    distance = float(distance)
+    if not np.isfinite(distance) or distance <= 0.0:
+        raise ValueError(
+            "backbone_geometry parameter 'max_peptide_bond_distance' "
+            "must be a finite positive number"
+        )
+
+    fixed_parameters = {
+        "torsion_convention": _BACKBONE_TORSION_CONVENTION,
+        "units": _BACKBONE_TORSION_UNITS,
+        "missing_value_policy": _BACKBONE_MISSING_VALUE_POLICY,
+    }
+    for name, expected in fixed_parameters.items():
+        if name in params and params[name] != expected:
+            raise ValueError(f"backbone_geometry parameter '{name}' must be {expected!r}")
+
+    return {
+        "mode": mode,
+        **fixed_parameters,
+        "max_peptide_bond_distance": distance,
+    }
+
+
+def backbone_geometry_fn(
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> np.ndarray:
+    angles = backbone_torsions(
+        data["backbone_n"],
+        data["backbone_ca"],
+        data["backbone_c"],
+        data["backbone_n_mask"],
+        data["backbone_ca_mask"],
+        data["backbone_c_mask"],
+        data["chain_id"],
+        data["structural_residue_index"],
+        max_peptide_bond_distance=params["max_peptide_bond_distance"],
+    )
+    mode = params["mode"]
+    if mode == "raw":
+        return angles
+
+    periodic = np.column_stack(
+        [
+            np.sin(angles[:, 0]),
+            np.cos(angles[:, 0]),
+            np.sin(angles[:, 1]),
+            np.cos(angles[:, 1]),
+            np.sin(angles[:, 2]),
+            np.cos(angles[:, 2]),
+        ]
+    ).astype(np.float32)
+    if mode == "both":
+        return np.concatenate([periodic, angles], axis=1).astype(np.float32)
+    return periodic
+
+
+def backbone_geometry_keys(
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> List[str]:
+    periodic = [
+        "backbone.phi_sin",
+        "backbone.phi_cos",
+        "backbone.psi_sin",
+        "backbone.psi_cos",
+        "backbone.omega_sin",
+        "backbone.omega_cos",
+    ]
+    raw = ["backbone.phi", "backbone.psi", "backbone.omega"]
+    if params["mode"] == "sincos":
+        return periodic
+    if params["mode"] == "raw":
+        return raw
+    return [*periodic, *raw]
+
+
+register_residue_node_feature(
+    FeatureSpec(
+        token="backbone_geometry",
+        order=75,
+        requires={
+            "backbone_n",
+            "backbone_ca",
+            "backbone_c",
+            "backbone_n_mask",
+            "backbone_ca_mask",
+            "backbone_c_mask",
+            "chain_id",
+            "structural_residue_index",
+        },
+        fn=backbone_geometry_fn,
+        keys_fn=backbone_geometry_keys,
+        params_fn=normalize_backbone_geometry_params,
     )
 )
 

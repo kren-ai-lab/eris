@@ -5,6 +5,7 @@ from importlib import metadata
 
 import pytest
 
+from eris.core.artifact_schema_v2 import compute_config_fingerprint
 from eris.core.config import (
     _CONFIG_TYPES_BY_REPRESENTATION,
     AtomKNNGraphConfig,
@@ -42,7 +43,7 @@ ATOM_SELECTION = {
 RESIDUE_SELECTION = {
     "residue_center": "ca",
     "amino_acids_only": True,
-    "altloc": "first",
+    "altloc": "max_occupancy",
     "missing_residue_center": "skip",
     "plddt_source": "none",
 }
@@ -220,7 +221,7 @@ def test_invalid_values_fail_during_construction(factory):
     "factory",
     [
         lambda: ResiduePointCloudConfig(amino_acids_only=False),
-        lambda: ResiduePointCloudConfig(altloc="max_occupancy"),
+        lambda: ResiduePointCloudConfig(altloc="first"),
         lambda: ResiduePointCloudConfig(missing_residue_center="nan"),
     ],
 )
@@ -330,6 +331,47 @@ def test_parameterized_residue_features_are_canonical_and_provider_pinned():
     ]
 
 
+def test_backbone_geometry_parameters_canonicalize_and_fingerprint_scientific_changes():
+    minimal = ResiduePointCloudConfig(
+        node_attr_mode=[{"backbone_geometry": {"mode": " BOTH ", "max_peptide_bond_distance": 2}}]
+    )
+    explicit = ResiduePointCloudConfig(
+        node_attr_mode=[
+            {
+                "backbone_geometry": {
+                    "mode": "both",
+                    "max_peptide_bond_distance": 2.0,
+                    "torsion_convention": "standard_signed_atan2[-pi,pi)",
+                    "units": "radians",
+                    "missing_value_policy": "nan",
+                }
+            }
+        ]
+    )
+    changed_mode = ResiduePointCloudConfig(node_attr_mode=[{"backbone_geometry": {"mode": "raw"}}])
+    changed_threshold = ResiduePointCloudConfig(
+        node_attr_mode=[{"backbone_geometry": {"mode": "both", "max_peptide_bond_distance": 1.9}}]
+    )
+
+    assert minimal == explicit
+    assert minimal.to_dict() == explicit.to_dict()
+    baseline = compute_config_fingerprint(
+        minimal.representation_name,
+        minimal.to_fingerprint_dict(),
+        chain_ids=["A"],
+    )
+    assert baseline != compute_config_fingerprint(
+        changed_mode.representation_name,
+        changed_mode.to_fingerprint_dict(),
+        chain_ids=["A"],
+    )
+    assert baseline != compute_config_fingerprint(
+        changed_threshold.representation_name,
+        changed_threshold.to_fingerprint_dict(),
+        chain_ids=["A"],
+    )
+
+
 @pytest.mark.parametrize(
     "value",
     [
@@ -339,6 +381,9 @@ def test_parameterized_residue_features_are_canonical_and_provider_pinned():
         [{"aaindex": {"ids": ["KYTJ820101", "kytj820101"]}}],
         [{"aaindex": {"ids": ["NOT_A_REAL_ID"]}}],
         [{"aaindex": {"ids": ["KYTJ820101"], "extra": True}}],
+        [{"backbone_geometry": {"mode": "degrees"}}],
+        [{"backbone_geometry": {"max_peptide_bond_distance": 0.0}}],
+        [{"backbone_geometry": {"missing_value_policy": "zero"}}],
     ],
 )
 def test_residue_feature_parameters_fail_during_config_construction(value):

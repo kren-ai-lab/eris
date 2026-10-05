@@ -141,12 +141,24 @@ def _altloc_rank(alt: str) -> int:
     Prefer blank altloc over 'A' over others (for deterministic tie-breaking).
     Lower rank is preferred.
     """
-    a = (alt or "").strip().upper()
+    a = _altloc_identifier(alt)
     if a == "":
         return 0
     if a == "A":
         return 1
     return 2
+
+
+def _altloc_identifier(alt: str) -> str:
+    return (alt or "").replace("\x00", "").strip().upper()
+
+
+def _max_occupancy_sort_key(atom: gemmi.Atom) -> tuple[int, float, int, str]:
+    occupancy = float(getattr(atom, "occ", float("nan")))
+    identifier = _altloc_identifier(getattr(atom, "altloc", ""))
+    finite_rank = 0 if np.isfinite(occupancy) else 1
+    occupancy_rank = -occupancy if np.isfinite(occupancy) else 0.0
+    return finite_rank, occupancy_rank, _altloc_rank(identifier), identifier
 
 
 def _select_atom_altloc(atoms: Iterable[gemmi.Atom], altloc: str) -> Optional[gemmi.Atom]:
@@ -177,20 +189,15 @@ def _select_atom_altloc(atoms: Iterable[gemmi.Atom], altloc: str) -> Optional[ge
         return atoms_list[0]
 
     if policy.lower() == "max_occupancy":
-        return max(
-            atoms_list,
-            key=lambda a: (float(getattr(a, "occ", 0.0)), -_altloc_rank(getattr(a, "altloc", ""))),
-        )
+        return min(atoms_list, key=_max_occupancy_sort_key)
 
     # explicit letter
     letter = policy.upper()
-    preferred = [
-        a for a in atoms_list if (getattr(a, "altloc", "") or "").strip().upper() == letter
-    ]
+    preferred = [a for a in atoms_list if _altloc_identifier(getattr(a, "altloc", "")) == letter]
     if preferred:
         return preferred[0]
 
-    blank = [a for a in atoms_list if (getattr(a, "altloc", "") or "").strip() == ""]
+    blank = [a for a in atoms_list if _altloc_identifier(getattr(a, "altloc", "")) == ""]
     if blank:
         return blank[0]
 
@@ -231,6 +238,24 @@ def _selected_atoms_from_residue(res: gemmi.Residue, altloc: str) -> List[gemmi.
             selected.append(atom)
 
     return selected
+
+
+def _selected_atom_coordinate(
+    res: gemmi.Residue,
+    atom_name: str,
+    altloc: str,
+) -> tuple[np.ndarray, bool]:
+    atom = _select_atom_altloc(res[atom_name], altloc) if atom_name in res else None
+    if atom is None:
+        return np.full((3,), np.nan, dtype=np.float32), False
+    coordinate = np.asarray(
+        [float(atom.pos.x), float(atom.pos.y), float(atom.pos.z)],
+        dtype=np.float32,
+    )
+    valid = bool(np.isfinite(coordinate).all())
+    if not valid:
+        coordinate[:] = np.nan
+    return coordinate, valid
 
 
 def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
@@ -300,7 +325,7 @@ def extract_residue_bundle(
     chain: gemmi.Chain,
     amino_acids_only: bool = True,
     *,
-    altloc: str = "first",
+    altloc: str = "max_occupancy",
     missing_residue: str = "skip",
     mode: str = "ca",
     plddt_source: str = "none",
@@ -336,6 +361,9 @@ def extract_residue_bundle(
         aa_index : (N,) int16
         plddt : (N,) float32
         bfactor_ca : (N,) float32
+        backbone_n/backbone_ca/backbone_c : (N,3) float32
+        backbone_n_mask/backbone_ca_mask/backbone_c_mask : (N,) bool
+        structural_residue_index : (N,) int64
     """
     missing_policy = (missing_residue or "skip").strip().lower()
     if missing_policy not in {"skip", "error", "nan"}:
@@ -360,14 +388,24 @@ def extract_residue_bundle(
     bfac_list: List[float] = []
     missing_ids: List[str] = []
     biological_sequence_positions: List[int] = []
+    structural_residue_indices: List[int] = []
+    backbone_n: List[List[float]] = []
+    backbone_ca: List[List[float]] = []
+    backbone_c: List[List[float]] = []
+    backbone_n_mask: List[bool] = []
+    backbone_ca_mask: List[bool] = []
+    backbone_c_mask: List[bool] = []
     previous_residue_number: int | None = None
     previous_sequence_position: int | None = None
+    structural_residue_index = -1
 
     for res in chain:
         r3 = res.name.upper()
 
         if amino_acids_only and r3 not in AA3_TO_AA1:
             continue
+
+        structural_residue_index += 1
 
         rid = _residue_id(chain, res)
         aa1 = AA3_TO_AA1.get(r3, "X")
@@ -381,6 +419,9 @@ def extract_residue_bundle(
         previous_sequence_position = sequence_position
 
         center, bfactor_ca = _compute_residue_center(res, mode=mode, altloc=altloc)
+        n_coord, n_valid = _selected_atom_coordinate(res, "N", altloc)
+        ca_coord, ca_valid = _selected_atom_coordinate(res, "CA", altloc)
+        c_coord, c_valid = _selected_atom_coordinate(res, "C", altloc)
         if plddt_source == "none" or not np.isfinite(bfactor_ca):
             plddt_ca = float("nan")
         elif 0.0 <= bfactor_ca <= 100.0:
@@ -409,6 +450,13 @@ def extract_residue_bundle(
             plddt_list.append(float("nan"))
             bfac_list.append(float("nan"))
             biological_sequence_positions.append(sequence_position)
+            structural_residue_indices.append(structural_residue_index)
+            backbone_n.append(n_coord.tolist())
+            backbone_ca.append(ca_coord.tolist())
+            backbone_c.append(c_coord.tolist())
+            backbone_n_mask.append(n_valid)
+            backbone_ca_mask.append(ca_valid)
+            backbone_c_mask.append(c_valid)
             continue
 
         coords.append(center.tolist())
@@ -419,6 +467,13 @@ def extract_residue_bundle(
         plddt_list.append(plddt_ca)
         bfac_list.append(bfactor_ca)
         biological_sequence_positions.append(sequence_position)
+        structural_residue_indices.append(structural_residue_index)
+        backbone_n.append(n_coord.tolist())
+        backbone_ca.append(ca_coord.tolist())
+        backbone_c.append(c_coord.tolist())
+        backbone_n_mask.append(n_valid)
+        backbone_ca_mask.append(ca_valid)
+        backbone_c_mask.append(c_valid)
 
     if missing_policy == "error" and missing_ids:
         preview = ", ".join(missing_ids[:10])
@@ -435,6 +490,13 @@ def extract_residue_bundle(
         "bfactor_ca": np.asarray(bfac_list, dtype=np.float32),
         "omitted_residue_ids": np.asarray(missing_ids, dtype=np.str_),
         "biological_sequence_positions": np.asarray(biological_sequence_positions, dtype=np.int64),
+        "structural_residue_index": np.asarray(structural_residue_indices, dtype=np.int64),
+        "backbone_n": np.asarray(backbone_n, dtype=np.float32).reshape((-1, 3)),
+        "backbone_ca": np.asarray(backbone_ca, dtype=np.float32).reshape((-1, 3)),
+        "backbone_c": np.asarray(backbone_c, dtype=np.float32).reshape((-1, 3)),
+        "backbone_n_mask": np.asarray(backbone_n_mask, dtype=bool),
+        "backbone_ca_mask": np.asarray(backbone_ca_mask, dtype=bool),
+        "backbone_c_mask": np.asarray(backbone_c_mask, dtype=bool),
     }
 
 
@@ -475,7 +537,7 @@ def load_and_extract_residue(
     amino_acids_only: bool = True,
     *,
     mode: str = "ca",
-    altloc: str = "first",
+    altloc: str = "max_occupancy",
     missing_ca: str = "skip",
     plddt_source: str = "none",
 ) -> LoadedStructureData:

@@ -63,7 +63,7 @@ def test_residue_encoder_traces_skipped_residues(tmp_path: Path) -> None:
         structure_input
     )
 
-    assert ResiduePointCloudCA.version == "0.1.1"
+    assert ResiduePointCloudCA.version == "0.1.2"
     assert artifact.meta["parameters"]["missing_residue_center"] == "skip"
     assert artifact.data["residue_ids"].tolist() == ["A:15::ALA", "A:20:A:SER"]
     assert artifact.data["omitted_residue_ids"].tolist() == ["A:16::GLY"]
@@ -190,7 +190,7 @@ def test_old_residue_cache_key_cannot_satisfy_new_output_contract(tmp_path: Path
     )
     cache.set_v2(old_key, stale)
 
-    assert encoder.version == "0.1.1"
+    assert encoder.version == "0.1.2"
     assert old_key != current_key
     assert cache.get_v2(old_key) is not None
     result = encoder.encode(structure_input)

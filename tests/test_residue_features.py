@@ -21,7 +21,12 @@ from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
 from eris.features.node.constants import AA_VOCAB
 from eris.features.node.external import ExternalFeatureError
 from eris.features.node.residue import build_node_attr
+from eris.features.geometry import backbone_torsions, peptide_continuity, signed_dihedral
 from eris.pipelines.manifest import StructureManifestRow
+
+
+PDB = Path("tests/data/1AQ2.pdb")
+MMCIF = Path("tests/data/1AQ2.cif")
 
 
 def _write_ca_structure(
@@ -37,6 +42,75 @@ def _write_ca_structure(
         )
     path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
     return StructureInput(source=str(path), chain_id="A")
+
+
+def _backbone_atom_line(
+    serial: int,
+    atom_name: str,
+    residue_name: str,
+    chain_id: str,
+    residue_number: int,
+    insertion_code: str,
+    coordinate: tuple[float, float, float],
+) -> str:
+    x, y, z = coordinate
+    return (
+        f"ATOM  {serial:5d} {atom_name:>4s} {residue_name:>3s} {chain_id}"
+        f"{residue_number:4d}{insertion_code:1s}   {x:8.3f}{y:8.3f}{z:8.3f}"
+        f"{1.0:6.2f}{10.0:6.2f}           {atom_name[0]:>2s}  "
+    )
+
+
+def _altloc_atom_line(
+    serial: int,
+    atom_name: str,
+    altloc: str,
+    coordinate: tuple[float, float, float],
+    occupancy: float,
+) -> str:
+    x, y, z = coordinate
+    return (
+        f"ATOM  {serial:5d} {atom_name:>4s}{altloc:1s}ALA A   1    "
+        f"{x:8.3f}{y:8.3f}{z:8.3f}{occupancy:6.2f}{10.0:6.2f}"
+        f"           {atom_name[0]:>2s}  "
+    )
+
+
+def _write_backbone_structure(
+    path: Path,
+    residues: list[
+        tuple[
+            str,
+            int,
+            str,
+            str,
+            dict[str, tuple[float, float, float]],
+        ]
+    ],
+) -> StructureInput:
+    lines: list[str] = []
+    serial = 1
+    previous_chain: str | None = None
+    for chain_id, residue_number, insertion_code, residue_name, atoms in residues:
+        if previous_chain is not None and chain_id != previous_chain:
+            lines.append("TER")
+        for atom_name in ("N", "CA", "C"):
+            if atom_name in atoms:
+                lines.append(
+                    _backbone_atom_line(
+                        serial,
+                        atom_name,
+                        residue_name,
+                        chain_id,
+                        residue_number,
+                        insertion_code,
+                        atoms[atom_name],
+                    )
+                )
+                serial += 1
+        previous_chain = chain_id
+    path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
+    return StructureInput(source=str(path))
 
 
 def _aa_indices(sequence: str) -> np.ndarray:
@@ -203,6 +277,343 @@ def test_default_residue_and_voxel_features_do_not_request_plddt() -> None:
     assert "plddt_ca" not in residue["node_attr_mode"]
     assert all(channel != "plddt" for channel in voxel["channels"])
     assert voxel["clamp"] is False
+
+
+@pytest.mark.parametrize(
+    ("angle", "expected"),
+    [
+        (0.0, 0.0),
+        (np.pi / 2.0, np.pi / 2.0),
+        (-np.pi / 2.0, -np.pi / 2.0),
+        (np.pi, -np.pi),
+    ],
+)
+def test_signed_dihedral_known_angles_and_boundary(angle: float, expected: float) -> None:
+    points = np.asarray(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [np.cos(angle), np.sin(angle), 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    assert signed_dihedral(*points) == pytest.approx(expected, abs=1e-12)
+
+
+def test_signed_dihedral_is_translation_and_rotation_invariant() -> None:
+    points = np.asarray(
+        [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 1.0]],
+        dtype=np.float64,
+    )
+    rotation = np.asarray(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    expected = signed_dihedral(*points)
+
+    translated = points + np.asarray([12.5, -7.25, 3.0])
+    rotated = points @ rotation.T
+
+    assert signed_dihedral(*translated) == pytest.approx(expected, abs=1e-12)
+    assert signed_dihedral(*rotated) == pytest.approx(expected, abs=1e-12)
+
+
+def test_physical_peptide_continuity_is_inclusive_and_never_crosses_chains() -> None:
+    c_coord = np.asarray(
+        [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [8.0, 0.0, 0.0], [12.0, 0.0, 0.0]],
+        dtype=np.float32,
+    )
+    n_coord = np.asarray(
+        [[-1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [6.01, 0.0, 0.0], [10.0, 0.0, 0.0]],
+        dtype=np.float32,
+    )
+    valid = np.ones((4,), dtype=bool)
+
+    continuity = peptide_continuity(
+        c_coord,
+        n_coord,
+        valid,
+        valid,
+        np.asarray(["A", "A", "A", "B"]),
+        np.asarray([0, 1, 2, 0]),
+        max_peptide_bond_distance=2.0,
+    )
+
+    # Exactly 2.0 A is connected; 2.01 A and a chain boundary are not.
+    np.testing.assert_array_equal(continuity, np.asarray([True, False, False]))
+
+
+def test_backbone_torsions_respect_missing_atoms_physical_breaks_and_chains() -> None:
+    n_coord = np.asarray(
+        [[-1.0, 0.0, 0.0], [1.7, 0.8, 0.1], [4.0, 1.2, 1.1], [6.5, 0.7, 2.1]],
+        dtype=np.float32,
+    )
+    ca_coord = np.asarray(
+        [[0.0, 0.0, 0.0], [2.2, 1.5, 0.7], [4.6, 0.5, 1.5], [7.0, 1.4, 2.8]],
+        dtype=np.float32,
+    )
+    c_coord = np.asarray(
+        [[0.8, 0.8, 0.0], [3.1, 1.0, 1.0], [5.5, 0.9, 2.0], [7.9, 1.0, 3.1]],
+        dtype=np.float32,
+    )
+    valid = np.ones((4,), dtype=bool)
+
+    complete = backbone_torsions(
+        n_coord,
+        ca_coord,
+        c_coord,
+        valid,
+        valid,
+        valid,
+        np.asarray(["A", "A", "A", "A"]),
+        np.arange(4),
+    )
+    assert np.isnan(complete[0, 0])
+    assert np.isfinite(complete[0, 1:]).all()
+    assert np.isfinite(complete[1:3]).all()
+    assert np.isfinite(complete[3, 0])
+    assert np.isnan(complete[3, 1:]).all()
+
+    rotation = np.asarray(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+    translation = np.asarray([11.0, -4.0, 2.5], dtype=np.float32)
+    transformed = backbone_torsions(
+        n_coord @ rotation.T + translation,
+        ca_coord @ rotation.T + translation,
+        c_coord @ rotation.T + translation,
+        valid,
+        valid,
+        valid,
+        np.asarray(["A", "A", "A", "A"]),
+        np.arange(4),
+    )
+    np.testing.assert_allclose(transformed, complete, atol=1e-6, equal_nan=True)
+
+    missing_n = valid.copy()
+    missing_n[1] = False
+    incomplete = backbone_torsions(
+        n_coord,
+        ca_coord,
+        c_coord,
+        missing_n,
+        valid,
+        valid,
+        np.asarray(["A", "A", "A", "A"]),
+        np.arange(4),
+    )
+    assert np.isnan(incomplete[0, 1:]).all()
+    assert np.isnan(incomplete[1, 0:2]).all()
+    assert np.isfinite(incomplete[1, 2])
+    assert np.isfinite(incomplete[2]).all()
+
+    broken_c = c_coord.copy()
+    broken_c[1] = [20.0, 20.0, 20.0]
+    broken = backbone_torsions(
+        n_coord,
+        ca_coord,
+        broken_c,
+        valid,
+        valid,
+        valid,
+        np.asarray(["A", "A", "A", "A"]),
+        np.arange(4),
+    )
+    assert np.isnan(broken[1, 1:]).all()
+    assert np.isnan(broken[2, 0])
+
+    multichain = backbone_torsions(
+        n_coord,
+        ca_coord,
+        c_coord,
+        valid,
+        valid,
+        valid,
+        np.asarray(["A", "A", "B", "B"]),
+        np.asarray([0, 1, 0, 1]),
+    )
+    assert np.isnan(multichain[1, 1:]).all()
+    assert np.isnan(multichain[2, 0])
+
+
+def test_backbone_extraction_preserves_number_gaps_insertions_and_missing_atoms(
+    tmp_path: Path,
+) -> None:
+    residues = [
+        (
+            "A",
+            10,
+            " ",
+            "ALA",
+            {"N": (-1.0, 0.0, 0.0), "CA": (0.0, 0.0, 0.0), "C": (0.8, 0.8, 0.0)},
+        ),
+        (
+            "A",
+            12,
+            " ",
+            "GLY",
+            {"N": (1.7, 0.8, 0.1), "CA": (2.2, 1.5, 0.7), "C": (3.1, 1.0, 1.0)},
+        ),
+        (
+            "A",
+            12,
+            "A",
+            "SER",
+            {"N": (4.0, 1.2, 1.1), "CA": (4.6, 0.5, 1.5)},
+        ),
+    ]
+    inp = _write_backbone_structure(tmp_path / "ordering.pdb", residues)
+
+    loaded = load_and_extract_residue(inp)
+    assert loaded["residue_ids"].tolist() == ["A:10::ALA", "A:12::GLY", "A:12:A:SER"]
+    np.testing.assert_array_equal(loaded["structural_residue_index"], [0, 1, 2])
+    np.testing.assert_array_equal(loaded["backbone_c_mask"], [True, True, False])
+    assert loaded["backbone_c"].shape == (3, 3)
+    assert np.isnan(loaded["backbone_c"][2]).all()
+
+    continuity = peptide_continuity(
+        loaded["backbone_c"],
+        loaded["backbone_n"],
+        loaded["backbone_c_mask"],
+        loaded["backbone_n_mask"],
+        loaded["chain_id"],
+        loaded["structural_residue_index"],
+    )
+    # The 10 -> 12 numbering gap is physically connected, and 12A remains structurally adjacent.
+    np.testing.assert_array_equal(continuity, [True, True])
+
+    artifact = ResiduePointCloudCA(
+        node_attr_mode=[{"backbone_geometry": {"mode": "both"}}],
+        use_cache=False,
+    ).encode(inp)
+    assert artifact.data["node_attr"].shape == (3, 9)
+    assert np.isnan(artifact.data["node_attr"][0, [0, 1, 6]]).all()
+    assert np.isfinite(artifact.data["node_attr"][0, [2, 3, 4, 5, 7, 8]]).all()
+    assert np.isfinite(artifact.data["node_attr"][1]).all()
+    assert np.isnan(artifact.data["node_attr"][2]).all()
+
+    default = ResiduePointCloudCA(
+        node_attr_mode=["backbone_geometry"],
+        use_cache=False,
+    ).encode(inp)
+    assert default.meta["feature_keys"]["node_attr_keys"] == [
+        "backbone.phi_sin",
+        "backbone.phi_cos",
+        "backbone.psi_sin",
+        "backbone.psi_cos",
+        "backbone.omega_sin",
+        "backbone.omega_cos",
+    ]
+    assert default.data["node_attr"].shape == (3, 6)
+
+
+def test_backbone_extraction_uses_frozen_altloc_selection(tmp_path: Path) -> None:
+    source = tmp_path / "altloc.pdb"
+    source.write_text(
+        "\n".join(
+            [
+                _altloc_atom_line(1, "N", "A", (1.0, 0.0, 0.0), 0.4),
+                _altloc_atom_line(2, "N", "B", (2.0, 0.0, 0.0), 0.8),
+                _altloc_atom_line(3, "CA", " ", (3.0, 0.0, 0.0), 0.5),
+                _altloc_atom_line(4, "CA", "A", (4.0, 0.0, 0.0), 0.5),
+                _altloc_atom_line(5, "C", "C", (5.0, 0.0, 0.0), 0.5),
+                _altloc_atom_line(6, "C", "B", (6.0, 0.0, 0.0), 0.5),
+                "TER",
+                "END",
+                "",
+            ]
+        ),
+        encoding="ascii",
+    )
+
+    loaded = load_and_extract_residue(StructureInput(source=str(source), chain_id="A"))
+
+    np.testing.assert_array_equal(loaded["backbone_n"], [[2.0, 0.0, 0.0]])
+    np.testing.assert_array_equal(loaded["backbone_ca"], [[3.0, 0.0, 0.0]])
+    np.testing.assert_array_equal(loaded["backbone_c"], [[6.0, 0.0, 0.0]])
+
+
+def test_backbone_geometry_realistic_pdb_mmcif_hybrid_round_trip_and_identity(
+    tmp_path: Path,
+) -> None:
+    explicit = {
+        "backbone_geometry": {
+            "mode": "both",
+            "max_peptide_bond_distance": 2,
+            "torsion_convention": "standard_signed_atan2[-pi,pi)",
+            "units": "radians",
+            "missing_value_policy": "nan",
+        }
+    }
+    mode = [explicit, "onehot", "bfactor_ca"]
+    pdb = ResidueKNNGraph(
+        k=2, node_attr_mode=[explicit, "onehot", "bfactor_ca"], use_cache=False
+    ).encode(StructureInput(source=str(PDB), chain_id="A"))
+    mmcif = ResidueKNNGraph(k=2, node_attr_mode=mode, use_cache=False).encode(
+        StructureInput(source=str(MMCIF), chain_id="A")
+    )
+    repeat = ResidueKNNGraph(k=2, node_attr_mode=mode, use_cache=False).encode(
+        StructureInput(source=str(PDB), chain_id="A")
+    )
+
+    periodic_keys = [
+        "backbone.phi_sin",
+        "backbone.phi_cos",
+        "backbone.psi_sin",
+        "backbone.psi_cos",
+        "backbone.omega_sin",
+        "backbone.omega_cos",
+    ]
+    raw_keys = ["backbone.phi", "backbone.psi", "backbone.omega"]
+    expected_keys = [
+        *[f"aa_onehot.{aa}" for aa in AA_VOCAB],
+        "bfactor_ca",
+        *periodic_keys,
+        *raw_keys,
+    ]
+    assert pdb.meta["feature_keys"]["node_attr_keys"] == expected_keys
+    assert pdb.data["node_attr"].dtype == np.float32
+    assert pdb.data["node_attr"].shape == (534, len(expected_keys))
+    raw = pdb.data["node_attr"][:, -3:]
+    assert np.isnan(raw[0, 0])
+    assert np.isnan(raw[-1, 1:]).all()
+    assert (np.isfinite(raw).sum(axis=0) > 500).all()
+    periodic = pdb.data["node_attr"][:, -9:-3]
+    assert np.isnan(periodic[0, 0:2]).all()
+    assert np.isnan(periodic[-1, 2:6]).all()
+    np.testing.assert_equal(pdb.data["node_attr"], repeat.data["node_attr"])
+    np.testing.assert_equal(pdb.data["node_attr"], mmcif.data["node_attr"])
+
+    params = pdb.meta["parameters"]["node_attr_mode"][0]["backbone_geometry"]
+    assert params == {
+        "max_peptide_bond_distance": 2.0,
+        "missing_value_policy": "nan",
+        "mode": "both",
+        "torsion_convention": "standard_signed_atan2[-pi,pi)",
+        "units": "radians",
+    }
+    assert (
+        pdb.meta["provenance"]["config_fingerprint"]
+        == mmcif.meta["provenance"]["config_fingerprint"]
+    )
+    raw_only = ResiduePointCloudCA(
+        node_attr_mode=[{"backbone_geometry": {"mode": "raw"}}],
+        use_cache=False,
+    ).encode(StructureInput(source=str(PDB), chain_id="A"))
+    assert raw_only.meta["feature_keys"]["node_attr_keys"] == raw_keys
+    assert (
+        pdb.meta["provenance"]["config_fingerprint"]
+        != raw_only.meta["provenance"]["config_fingerprint"]
+    )
+
+    artifact_dir = tmp_path / "backbone-artifact"
+    pdb.save(artifact_dir)
+    loaded = StructureArtifact.load(artifact_dir, strict=True)
+    np.testing.assert_equal(loaded.data["node_attr"], pdb.data["node_attr"])
+    assert loaded.meta["feature_keys"]["node_attr_keys"] == expected_keys
 
 
 def test_direct_builder_cannot_bypass_feature_parameter_validation() -> None:

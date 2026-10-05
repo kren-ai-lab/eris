@@ -14,7 +14,7 @@ construction; `scale=None` preserves ångström-based geometry.
 | all | `scale` | `None` | optional positive coordinate divisor |
 | residue | `residue_center` | `"ca"` | alpha-carbon coordinate |
 | residue | `amino_acids_only` | `True` | frozen for v0.1 |
-| residue | `altloc` | `"first"` | frozen alternate-location policy |
+| residue | `altloc` | `"max_occupancy"` | highest finite occupancy; ties blank, `A`, then lexicographic |
 | residue | `missing_residue_center` | `"skip"` | omit and record missing centers; `"error"` is available |
 | residue | `plddt_source` | `"none"` | use `"bfactor"` only for inputs known to store pLDDT in CA B-factor |
 | atom | `include_hetero` | `False` | exclude hetero residues |
@@ -66,6 +66,7 @@ Registered residue feature tokens are:
 | `plddt_ca` | explicitly sourced CA pLDDT |
 | `bfactor_ca` | raw CA B-factor |
 | `flags` | glycine, proline, unknown, and CA-presence flags |
+| `backbone_geometry` | physical-continuity-aware phi, psi, and omega torsions |
 | `external` | aligned external numerical values |
 
 Physical blocks follow `FeatureSpec.order`, not request order. `node_attr_keys` is authoritative.
@@ -80,6 +81,9 @@ pLDDT remains `NaN` after extraction; the normal explicit encoder feature builde
 requested missing `plddt_ca` value with zero. Finite values outside 0–100 fail.
 
 The `external` token follows [the external residue feature contract](external_residue_features.md).
+`backbone_geometry` defaults to `mode="sincos"`; `raw` emits signed radians and `both` emits
+the six periodic columns followed by the three raw columns. Undefined values remain `NaN`, and
+physical continuity uses an inclusive `max_peptide_bond_distance=2.0` A cutoff.
 
 ### Graph edge and graph features
 
@@ -186,8 +190,9 @@ as a non-default output dtype.
 
 ## Final-v0.1 structural defaults
 
-The multi-chain `chain_id` and selected-model behavior below are implemented. The remaining
-targets are frozen for later final-v0.1 work units and do not claim current runtime support.
+The multi-chain, selected-model, alternate-location, physical-continuity, and backbone-torsion
+behavior below is implemented. The remaining targets are frozen for later final-v0.1 work units
+and do not claim current runtime support.
 Their complete scientific definitions, feature orders, missing-value behavior, and provenance requirements live in
 [`structural_features.md`](structural_features.md).
 

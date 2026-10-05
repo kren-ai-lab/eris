@@ -253,7 +253,7 @@ def test_corrected_graph_cache_version_cannot_reuse_previous_version(
     cache = DiskCache(tmp_path / "cache")
     current = _encode(encoder_type, structure_input)
     stale_meta = deepcopy(current.meta)
-    stale_meta["encoder"]["version"] = "0.1.1"
+    stale_meta["encoder"]["version"] = "0.1.2"
     stale = StructureArtifact(data=dict(current.data), meta=stale_meta)
     stale.validate(strict=True)
 
@@ -275,13 +275,13 @@ def test_corrected_graph_cache_version_cannot_reuse_previous_version(
         "model_index": structure_input.model_index,
         "chain_ids": structure_input.chain_id,
     }
-    old_key = compute_cache_key_v2(encoder_version="0.1.1", **common)
+    old_key = compute_cache_key_v2(encoder_version="0.1.2", **common)
     current_key = compute_cache_key_v2(encoder_version=encoder.version, **common)
     cache.set_v2(old_key, stale)
 
-    assert encoder.version == "0.1.2"
+    assert encoder.version == "0.1.3"
     assert old_key != current_key
     assert cache.get_v2(current_key) is None
     result = encoder.encode(structure_input)
-    assert result.meta["encoder"]["version"] == "0.1.2"
+    assert result.meta["encoder"]["version"] == "0.1.3"
     assert cache.get_v2(current_key) is not None

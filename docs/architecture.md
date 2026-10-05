@@ -60,8 +60,11 @@ policy; skipped identities remain in `omitted_residue_ids`.
 Feature-bearing residue clouds and graphs pass the extracted bundle through the residue feature
 registry. `FeatureMode` validates requested tokens and parameters; physical block order follows
 `FeatureSpec.order`. The encoder stores the concatenated `node_attr` and authoritative ordered
-`node_attr_keys`. Matrix encoders use positions without fabricating node features. The voxel
-encoder uses the grid feature registry.
+`node_attr_keys`. The shared residue bundle also retains aligned selected `N`, `CA`, and `C`
+coordinates and validity masks. `backbone_geometry` uses those arrays with same-chain structural
+adjacency and the physical C--N cutoff to emit phi, psi, and omega without crossing breaks.
+Matrix encoders use positions without fabricating node features. The voxel encoder uses the grid
+feature registry.
 
 ## Learned encoding flow
 
@@ -135,12 +138,10 @@ External producers must also satisfy [the external NPZ contract](external_residu
 
 ## Contracts that extensions must preserve
 
-The final-v0.1 contracts for polymer continuity,
-torsions, local frames, secondary structure, solvent accessibility, interfaces,
-and structure-level pooling are frozen in
-[`structural_features.md`](structural_features.md). They are future-facing
-contracts until their focused implementation work units land; their presence
-in the documentation does not imply current runtime support.
+The final-v0.1 contracts for polymer continuity, torsions, local frames, secondary structure,
+solvent accessibility, interfaces, and structure-level pooling are frozen in
+[`structural_features.md`](structural_features.md). Polymer continuity and backbone torsions are
+implemented; the other contracts remain future-facing until their focused work units land.
 
 Those features must follow the same architecture described above. Public APIs
 construct canonical configuration, registries resolve implementations, runners

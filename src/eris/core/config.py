@@ -368,8 +368,8 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
         default=True,
         metadata=_metadata("Frozen residue extraction policy for v0.1."),
     )
-    altloc: Literal["first"] = field(
-        default="first",
+    altloc: Literal["max_occupancy"] = field(
+        default="max_occupancy",
         metadata=_metadata("Frozen residue alternate-location policy for v0.1."),
     )
     missing_residue_center: Literal["skip", "error"] = field(
@@ -405,7 +405,7 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
         object.__setattr__(
             self,
             "altloc",
-            _normalize_choice("altloc", self.altloc, ("first",)),
+            _normalize_choice("altloc", self.altloc, ("max_occupancy",)),
         )
         object.__setattr__(
             self,
