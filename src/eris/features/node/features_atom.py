@@ -78,16 +78,11 @@ register_atom_node_feature(
 def bfactor_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     n = data["n"]
     missing = ctx["missing"]
-    bfactor_norm = ctx["bfactor_norm"]
 
     if data["bfactor"] is None:
         v = np.full((n, 1), np.nan if missing == "nan" else 0.0, dtype=np.float32)
     else:
         v = safe_float(data["bfactor"], missing=missing).reshape(-1, 1)
-        if missing != "nan" and bfactor_norm and float(np.nanmax(v)) > 1.5:
-            v = v / 100.0
-        if missing != "nan":
-            v = np.clip(v, 0.0, 1.0)
 
     return v.astype(np.float32)
 
@@ -100,7 +95,7 @@ register_atom_node_feature(
     FeatureSpec(
         token="bfactor",
         order=30,
-        requires={"missing", "bfactor", "bfactor_norm", "n"},
+        requires={"missing", "bfactor", "n"},
         fn=bfactor_fn,
         keys_fn=bfactor_keys,
     )

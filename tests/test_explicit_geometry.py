@@ -160,7 +160,8 @@ ARRAY_BASELINES = {
 CLOUD_DIGESTS = {
     "atom_point_cloud": {
         "pos": "4fbaf06af17251ada366958fc3bc8218bb2d68785b6ccd5b0eb76cb392721c2b",
-        "node_attr": "a0730a9b59dd605960da05f0f754a0ed06bf76aadb4adc0eaabba3a98ffcab93",
+        # Protects raw atomic B-factors: no implicit division or clipping.
+        "node_attr": "80820a0ff12567827f0afe82392a0327df67ef33a186ce5f09a3bc45b6b6854b",
     },
     "residue_point_cloud": {
         "pos": "54a3d3c574f404a5cbb6d034def52abf5b64d1096121df673501ed715f3474d3",

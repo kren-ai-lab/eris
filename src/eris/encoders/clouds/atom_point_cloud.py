@@ -39,6 +39,7 @@ class AtomPointCloud(BaseAtomEncoder):
 
     # Identity
     name: ClassVar[str] = "atom_point_cloud"
+    version: ClassVar[str] = "0.1.1"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
     output_declarations_v2: ClassVar = ATOM_POINT_CLOUD_OUTPUTS
 
@@ -116,7 +117,6 @@ class AtomPointCloud(BaseAtomEncoder):
             atom_role=strc["atom_role"],
             bfactor=strc["bfactor"],
             occ=strc["occ"],
-            bfactor_norm=True,
             mode=self.config.node_attr_mode.to_list(),
             return_keys=True,
         )

@@ -34,6 +34,7 @@ class AtomKNNGraph(BaseAtomEncoder):
 
     # Identity
     name: ClassVar[str] = "atom_knn_graph"
+    version: ClassVar[str] = "0.1.1"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
     output_declarations_v2: ClassVar = ATOM_GRAPH_OUTPUTS
 
@@ -150,7 +151,6 @@ class AtomKNNGraph(BaseAtomEncoder):
             atom_role=strc["atom_role"],
             bfactor=strc["bfactor"],
             occ=strc["occ"],
-            bfactor_norm=True,
             mode=self.config.node_attr_mode.to_list(),
             return_keys=True,
         )

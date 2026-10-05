@@ -13,7 +13,9 @@ from eris.core.cache import DiskCache
 from eris.core.config import ResiduePointCloudConfig, ResidueVoxelGridConfig
 from eris.core.io import StructureLoadError, load_and_extract_residue
 from eris.core.types import StructureInput
+from eris.encoders.clouds.atom_point_cloud import AtomPointCloud
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
+from eris.encoders.graphs.atom_knn_graph import AtomKNNGraph
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
 from eris.features.node.constants import AA_VOCAB
@@ -48,6 +50,8 @@ def _write_external_features(
     residue_ids: list[str],
     source_name: str = "custom",
     feature_keys: list[str] | None = None,
+    chain_id: str = "A",
+    model_index: int = 0,
 ) -> Path:
     if feature_keys is None:
         feature_keys = ["score_a", "score_b"]
@@ -57,8 +61,8 @@ def _write_external_features(
         residue_ids=np.asarray(residue_ids),
         source_name=np.asarray(source_name),
         feature_keys=np.asarray(feature_keys),
-        chain_id=np.asarray("A"),
-        model_index=np.asarray(0, dtype=np.int64),
+        chain_id=np.asarray(chain_id),
+        model_index=np.asarray(model_index, dtype=np.int64),
     )
     return path
 
@@ -81,6 +85,54 @@ def _aaindex_mode(
     ]
 
 
+def test_atom_point_cloud_bfactor_is_raw_by_default(tmp_path: Path) -> None:
+    inp = _write_ca_structure(
+        tmp_path / "atom-cloud.pdb",
+        [("ALA", 42.0), ("GLY", 142.0)],
+    )
+
+    artifact = AtomPointCloud(node_attr_mode=["bfactor"], use_cache=False).encode(inp)
+
+    assert artifact.meta["feature_keys"]["node_attr_keys"] == ["bfactor"]
+    np.testing.assert_array_equal(
+        artifact.data["node_attr"][:, 0],
+        np.asarray([42.0, 142.0], dtype=np.float32),
+    )
+    np.testing.assert_array_equal(artifact.data["node_attr"][:, 0], artifact.data["bfactor"])
+
+
+def test_atom_graph_bfactor_is_raw_by_default(tmp_path: Path) -> None:
+    inp = _write_ca_structure(
+        tmp_path / "atom-graph.pdb",
+        [("ALA", 42.0), ("GLY", 142.0)],
+    )
+
+    artifact = AtomKNNGraph(k=1, node_attr_mode=["bfactor"], use_cache=False).encode(inp)
+
+    assert artifact.meta["feature_keys"]["node_attr_keys"] == ["bfactor"]
+    np.testing.assert_array_equal(
+        artifact.data["node_attr"][:, 0],
+        np.asarray([42.0, 142.0], dtype=np.float32),
+    )
+    np.testing.assert_array_equal(artifact.data["node_attr"][:, 0], artifact.data["bfactor"])
+
+
+def test_residue_bfactor_is_raw_by_default(tmp_path: Path) -> None:
+    inp = _write_ca_structure(
+        tmp_path / "residue-cloud.pdb",
+        [("ALA", 42.0), ("GLY", 142.0)],
+    )
+
+    artifact = ResiduePointCloudCA(node_attr_mode=["bfactor_ca"], use_cache=False).encode(inp)
+
+    assert artifact.meta["feature_keys"]["node_attr_keys"] == ["bfactor_ca"]
+    np.testing.assert_array_equal(
+        artifact.data["node_attr"][:, 0],
+        np.asarray([42.0, 142.0], dtype=np.float32),
+    )
+    np.testing.assert_array_equal(artifact.data["node_attr"][:, 0], artifact.data["bfactor_ca"])
+
+
 def test_bfactor_is_not_automatically_interpreted_as_plddt(tmp_path: Path) -> None:
     inp = _write_ca_structure(tmp_path / "experimental.pdb", [("ALA", 42.0)])
 
@@ -90,7 +142,7 @@ def test_bfactor_is_not_automatically_interpreted_as_plddt(tmp_path: Path) -> No
     assert np.isnan(loaded["plddt"]).all()
 
 
-def test_explicit_bfactor_plddt_source_is_raw_and_serialized(tmp_path: Path) -> None:
+def test_plddt_requires_explicit_source_and_preserves_raw_bfactor(tmp_path: Path) -> None:
     inp = _write_ca_structure(tmp_path / "predicted.pdb", [("ALA", 87.5)])
     config = ResiduePointCloudConfig(
         plddt_source="bfactor",
@@ -346,6 +398,12 @@ def test_external_features_align_by_exact_residue_id_and_compose(tmp_path: Path)
         }
     ]
 
+    artifact_dir = tmp_path / "self-contained-artifact"
+    artifact.save(artifact_dir)
+    external.unlink()
+    reloaded = StructureArtifact.load(artifact_dir, strict=True)
+    np.testing.assert_array_equal(reloaded.data["node_attr"], artifact.data["node_attr"])
+
 
 @pytest.mark.parametrize(
     ("residue_ids", "match"),
@@ -374,6 +432,63 @@ def test_external_features_reject_invalid_residue_identity_set(
             node_attr_mode=[{"external": {"path": str(external)}}],
             use_cache=False,
         ).encode(inp)
+
+
+def test_external_rejects_wrong_chain(tmp_path: Path) -> None:
+    inp = _write_ca_structure(tmp_path / "protein.pdb", [("ALA", 12.0), ("GLY", 34.0)])
+    external = _write_external_features(
+        tmp_path / "wrong-chain.npz",
+        values=[[1.0, 2.0], [3.0, 4.0]],
+        residue_ids=["B:1::ALA", "B:2::GLY"],
+        chain_id="B",
+    )
+
+    with pytest.raises(ExternalFeatureError, match="External chain mismatch"):
+        ResiduePointCloudCA(
+            node_attr_mode=[{"external": {"path": str(external)}}],
+            use_cache=False,
+        ).encode(inp)
+
+
+def test_external_rejects_wrong_model(tmp_path: Path) -> None:
+    inp = _write_ca_structure(tmp_path / "protein.pdb", [("ALA", 12.0), ("GLY", 34.0)])
+    external = _write_external_features(
+        tmp_path / "wrong-model.npz",
+        values=[[1.0, 2.0], [3.0, 4.0]],
+        residue_ids=["A:1::ALA", "A:2::GLY"],
+        model_index=1,
+    )
+
+    with pytest.raises(ExternalFeatureError, match="External model-index mismatch"):
+        ResiduePointCloudCA(
+            node_attr_mode=[{"external": {"path": str(external)}}],
+            use_cache=False,
+        ).encode(inp)
+
+
+def test_external_detects_source_mutation_after_config_resolution(tmp_path: Path) -> None:
+    inp = _write_ca_structure(tmp_path / "protein.pdb", [("ALA", 12.0), ("GLY", 34.0)])
+    external = _write_external_features(
+        tmp_path / "mutable.npz",
+        values=[[1.0, 2.0], [3.0, 4.0]],
+        residue_ids=["A:1::ALA", "A:2::GLY"],
+    )
+    config = ResiduePointCloudConfig(node_attr_mode=[{"external": {"path": str(external)}}])
+    resolved = config.to_dict()["node_attr_mode"][0]["external"]
+
+    _write_external_features(
+        external,
+        values=[[10.0, 20.0], [30.0, 40.0]],
+        residue_ids=["A:1::ALA", "A:2::GLY"],
+    )
+
+    with pytest.raises(
+        ExternalFeatureError,
+        match="changed after configuration was resolved",
+    ):
+        ResiduePointCloudCA(config=config, use_cache=False).encode(inp)
+
+    assert config.to_dict()["node_attr_mode"][0]["external"] == resolved
 
 
 def test_high_dimensional_external_hybrid_round_trip_and_identity(tmp_path: Path) -> None:

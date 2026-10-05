@@ -44,6 +44,8 @@ execution concerns, not representation parameters.
 
 The artifact also retains the raw atom fields, including element index, atom role, B-factor,
 occupancy, residue identity, residue name, atom name, and residue sequence position.
+The atomic `bfactor` node-feature column is the raw experimental value. It is never implicitly
+divided by 100, clipped, or interpreted as pLDDT.
 
 ### Residue node features
 

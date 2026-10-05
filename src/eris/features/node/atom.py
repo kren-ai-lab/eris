@@ -12,7 +12,6 @@ def build_node_attr(
     atom_role: np.ndarray,
     bfactor: np.ndarray,
     occ: np.ndarray,
-    bfactor_norm: bool = True,
     mode: str = "elem+role+bfactor+occ",
     return_keys: bool = False,
     missing: str = "zero",
@@ -36,10 +35,7 @@ def build_node_attr(
         "n": n,
     }
 
-    feat_ctx = {
-        "missing": missing,
-        "bfactor_norm": bfactor_norm,
-    }
+    feat_ctx = {"missing": missing}
 
     return build_from_registry(
         data=data,
