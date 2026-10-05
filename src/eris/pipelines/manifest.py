@@ -4,7 +4,7 @@ import csv
 import json
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, TypeVar
@@ -46,6 +46,39 @@ def _optional_string(value: Any, *, field: str, row_index: int | None = None) ->
         location = _row_location(row_index)
         raise ManifestValidationError(f"{location}: field '{field}' must be a string")
     return value.strip() or None
+
+
+def _chain_selection(
+    value: Any, *, field: str, row_index: int | None = None
+) -> tuple[str, ...] | None:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith("["):
+            try:
+                value = json.loads(text)
+            except json.JSONDecodeError as error:
+                location = _row_location(row_index)
+                raise ManifestValidationError(
+                    f"{location}: field '{field}' contains invalid JSON chain list"
+                ) from error
+        else:
+            value = (text,)
+    if not isinstance(value, Sequence) or isinstance(value, (bytes, bytearray)):
+        location = _row_location(row_index)
+        raise ManifestValidationError(
+            f"{location}: field '{field}' must be a string or non-empty list of strings"
+        )
+    chains = tuple(value)
+    location = _row_location(row_index)
+    if not chains or any(not isinstance(chain, str) for chain in chains):
+        raise ManifestValidationError(
+            f"{location}: field '{field}' must be a string or non-empty list of strings"
+        )
+    if len(chains) != len(set(chains)):
+        raise ManifestValidationError(f"{location}: field '{field}' contains duplicate chains")
+    return chains
 
 
 def _optional_text_path(value: Any, *, field: str, row_index: int | None = None) -> str | None:
@@ -112,7 +145,7 @@ class BaseManifestRow(ABC):
 @dataclass
 class StructureManifestRow(BaseManifestRow):
     path: str
-    chain: str | None = None
+    chain: str | Sequence[str] | None = None
     model: int = 0
 
     field_order: ClassVar[tuple[str, ...]] = ("id", "path", "chain", "model")
@@ -120,7 +153,7 @@ class StructureManifestRow(BaseManifestRow):
     def __post_init__(self) -> None:
         self.id = _required_string(self.id, field="id")
         self.path = _required_text_path(self.path, field="path")
-        self.chain = _optional_string(self.chain, field="chain")
+        self.chain = _chain_selection(self.chain, field="chain")
         self.model = _model(self.model, field="model")
 
     @classmethod
@@ -137,7 +170,7 @@ class StructureManifestRow(BaseManifestRow):
             )
         sid = _required_string(d.get("id"), field="id", row_index=row_index)
         path = _required_text_path(d.get("path"), field="path", row_index=row_index)
-        chain = _optional_string(d.get("chain"), field="chain", row_index=row_index)
+        chain = _chain_selection(d.get("chain"), field="chain", row_index=row_index)
         model = _model(d.get("model"), field="model", row_index=row_index)
 
         return cls(id=sid, path=path, chain=chain, model=model)
@@ -146,7 +179,7 @@ class StructureManifestRow(BaseManifestRow):
         return {
             "id": self.id,
             "path": self.path,
-            "chain": self.chain,
+            "chain": None if self.chain is None else list(self.chain),
             "model": self.model,
         }
 
@@ -329,7 +362,14 @@ def read_manifest(path: Path, row_cls: type[T]) -> list[T]:
 def _csv_row(row: BaseManifestRow) -> dict[str, Any]:
     serialized = row.to_dict()
     return {
-        field: "" if serialized[field] is None else serialized[field] for field in row.field_order
+        field: (
+            ""
+            if serialized[field] is None
+            else json.dumps(serialized[field])
+            if isinstance(serialized[field], list)
+            else serialized[field]
+        )
+        for field in row.field_order
     }
 
 

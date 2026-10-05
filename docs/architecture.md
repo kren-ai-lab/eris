@@ -34,7 +34,7 @@ Both families return `StructureArtifact` objects and use Artifact Schema v2 for 
 ```text
 eris.encode(...)
     -> resolve typed config from the explicit Registry
-    -> load PDB/mmCIF and select model/chain
+    -> load PDB/mmCIF and resolve the model-order canonical chain set
     -> extract atom or residue data
     -> compute coordinates and registered features
     -> construct representation arrays
@@ -48,6 +48,11 @@ must match the Registry key, encoder `name`, artifact `representation_name`, CLI
 and documentation.
 
 Residue representations share selection and positioning in `BaseResidueEncoder`.
+`chain_id=None` selects every relevant protein/polymer chain in the selected model; a string
+selects one chain and a sequence selects an explicit set. Empty, duplicate, and unknown
+selections fail. Caller order does not affect node order, fingerprints, or cache identity.
+Explicit atom and residue artifacts carry aligned `chain_id` arrays. No biological assembly is
+generated.
 `residue_center` maps `ca`, `mean`, and `com` to artifact coordinate sources `ca`,
 `residue_mean`, and `residue_com`. Missing centers follow the configured `skip` or `error`
 policy; skipped identities remain in `omitted_residue_ids`.
@@ -76,6 +81,8 @@ embedders, or loading an existing artifact must not import Torch or require a ch
 GearNet-specific behavior is isolated under
 `src/eris/core/learned/backends/gearnet/` and frozen by
 [the backend contract](gearnet_edge_backend.md).
+GearNet v0.1 remains single-chain: resolving more than one selected chain fails clearly before
+checkpoint inference.
 
 ## Public boundaries
 
@@ -92,6 +99,8 @@ The CLI exposes `encode`, `embed`, `pack`, `batch`, `export`, `info`, `cache`,
 delegate to the corresponding Python operation.
 
 Batch structure rows contain `id`, `path`, `chain`, and `model`. Python
+`chain` accepts `null`, one string, or a non-empty list of unique strings; JSON/JSONL preserve
+lists directly and CSV stores a JSON list in the field. Python
 `batch_encode(..., params_by_id=...)` applies row-specific shallow top-level overrides to global
 `params`; the CLI accepts global parameters only. `pack()` writes a metadata index consumed by
 `ErisFolderDataset`.
@@ -126,7 +135,7 @@ External producers must also satisfy [the external NPZ contract](external_residu
 
 ## Contracts that extensions must preserve
 
-The final-v0.1 contracts for multi-chain selection, polymer continuity,
+The final-v0.1 contracts for polymer continuity,
 torsions, local frames, secondary structure, solvent accessibility, interfaces,
 and structure-level pooling are frozen in
 [`structural_features.md`](structural_features.md). They are future-facing

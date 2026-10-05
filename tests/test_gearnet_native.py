@@ -56,6 +56,26 @@ def _records(path: Path):
     return select_gearnet_transport_records(selected)
 
 
+def test_gearnet_v01_rejects_multichain_selection(tmp_path: Path) -> None:
+    source = tmp_path / "multi.pdb"
+    source.write_text(
+        "\n".join(
+            [
+                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
+                "TER",
+                "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
+                "TER",
+                "END",
+                "",
+            ]
+        ),
+        encoding="ascii",
+    )
+
+    with pytest.raises(GearNetPreprocessingError, match="exactly one selected chain"):
+        load_selected_biological_structure(StructureInput(source=source))
+
+
 def _atom_line(
     serial: int,
     residue_name: str,

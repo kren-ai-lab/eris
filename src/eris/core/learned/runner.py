@@ -41,13 +41,13 @@ _GRANULARITY_BY_MODE = {
 
 _OUTPUT_ORDERS = {
     "node": (
-        ("node_embedding", "node_ids"),
-        ("node_embedding", "node_ids", "valid_mask"),
+        ("node_embedding", "node_ids", "chain_id"),
+        ("node_embedding", "node_ids", "chain_id", "valid_mask"),
     ),
     "global": (("global_embedding",),),
     "both": (
-        ("node_embedding", "global_embedding", "node_ids"),
-        ("node_embedding", "global_embedding", "node_ids", "valid_mask"),
+        ("node_embedding", "global_embedding", "node_ids", "chain_id"),
+        ("node_embedding", "global_embedding", "node_ids", "chain_id", "valid_mask"),
     ),
 }
 
@@ -159,7 +159,7 @@ def _matches_cache_identity(
         and provenance.get("config_fingerprint") == config_fingerprint
         and input_metadata.get("source_sha256") == source_sha256
         and input_metadata.get("model_index") == structure_input.model_index
-        and input_metadata.get("chain_id") == structure_input.chain_id
+        and input_metadata.get("chain_ids") == list(structure_input.chain_id)
         and isinstance(input_metadata.get("format"), str)
         and parser_hint_matches_format(parser_hint, input_metadata["format"])
         and _cached_model_identity(meta.get("model")) == model.to_cache_identity()
@@ -182,7 +182,7 @@ def _refresh_input_source(
         source_sha256=source_sha256,
         input_format=artifact.meta["input"]["format"],
         model_index=structure_input.model_index,
-        chain_id=structure_input.chain_id,
+        chain_ids=structure_input.chain_id,
     )
     refreshed = StructureArtifact(data=artifact.data, meta=metadata)
     refreshed.validate(strict=True)
@@ -258,12 +258,21 @@ class StructuralEmbedderRunner:
                 f"Config for '{config.representation_name}' must be an {info.config_type.__name__}"
             )
 
+        from eris.core.io import resolve_structure_input
+
+        structure_input = resolve_structure_input(structure_input)
+        if len(structure_input.chain_id) != 1:
+            raise ExecutionError(
+                "GearNet v0.1 accepts exactly one selected chain; pass chain_id as one string"
+            )
+
         execution_request = execution or StructuralExecutionConfig()
         source_sha256 = sha256_file(Path(structure_input.source))
         parameters = config.to_dict()
         config_fingerprint = compute_config_fingerprint(
             config.representation_name,
             parameters,
+            chain_ids=structure_input.chain_id,
         )
         parser_hint = parser_hint_from_source(structure_input.source)
         request_execution_identity = execution_request_cache_identity(execution_request)
@@ -275,7 +284,7 @@ class StructuralEmbedderRunner:
             source_sha256=source_sha256,
             parser_hint=parser_hint,
             model_index=structure_input.model_index,
-            chain_id=structure_input.chain_id,
+            chain_ids=structure_input.chain_id,
             model=model.to_cache_identity(),
             execution=request_execution_identity,
         )
@@ -326,7 +335,7 @@ class StructuralEmbedderRunner:
             source_sha256=source_sha256,
             input_format=preprocessed.input_format,
             model_index=structure_input.model_index,
-            chain_id=structure_input.chain_id,
+            chain_ids=structure_input.chain_id,
         )
         model_instance = backend.load(
             verified_checkpoint,

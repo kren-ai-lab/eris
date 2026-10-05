@@ -25,6 +25,7 @@ _COMMON_METADATA = (
 )
 _MATRIX_KEYS = ("dist", "dist_bins", "contact", "contact_bins")
 _AUXILIARY_KEYS = (
+    "chain_id",
     "residue_ids",
     "resname",
     "aa_index",
@@ -229,6 +230,10 @@ def _learned_to_torch(artifact: StructureArtifact) -> dict[str, Any]:
             raise TorchExportError("Learned node_ids length must match node_embedding row count.")
         out["node_embedding"] = node_embedding
         out["node_ids"] = node_ids
+        chain_ids = _as_flat_python_list(_require_array(data, "chain_id"), key="chain_id")
+        if len(chain_ids) != int(node_embedding.shape[0]):
+            raise TorchExportError("Learned chain_id length must match node_embedding row count.")
+        out["chain_id"] = chain_ids
 
         if "valid_mask" in data:
             valid_mask = _to_tensor(data["valid_mask"])

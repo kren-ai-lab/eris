@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -69,7 +69,7 @@ def compute_cache_key_v2(
     source_sha256: str,
     parser_hint: str,
     model_index: int,
-    chain_id: str | None,
+    chain_ids: Sequence[str],
     model: Mapping[str, Any] | None = None,
     execution: Mapping[str, Any] | None = None,
 ) -> str:
@@ -88,8 +88,15 @@ def compute_cache_key_v2(
     hint = _require_non_empty_string(parser_hint, "parser_hint")
     if type(model_index) is not int or model_index < 0:
         raise ValueError("model_index must be a plain integer >= 0")
-    if chain_id is not None and not isinstance(chain_id, str):
-        raise ValueError("chain_id must be a string or None")
+    if isinstance(chain_ids, (str, bytes)) or not isinstance(chain_ids, Sequence):
+        raise ValueError("chain_ids must be a non-empty sequence of strings")
+    normalized_chain_ids = list(chain_ids)
+    if not normalized_chain_ids or any(
+        not isinstance(chain, str) for chain in normalized_chain_ids
+    ):
+        raise ValueError("chain_ids must be a non-empty sequence of strings")
+    if len(normalized_chain_ids) != len(set(normalized_chain_ids)):
+        raise ValueError("chain_ids must not contain duplicates")
     if model is not None and not isinstance(model, Mapping):
         raise ValueError("model must be a mapping or None")
     if execution is not None and not isinstance(execution, Mapping):
@@ -108,7 +115,7 @@ def compute_cache_key_v2(
         "parser_hint": hint,
         "input_selection": {
             "model_index": model_index,
-            "chain_id": chain_id,
+            "chain_ids": normalized_chain_ids,
         },
     }
     if model is not None:

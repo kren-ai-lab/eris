@@ -94,7 +94,8 @@ def local_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) 
     seq_sep = ctx["seq_sep"]
     local_cutoff = ctx["local_cutoff"]
 
-    is_local = (seq_sep <= float(local_cutoff)).astype(np.float32).reshape(-1, 1)
+    is_local = ((seq_sep >= 0.0) & (seq_sep <= float(local_cutoff))).astype(np.float32)
+    is_local = is_local.reshape(-1, 1)
     return is_local.astype(np.float32)
 
 

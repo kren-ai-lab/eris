@@ -16,7 +16,7 @@ def build_node_attr(
     bfactor_ca: Optional[np.ndarray] = None,
     has_ca: Optional[np.ndarray] = None,
     residue_ids: Optional[np.ndarray] = None,
-    chain_id: Optional[str] = None,
+    chain_ids: Optional[tuple[str, ...]] = None,
     model_index: Optional[int] = None,
     # contract
     mode: str = "onehot+physchem+bfactor_ca",
@@ -49,8 +49,8 @@ def build_node_attr(
     feat_ctx = {
         "missing": missing,
     }
-    if chain_id is not None:
-        feat_ctx["chain_id"] = chain_id
+    if chain_ids is not None:
+        feat_ctx["chain_ids"] = chain_ids
     if model_index is not None:
         feat_ctx["model_index"] = model_index
 

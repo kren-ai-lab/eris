@@ -158,6 +158,7 @@ class VoxelGridCA(BaseResidueEncoder):
             "origin": extra["origin"].astype(np.float32),
             "centroid": centroid.astype(np.float32),
             "residue_ids": strc["residue_ids"],
+            "chain_id": strc["chain_id"],
             "omitted_residue_ids": np.asarray(strc.get("omitted_residue_ids", []), dtype=np.str_),
             "resname": strc["resname"],
             "aa_index": strc["aa_index"],

@@ -50,7 +50,7 @@ def _write_external_features(
     residue_ids: list[str],
     source_name: str = "custom",
     feature_keys: list[str] | None = None,
-    chain_id: str = "A",
+    chain_ids: list[str] | None = None,
     model_index: int = 0,
 ) -> Path:
     if feature_keys is None:
@@ -61,7 +61,7 @@ def _write_external_features(
         residue_ids=np.asarray(residue_ids),
         source_name=np.asarray(source_name),
         feature_keys=np.asarray(feature_keys),
-        chain_id=np.asarray(chain_id),
+        chain_ids=np.asarray(["A"] if chain_ids is None else chain_ids),
         model_index=np.asarray(model_index, dtype=np.int64),
     )
     return path
@@ -440,10 +440,10 @@ def test_external_rejects_wrong_chain(tmp_path: Path) -> None:
         tmp_path / "wrong-chain.npz",
         values=[[1.0, 2.0], [3.0, 4.0]],
         residue_ids=["B:1::ALA", "B:2::GLY"],
-        chain_id="B",
+        chain_ids=["B"],
     )
 
-    with pytest.raises(ExternalFeatureError, match="External chain mismatch"):
+    with pytest.raises(ExternalFeatureError, match="External chain-set mismatch"):
         ResiduePointCloudCA(
             node_attr_mode=[{"external": {"path": str(external)}}],
             use_cache=False,
@@ -464,6 +464,54 @@ def test_external_rejects_wrong_model(tmp_path: Path) -> None:
             node_attr_mode=[{"external": {"path": str(external)}}],
             use_cache=False,
         ).encode(inp)
+
+
+def test_external_features_align_across_canonical_multichain_selection(tmp_path: Path) -> None:
+    structure = tmp_path / "multi.pdb"
+    structure.write_text(
+        "\n".join(
+            [
+                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
+                "TER",
+                "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
+                "TER",
+                "END",
+                "",
+            ]
+        ),
+        encoding="ascii",
+    )
+    external = _write_external_features(
+        tmp_path / "multi.npz",
+        values=[[3.0, 4.0], [1.0, 2.0]],
+        residue_ids=["B:1::GLY", "A:1::ALA"],
+        chain_ids=["A", "B"],
+    )
+
+    artifact = ResiduePointCloudCA(
+        node_attr_mode=[{"external": {"path": str(external)}}],
+        use_cache=False,
+    ).encode(StructureInput(source=str(structure), chain_id=["B", "A"]))
+
+    assert artifact.meta["input"]["chain_ids"] == ["A", "B"]
+    np.testing.assert_array_equal(
+        artifact.data["node_attr"], np.asarray([[1.0, 2.0], [3.0, 4.0]], np.float32)
+    )
+
+
+def test_external_legacy_scalar_chain_field_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "legacy.npz"
+    np.savez(
+        path,
+        values=np.asarray([[1.0]], dtype=np.float32),
+        residue_ids=np.asarray(["A:1::ALA"]),
+        source_name=np.asarray("legacy"),
+        chain_id=np.asarray("A"),
+        model_index=np.asarray(0, dtype=np.int64),
+    )
+
+    with pytest.raises(ExternalFeatureError, match="missing fields.*chain_ids"):
+        ResiduePointCloudConfig(node_attr_mode=[{"external": {"path": str(path)}}])
 
 
 def test_external_detects_source_mutation_after_config_resolution(tmp_path: Path) -> None:

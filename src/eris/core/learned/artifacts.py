@@ -42,6 +42,12 @@ _OUTPUT_DECLARATIONS = {
         "granularity": "residue",
         "layout": "N",
     },
+    "chain_id": {
+        "name": "chain_id",
+        "role": "chain_id",
+        "granularity": "residue",
+        "layout": "N",
+    },
     "valid_mask": {
         "name": "valid_mask",
         "role": "valid_mask",
@@ -55,6 +61,7 @@ def _ordered_data(
     result: StructuralEmbeddingResult,
     *,
     output_mode: OutputMode,
+    chain_ids: list[str],
 ) -> dict[str, np.ndarray]:
     data: dict[str, np.ndarray] = {}
 
@@ -63,7 +70,10 @@ def _ordered_data(
     if output_mode in {"global", "both"}:
         data["global_embedding"] = cast(np.ndarray, result.global_embedding)
     if output_mode in {"node", "both"}:
+        if len(chain_ids) != 1:
+            raise ValueError("Learned residue outputs require exactly one selected chain in v0.1")
         data["node_ids"] = cast(np.ndarray, result.node_ids)
+        data["chain_id"] = np.full(data["node_ids"].shape, chain_ids[0], dtype=np.str_)
         if result.valid_mask is not None:
             data["valid_mask"] = result.valid_mask
 
@@ -88,7 +98,11 @@ def build_learned_artifact(
 
     validate_embedding_result(result, output_mode=config.output_mode)
 
-    data = _ordered_data(result, output_mode=config.output_mode)
+    data = _ordered_data(
+        result,
+        output_mode=config.output_mode,
+        chain_ids=input_metadata["chain_ids"],
+    )
     parameters = config.to_dict()
     counts = (
         {"n_nodes": int(cast(np.ndarray, result.node_embedding).shape[0])}
@@ -101,6 +115,7 @@ def build_learned_artifact(
         build_provenance(
             representation_name=config.representation_name,
             parameters=parameters,
+            chain_ids=input_metadata["chain_ids"],
         )
     )
     if provenance_environment is not None:

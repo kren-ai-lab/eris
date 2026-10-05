@@ -105,7 +105,7 @@ def _learned_artifact(
             source_sha256=sha256_file(source),
             input_format="pdb",
             model_index=model_index,
-            chain_id=chain_id,
+            chain_ids=["A" if chain_id is None else chain_id],
         ),
         encoder_metadata={
             "implementation": GEARNET_EDGE_IMPLEMENTATION,
@@ -154,6 +154,61 @@ def test_manifest_accepts_only_canonical_structure_fields(tmp_path: Path) -> Non
     rows = read_manifest(manifest, StructureManifestRow)
 
     assert rows == [StructureManifestRow(id="protein", path="protein.pdb", chain="A", model=1)]
+
+
+def test_manifest_batch_and_resume_canonicalize_multichain_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "multi.pdb"
+    source.write_text(
+        "\n".join(
+            [
+                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
+                "TER",
+                "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
+                "TER",
+                "END",
+                "",
+            ]
+        ),
+        encoding="ascii",
+    )
+    manifest = tmp_path / "structures.json"
+    manifest.write_text(
+        f'{{"id":"protein","path":"{source.as_posix()}","chain":["B","A"],"model":0}}\n',
+        encoding="utf-8",
+    )
+    # JSON manifests are lists rather than a single object.
+    manifest.write_text(f"[{manifest.read_text(encoding='utf-8').strip()}]\n", encoding="utf-8")
+    rows = read_manifest(manifest, StructureManifestRow)
+    artifact_root = tmp_path / "artifacts"
+
+    result = batch_encode(
+        rows,
+        representation="residue_point_cloud",
+        artifact_root=artifact_root,
+        use_cache=False,
+    )
+
+    assert result[0].status == "success"
+    artifact = StructureArtifact.load(
+        artifact_root / "protein" / "residue_point_cloud", strict=True
+    )
+    assert artifact.meta["input"]["chain_ids"] == ["A", "B"]
+
+    monkeypatch.setattr(
+        batch_module.eris,
+        "encode",
+        lambda *args, **kwargs: pytest.fail("equivalent resumed artifact must be reused"),
+    )
+    resumed = batch_encode(
+        [StructureManifestRow(id="protein", path=str(source), chain=["A", "B"])],
+        representation="residue_point_cloud",
+        artifact_root=artifact_root,
+        resume=True,
+        use_cache=False,
+    )
+    assert resumed[0].status == "success"
 
 
 @pytest.mark.parametrize("alias", ["sample_id", "input", "chain_id", "model_index"])
@@ -217,7 +272,7 @@ def test_batch_encode_delegates_to_public_api_and_propagates_config(monkeypatch,
     assert resolved_config.k == 8
     assert kwargs == {
         "representation": "residue_knn_graph",
-        "chain_id": "A",
+        "chain_id": ("A",),
         "model_index": 2,
         "use_cache": False,
     }
@@ -349,10 +404,6 @@ def test_resume_regenerates_invalid_artifact_without_deleting_first(tmp_path, mo
             },
         ),
         (
-            lambda: _explicit_artifact(representation="residue_knn_graph", chain_id="A"),
-            {"representation": "residue_knn_graph"},
-        ),
-        (
             lambda: _explicit_artifact(representation="residue_knn_graph", source=OTHER_PDB),
             {"representation": "residue_knn_graph"},
         ),
@@ -446,7 +497,7 @@ def test_batch_embed_delegates_to_public_api_and_propagates_learned_options(tmp_
             "input.pdb",
             {
                 "representation": "gearnet_edge",
-                "chain_id": "A",
+                "chain_id": ("A",),
                 "model_index": 0,
                 "output_mode": "node",
                 "checkpoint_path": Path("checkpoint.pth"),

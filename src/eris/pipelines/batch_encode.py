@@ -14,7 +14,9 @@ from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import parser_hint_from_source, parser_hint_matches_format
 from eris.core.config import CanonicalRepresentationConfig
 from eris.core.hashing import sha256_file
+from eris.core.io import resolve_structure_input
 from eris.core.registry import get_encoder, get_encoder_info, resolve_representation_config
+from eris.core.types import StructureInput
 from eris.exceptions import ConfigError, ExecutionError
 from eris.pipelines.manifest import (
     BatchResultRow,
@@ -35,6 +37,7 @@ class _ResumeIdentity:
     coordinate_source: str
     parameters: dict[str, Any]
     config_fingerprint: str
+    chain_ids: tuple[str, ...]
     model: dict[str, Any] | None = None
     encoder_implementation: str | None = None
     encoder_version: str | None = None
@@ -113,6 +116,7 @@ def _normalize_explicit_params(
 def _explicit_resume_identity(
     representation: str,
     config: CanonicalRepresentationConfig,
+    chain_ids: tuple[str, ...],
 ) -> _ResumeIdentity:
     info = get_encoder_info(representation)
     encoder = get_encoder(representation, config=config, use_cache=False)
@@ -124,7 +128,10 @@ def _explicit_resume_identity(
         granularity=info.granularity,
         coordinate_source=config.coordinate_source,
         parameters=parameters,
-        config_fingerprint=compute_config_fingerprint(representation, parameters),
+        config_fingerprint=compute_config_fingerprint(
+            representation, parameters, chain_ids=chain_ids
+        ),
+        chain_ids=chain_ids,
         encoder_implementation=encoder.encoder_implementation,
         encoder_version=encoder.version,
     )
@@ -175,6 +182,7 @@ def _learned_resume_identity(
     output_mode: str,
     device: str,
     precision: str,
+    chain_ids: tuple[str, ...],
 ) -> _ResumeIdentity:
     from eris.core.learned.execution import (
         StructuralExecutionConfig,
@@ -197,7 +205,10 @@ def _learned_resume_identity(
         granularity=info["granularity_by_output_mode"][output_mode],
         coordinate_source=info["coordinate_source"],
         parameters=parameters,
-        config_fingerprint=compute_config_fingerprint(representation, parameters),
+        config_fingerprint=compute_config_fingerprint(
+            representation, parameters, chain_ids=chain_ids
+        ),
+        chain_ids=chain_ids,
         model=registry_info.model_descriptor.to_cache_identity(),
         encoder_implementation=registry_info.implementation,
         encoder_version=registry_info.encoder_version,
@@ -207,6 +218,12 @@ def _learned_resume_identity(
 
 def _target_dir(artifact_root: Path, row: StructureManifestRow, representation: str) -> Path:
     return artifact_root / row.id / representation
+
+
+def _resolved_row_input(row: StructureManifestRow) -> StructureInput:
+    return resolve_structure_input(
+        StructureInput(source=row.path, chain_id=row.chain, model_index=row.model)
+    )
 
 
 def _staging_dir(target: Path) -> Path:
@@ -271,6 +288,7 @@ def _input_matches(
     row: StructureManifestRow,
     *,
     source_sha256: str,
+    chain_ids: tuple[str, ...],
 ) -> bool:
     input_meta = artifact.meta.get("input")
     if not isinstance(input_meta, dict):
@@ -279,7 +297,7 @@ def _input_matches(
     return (
         input_meta.get("source_sha256") == source_sha256
         and input_meta.get("model_index") == row.model
-        and input_meta.get("chain_id") == row.chain
+        and input_meta.get("chain_ids") == list(chain_ids)
         and isinstance(input_format, str)
         and parser_hint_matches_format(parser_hint_from_source(row.path), input_format)
     )
@@ -338,7 +356,12 @@ def _artifact_matches_request(
         and meta.get("coordinate_source") == identity.coordinate_source
         and meta.get("parameters") == identity.parameters
         and provenance.get("config_fingerprint") == identity.config_fingerprint
-        and _input_matches(artifact, row, source_sha256=source_sha256)
+        and _input_matches(
+            artifact,
+            row,
+            source_sha256=source_sha256,
+            chain_ids=identity.chain_ids,
+        )
     )
     if not matches:
         return False
@@ -444,8 +467,8 @@ def _run_batch(
                     "to reuse equivalent artifacts or overwrite=True to replace it"
                 )
 
-            identity = identity_factory(row)
             if resume and target.exists():
+                identity = identity_factory(row)
                 artifact = _load_equivalent_artifact(target, row, identity)
                 if artifact is not None:
                     results.append(
@@ -535,6 +558,7 @@ def batch_encode(
         identity_factory=lambda row: _explicit_resume_identity(
             representation_name,
             explicit_configs_by_id[row.id],
+            _resolved_row_input(row).chain_id,
         ),
         execute=lambda row: eris.encode(
             row.path,
@@ -587,6 +611,7 @@ def batch_embed(
             output_mode=output_mode,
             device=device,
             precision=precision,
+            chain_ids=_resolved_row_input(row).chain_id,
         ),
         execute=lambda row: eris.embed(
             row.path,

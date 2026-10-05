@@ -23,7 +23,7 @@ class LoadedStructureData(dict[str, np.ndarray]):
     """Extracted arrays with the parser-confirmed coordinate format as typed side data."""
 
     input_format: str
-    chain_id: str
+    chain_ids: tuple[str, ...]
     model_index: int
 
     def __init__(
@@ -31,12 +31,12 @@ class LoadedStructureData(dict[str, np.ndarray]):
         data: dict[str, np.ndarray],
         *,
         input_format: str,
-        chain_id: str,
+        chain_ids: tuple[str, ...],
         model_index: int,
     ) -> None:
         super().__init__(data)
         self.input_format = input_format
-        self.chain_id = chain_id
+        self.chain_ids = chain_ids
         self.model_index = model_index
 
 
@@ -73,7 +73,20 @@ def load_structure(path: Path) -> gemmi.Structure:
         raise StructureLoadError(f"Failed to parse structure: {path}") from e
 
 
-def select_chain(st: gemmi.Structure, chain_id: Optional[str], model_index: int) -> gemmi.Chain:
+def _is_relevant_protein_chain(chain: gemmi.Chain) -> bool:
+    for residue in chain:
+        residue_info = gemmi.find_tabulated_residue(residue.name)
+        is_polymer = residue.entity_type == gemmi.EntityType.Polymer or residue.het_flag == "A"
+        if is_polymer and residue_info.is_amino_acid():
+            return True
+    return False
+
+
+def select_chains(
+    st: gemmi.Structure,
+    chain_id: tuple[str, ...] | None,
+    model_index: int,
+) -> tuple[gemmi.Chain, ...]:
     if len(st) == 0:
         raise StructureLoadError("Structure has no models.")
     if model_index < 0 or model_index >= len(st):
@@ -81,14 +94,28 @@ def select_chain(st: gemmi.Structure, chain_id: Optional[str], model_index: int)
     model = st[model_index]
 
     if chain_id is None:
-        if len(model) == 0:
-            raise StructureLoadError("Model has no chains.")
-        return model[0]
+        selected = tuple(chain for chain in model if _is_relevant_protein_chain(chain))
+        if not selected:
+            raise StructureLoadError("Model has no relevant protein/polymer chains.")
+        return selected
 
-    for ch in model:
-        if ch.name == chain_id:
-            return ch
-    raise StructureLoadError(f"Chain not found: {chain_id}")
+    available = {chain.name for chain in model}
+    missing = [name for name in chain_id if name not in available]
+    if missing:
+        raise StructureLoadError(f"Chain(s) not found: {missing}")
+    requested = set(chain_id)
+    return tuple(chain for chain in model if chain.name in requested)
+
+
+def resolve_structure_input(inp: StructureInput) -> StructureInput:
+    """Resolve a requested selection to an immutable tuple in model order."""
+    structure = load_structure(Path(inp.source))
+    chains = select_chains(structure, inp.chain_id, inp.model_index)
+    return StructureInput(
+        source=inp.source,
+        chain_id=tuple(chain.name for chain in chains),
+        model_index=inp.model_index,
+    )
 
 
 def _residue_id(chain: gemmi.Chain, res: gemmi.Residue) -> str:
@@ -326,6 +353,7 @@ def extract_residue_bundle(
 
     coords: List[List[float]] = []
     ids: List[str] = []
+    chain_ids: List[str] = []
     resnames: List[str] = []
     aa_idx: List[int] = []
     plddt_list: List[float] = []
@@ -375,6 +403,7 @@ def extract_residue_bundle(
             # "nan"
             coords.append([float("nan"), float("nan"), float("nan")])
             ids.append(rid)
+            chain_ids.append(chain.name)
             resnames.append(r3)
             aa_idx.append(aa_index)
             plddt_list.append(float("nan"))
@@ -384,6 +413,7 @@ def extract_residue_bundle(
 
         coords.append(center.tolist())
         ids.append(rid)
+        chain_ids.append(chain.name)
         resnames.append(r3)
         aa_idx.append(aa_index)
         plddt_list.append(plddt_ca)
@@ -395,14 +425,10 @@ def extract_residue_bundle(
         more = "" if len(missing_ids) <= 10 else f" (+{len(missing_ids) - 10} more)"
         raise StructureLoadError(f"Missing residue center in residues: {preview}{more}")
 
-    if not coords:
-        raise StructureLoadError(
-            "No residue positions found in selected chain (after filters/policies)."
-        )
-
     return {
-        "pos": np.asarray(coords, dtype=np.float32),
+        "pos": np.asarray(coords, dtype=np.float32).reshape((-1, 3)),
         "residue_ids": np.asarray(ids, dtype=np.str_),
+        "chain_id": np.asarray(chain_ids, dtype=np.str_),
         "resname": np.asarray(resnames, dtype=np.str_),
         "aa_index": np.asarray(aa_idx, dtype=np.int16),
         "plddt": np.asarray(plddt_list, dtype=np.float32),
@@ -418,12 +444,18 @@ def load_select_and_extract(
 ) -> LoadedStructureData:
     try:
         st = load_structure(Path(inp.source))
-        ch = select_chain(st, inp.chain_id, inp.model_index)
-        data = extractor(ch)
+        chains = select_chains(st, inp.chain_id, inp.model_index)
+        bundles = [extractor(chain) for chain in chains]
+        keys = bundles[0].keys()
+        data = {key: np.concatenate([bundle[key] for bundle in bundles], axis=0) for key in keys}
+        if data["pos"].shape[0] == 0:
+            raise StructureLoadError(
+                "No positions found in selected chains (after filters/policies)."
+            )
         return LoadedStructureData(
             data,
             input_format=_parsed_input_format(st),
-            chain_id=ch.name,
+            chain_ids=tuple(chain.name for chain in chains),
             model_index=inp.model_index,
         )
     except Exception:
@@ -431,7 +463,7 @@ def load_select_and_extract(
             "Failed to load structure",
             extra={
                 "source": str(inp.source),
-                "chain_id": inp.chain_id,
+                "chain_ids": inp.chain_id,
                 "model_index": inp.model_index,
             },
         )
@@ -580,6 +612,7 @@ def extract_atom_bundle(
     bfac: List[float] = []
     occ: List[float] = []
     residue_ids: List[str] = []
+    chain_ids: List[str] = []
     resname: List[str] = []
     atom_name: List[str] = []
     seq_pos_res: List[int] = []
@@ -644,22 +677,21 @@ def extract_atom_bundle(
             occ.append(float(getattr(atom, "occ", 0.0)))
 
             residue_ids.append(rid)
+            chain_ids.append(chain.name)
             resname.append(r3)
             atom_name.append((atom.name or "").strip())
 
             seq_pos_res.append(res_counter)
             aa_idx_res.append(aa_idx)
 
-    if not coords:
-        raise StructureLoadError("No atoms found in selected chain (after filters/policies).")
-
     return {
-        "pos": np.asarray(coords, dtype=np.float32),
+        "pos": np.asarray(coords, dtype=np.float32).reshape((-1, 3)),
         "elem_index": np.asarray(elem_idx, dtype=np.int16),
         "atom_role": np.asarray(roles, dtype=np.int8),
         "bfactor": np.asarray(bfac, dtype=np.float32),
         "occ": np.asarray(occ, dtype=np.float32),
         "residue_ids": np.asarray(residue_ids, dtype=np.str_),
+        "chain_id": np.asarray(chain_ids, dtype=np.str_),
         "resname": np.asarray(resname, dtype=np.str_),
         "atom_name": np.asarray(atom_name, dtype=np.str_),
         "seq_pos_residue": np.asarray(seq_pos_res, dtype=np.int32),

@@ -34,7 +34,7 @@ class InputMetadataRequired(TypedDict):
     source_sha256: str
     format: str
     model_index: int
-    chain_id: str | None
+    chain_ids: list[str]
 
 
 class InputMetadata(InputMetadataRequired, total=False):
@@ -230,8 +230,24 @@ def _reject_numpy_in_parameters(value: Any, path: str = "meta.parameters") -> No
             _reject_numpy_in_parameters(item, f"{path}[{index}]")
 
 
-def compute_config_fingerprint(representation_name: str, parameters: Mapping[str, Any]) -> str:
-    """Hash only the representation name and canonical requested parameters."""
+def _validated_chain_ids(chain_ids: Sequence[str], path: str) -> list[str]:
+    if isinstance(chain_ids, (str, bytes)) or not isinstance(chain_ids, Sequence):
+        _fail(f"{path} must be a non-empty sequence[str]")
+    normalized = list(chain_ids)
+    if not normalized or any(not isinstance(chain, str) for chain in normalized):
+        _fail(f"{path} must be a non-empty sequence[str]")
+    if len(normalized) != len(set(normalized)):
+        _fail(f"{path} must contain unique chain IDs")
+    return normalized
+
+
+def compute_config_fingerprint(
+    representation_name: str,
+    parameters: Mapping[str, Any],
+    *,
+    chain_ids: Sequence[str],
+) -> str:
+    """Hash the representation configuration and canonical resolved chain selection."""
     _require_non_empty_string(representation_name, "representation_name")
     if not isinstance(parameters, Mapping):
         _fail("parameters must be a mapping")
@@ -239,6 +255,7 @@ def compute_config_fingerprint(representation_name: str, parameters: Mapping[str
     payload = {
         "representation_name": representation_name,
         "parameters": parameters,
+        "input_selection": {"chain_ids": _validated_chain_ids(chain_ids, "chain_ids")},
     }
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
@@ -256,7 +273,7 @@ def _validate_encoder(encoder: Any) -> None:
 
 def _validate_input(input_meta: Any) -> None:
     value = _require_mapping(input_meta, "meta.input")
-    required = {"source", "source_sha256", "format", "model_index", "chain_id"}
+    required = {"source", "source_sha256", "format", "model_index", "chain_ids"}
     optional = {"original_filename", "structure_id", "source_database"}
     _require_exact_keys(value, required=required, optional=optional, path="meta.input")
     _require_non_empty_string(value["source"], "meta.input.source")
@@ -264,8 +281,7 @@ def _validate_input(input_meta: Any) -> None:
     _require_non_empty_string(value["format"], "meta.input.format")
     if type(value["model_index"]) is not int or value["model_index"] < 0:
         _fail("meta.input.model_index must be an integer >= 0")
-    if value["chain_id"] is not None and not isinstance(value["chain_id"], str):
-        _fail("meta.input.chain_id must be a string or None")
+    _validated_chain_ids(value["chain_ids"], "meta.input.chain_ids")
     for key in optional & value.keys():
         if not isinstance(value[key], str):
             _fail(f"meta.input.{key} must be a string")
@@ -277,7 +293,7 @@ def build_input_metadata(
     source_sha256: str,
     input_format: str,
     model_index: int,
-    chain_id: str | None,
+    chain_ids: Sequence[str],
 ) -> InputMetadata:
     """Build the canonical five-field Schema v2 input block."""
     if not isinstance(source, (str, Path)):
@@ -287,7 +303,7 @@ def build_input_metadata(
         "source_sha256": source_sha256,
         "format": input_format,
         "model_index": model_index,
-        "chain_id": chain_id,
+        "chain_ids": list(chain_ids),
     }
     _validate_input(input_meta)
     return input_meta
@@ -327,6 +343,7 @@ def build_provenance(
     *,
     representation_name: str,
     parameters: Mapping[str, Any],
+    chain_ids: Sequence[str],
 ) -> ProvenanceMetadata:
     """Build deterministic required provenance without optional environment state."""
     from eris import __version__
@@ -336,6 +353,7 @@ def build_provenance(
         "config_fingerprint": compute_config_fingerprint(
             representation_name,
             parameters,
+            chain_ids=chain_ids,
         ),
     }
     _validate_provenance(provenance)
@@ -634,6 +652,7 @@ def _validate_strict_roles(
             "node_embedding",
             "global_embedding",
             "node_ids",
+            "chain_id",
             "valid_mask",
         )
     }
@@ -700,6 +719,25 @@ def _validate_strict_roles(
         if meta["representation_family"] == "learned" and len(identifiers) != len(set(identifiers)):
             _fail("role='node_ids' requires unique identifiers")
 
+    chain_id = arrays["chain_id"]
+    requires_chain_id = meta["granularity"] == "residue" or (
+        meta["granularity"] == "mixed" and node_embedding is not None
+    )
+    if requires_chain_id and chain_id is None:
+        _fail("residue-level artifacts require an aligned role='chain_id' output")
+    if chain_id is not None:
+        _require_shape(chain_id, (None,), "chain_id")
+        if chain_id.dtype.kind != "U":
+            _fail("role='chain_id' requires a Unicode dtype")
+        selected_chain_ids = meta["input"]["chain_ids"]
+        aligned_chain_ids = chain_id.tolist()
+        if any(identifier not in selected_chain_ids for identifier in aligned_chain_ids):
+            _fail("role='chain_id' contains a chain outside meta.input.chain_ids")
+        chain_order = {identifier: index for index, identifier in enumerate(selected_chain_ids)}
+        aligned_order = [chain_order[identifier] for identifier in aligned_chain_ids]
+        if aligned_order != sorted(aligned_order):
+            _fail("role='chain_id' rows must preserve meta.input.chain_ids order")
+
     valid_mask = arrays["valid_mask"]
     if valid_mask is not None:
         _require_shape(valid_mask, (None,), "valid_mask")
@@ -747,7 +785,15 @@ def _validate_strict_roles(
             _fail("meta.counts.n_self_loops does not match edge_index")
     node_count_candidates = [
         array.shape[0]
-        for array in (coordinates, node_features, node_embedding, node_ids, valid_mask, matrix)
+        for array in (
+            coordinates,
+            node_features,
+            node_embedding,
+            node_ids,
+            chain_id,
+            valid_mask,
+            matrix,
+        )
         if array is not None
     ]
     if node_count_candidates and len(set(node_count_candidates)) != 1:
@@ -835,7 +881,9 @@ def validate_schema_v2(
             if normalized["dtypes"][name] != str(array.dtype):
                 _fail(f"meta.dtypes.{name} does not match data.{name}.dtype")
         expected_fingerprint = compute_config_fingerprint(
-            normalized["representation_name"], normalized["parameters"]
+            normalized["representation_name"],
+            normalized["parameters"],
+            chain_ids=normalized["input"]["chain_ids"],
         )
         if normalized["provenance"]["config_fingerprint"] != expected_fingerprint:
             _fail(

@@ -30,7 +30,7 @@ def _common_meta(data: dict[str, np.ndarray]) -> dict:
         "representation_name": "residue_knn_graph",
         "representation_family": "explicit",
         "representation_type": "graph",
-        "granularity": "residue",
+        "granularity": "structure",
         "coordinate_source": "ca",
         "encoder": {
             "implementation": "eris.encoders.graphs.ResidueKNNGraph",
@@ -41,12 +41,14 @@ def _common_meta(data: dict[str, np.ndarray]) -> dict:
             "source_sha256": "a" * 64,
             "format": "pdb",
             "model_index": 0,
-            "chain_id": None,
+            "chain_ids": ["A"],
         },
         "parameters": parameters,
         "provenance": {
             "eris_version": "0.1.0",
-            "config_fingerprint": compute_config_fingerprint("residue_knn_graph", parameters),
+            "config_fingerprint": compute_config_fingerprint(
+                "residue_knn_graph", parameters, chain_ids=["A"]
+            ),
         },
         "outputs": [],
         "feature_keys": {},
@@ -63,14 +65,17 @@ def _explicit_graph() -> tuple[dict, dict[str, np.ndarray]]:
         "edge_index": np.array([[0, 1, 2], [1, 0, 2]], dtype=np.int64),
         "edge_attr": np.array([[1.0], [1.0], [0.0]], dtype=np.float32),
         "graph_attr": np.array([3.0, 3.0], dtype=np.float32),
+        "chain_id": np.array(["A", "A", "A"], dtype=np.str_),
     }
     meta = _common_meta(data)
+    meta["granularity"] = "residue"
     meta["outputs"] = [
         {"name": "pos", "role": "positions", "granularity": "residue", "layout": "N3"},
         {"name": "node_attr", "role": "node_features", "granularity": "residue"},
         {"name": "edge_index", "role": "edge_index", "layout": "2E"},
         {"name": "edge_attr", "role": "edge_features", "layout": "EF"},
         {"name": "graph_attr", "role": "graph_features"},
+        {"name": "chain_id", "role": "chain_id", "granularity": "residue"},
     ]
     meta["feature_keys"] = {
         "node_attr_keys": ["residue.mass", "residue.charge"],
@@ -87,6 +92,7 @@ def _learned_embedding() -> tuple[dict, dict[str, np.ndarray]]:
         "global_embedding": np.array([0.25, 0.35, 0.45], dtype=np.float32),
         "node_ids": np.array(["A:1", "A:2"], dtype=np.str_),
         "valid_mask": np.array([True, True], dtype=np.bool_),
+        "chain_id": np.array(["A", "A"], dtype=np.str_),
     }
     meta = _common_meta(data)
     meta.update(
@@ -114,6 +120,7 @@ def _learned_embedding() -> tuple[dict, dict[str, np.ndarray]]:
                 {"name": "node_embedding", "role": "node_embedding", "layout": "ND"},
                 {"name": "global_embedding", "role": "global_embedding", "layout": "D"},
                 {"name": "node_ids", "role": "node_ids", "granularity": "residue"},
+                {"name": "chain_id", "role": "chain_id", "granularity": "residue"},
                 {"name": "valid_mask", "role": "valid_mask", "granularity": "residue"},
             ],
             "feature_keys": {},
@@ -121,7 +128,7 @@ def _learned_embedding() -> tuple[dict, dict[str, np.ndarray]]:
         }
     )
     meta["provenance"]["config_fingerprint"] = compute_config_fingerprint(
-        meta["representation_name"], meta["parameters"]
+        meta["representation_name"], meta["parameters"], chain_ids=["A"]
     )
     return meta, data
 
@@ -311,6 +318,8 @@ def test_learned_model_and_checkpoint_are_strict(mutation, match):
     [
         (lambda value: value.update({"source_sha256": "A" * 64}), "lowercase"),
         (lambda value: value.update({"model_index": -1}), "integer >= 0"),
+        (lambda value: value.update({"chain_ids": []}), "non-empty"),
+        (lambda value: value.update({"chain_ids": ["A", "A"]}), "unique"),
         (lambda value: value.update({"assembly": "1"}), "unknown fields"),
     ],
 )
@@ -321,11 +330,11 @@ def test_input_contract_rejects_invalid_values(mutation, match):
     _assert_invalid(meta, data, match)
 
 
-def test_input_optional_fields_and_chain_string_are_accepted():
+def test_input_optional_fields_and_chain_list_are_accepted():
     meta, data = _explicit_graph()
     meta["input"].update(
         {
-            "chain_id": "A",
+            "chain_ids": ["A"],
             "original_filename": "tiny.pdb",
             "structure_id": "tiny",
             "source_database": "PDB",
@@ -333,6 +342,14 @@ def test_input_optional_fields_and_chain_string_are_accepted():
     )
 
     validate_schema_v2(meta, data, strict=True)
+
+
+def test_legacy_scalar_chain_metadata_is_rejected():
+    meta, data = _explicit_graph()
+    del meta["input"]["chain_ids"]
+    meta["input"]["chain_id"] = "A"
+
+    _assert_invalid(meta, data, "missing required")
 
 
 @pytest.mark.parametrize("field", ["config_fingerprint"])
@@ -372,7 +389,7 @@ def test_parameters_preserve_nested_json_and_none():
     meta, data = _explicit_graph()
     meta["parameters"] = {"selection": {"chain": None}, "features": ["mass", "charge"]}
     meta["provenance"]["config_fingerprint"] = compute_config_fingerprint(
-        meta["representation_name"], meta["parameters"]
+        meta["representation_name"], meta["parameters"], chain_ids=["A"]
     )
 
     normalized = validate_schema_v2(meta, data, strict=True)
@@ -454,6 +471,7 @@ def test_scalar_shape_is_empty_list():
     data = {"score": np.array(1.0, dtype=np.float32)}
     meta = _common_meta(data)
     meta["representation_type"] = "matrix"
+    meta["granularity"] = "structure"
     meta["outputs"] = [{"name": "score", "role": "score"}]
 
     validate_schema_v2(meta, data, strict=True)
@@ -572,16 +590,16 @@ def test_config_fingerprint_is_deterministic_and_key_order_independent():
     left = {"center": True, "nested": {"b": 2, "a": 1}}
     right = {"nested": {"a": 1, "b": 2}, "center": True}
 
-    assert compute_config_fingerprint("residue_knn_graph", left) == compute_config_fingerprint(
-        "residue_knn_graph", right
-    )
+    assert compute_config_fingerprint(
+        "residue_knn_graph", left, chain_ids=["A"]
+    ) == compute_config_fingerprint("residue_knn_graph", right, chain_ids=["A"])
 
 
 def test_config_fingerprint_changes_only_for_accepted_identity_inputs():
-    baseline = compute_config_fingerprint("residue_knn_graph", {"k": 8})
+    baseline = compute_config_fingerprint("residue_knn_graph", {"k": 8}, chain_ids=["A"])
 
-    assert baseline != compute_config_fingerprint("residue_knn_graph", {"k": 9})
-    assert baseline != compute_config_fingerprint("atom_knn_graph", {"k": 8})
+    assert baseline != compute_config_fingerprint("residue_knn_graph", {"k": 9}, chain_ids=["A"])
+    assert baseline != compute_config_fingerprint("atom_knn_graph", {"k": 8}, chain_ids=["A"])
 
 
 def test_strict_validation_checks_config_fingerprint_against_name_and_parameters():

@@ -62,6 +62,7 @@ EXPECTED_DECLARATIONS = {
 }
 
 ATOM_AUX_BASELINE = (
+    ("chain_id", (4114,), "<U1"),
     ("elem_index", (4114,), "int16"),
     ("atom_role", (4114,), "int8"),
     ("bfactor", (4114,), "float32"),
@@ -74,6 +75,7 @@ ATOM_AUX_BASELINE = (
 )
 RESIDUE_AUX_BASELINE = (
     ("residue_ids", (534,), "<U10"),
+    ("chain_id", (534,), "<U1"),
     ("omitted_residue_ids", (0,), "<U1"),
     ("resname", (534,), "<U3"),
     ("aa_index", (534,), "int16"),
@@ -232,6 +234,7 @@ def test_shared_output_declarations_have_frozen_semantics():
         ("pos", "coordinates", "atom", "N3"),
         ("centroid", "centroid", "structure", None),
         ("node_attr", "node_features", "atom", "NF"),
+        ("chain_id", "chain_id", "atom", "N"),
         ("elem_index", "element_index", "atom", "N"),
         ("atom_role", "atom_role", "atom", "N"),
         ("bfactor", "bfactor", "atom", "N"),
@@ -247,6 +250,7 @@ def test_shared_output_declarations_have_frozen_semantics():
         ("centroid", "centroid", "structure", None),
         ("node_attr", "node_features", "residue", "NF"),
         ("residue_ids", "node_ids", "residue", "N"),
+        ("chain_id", "chain_id", "residue", "N"),
         ("omitted_residue_ids", "omitted_residue_ids", "residue", "N"),
         ("resname", "residue_names", "residue", "N"),
         ("aa_index", "amino_acid_index", "residue", "N"),
@@ -288,6 +292,7 @@ def test_shared_output_declarations_have_frozen_semantics():
         ("origin", "origin", None, None),
         ("centroid", "centroid", "structure", None),
         ("residue_ids", "residue_ids", "residue", "N"),
+        ("chain_id", "chain_id", "residue", "N"),
         ("omitted_residue_ids", "omitted_residue_ids", "residue", "N"),
         ("resname", "residue_names", "residue", "N"),
         ("aa_index", "amino_acid_index", "residue", "N"),
@@ -345,11 +350,12 @@ def test_all_explicit_encoders_return_complete_schema_v2(encoder_type):
         "source_sha256": sha256_file(PDB),
         "format": "pdb",
         "model_index": 0,
-        "chain_id": None,
+        "chain_ids": ["A"],
     }
     assert metadata["provenance"]["config_fingerprint"] == compute_config_fingerprint(
         encoder.name,
         encoder.config.to_dict(),
+        chain_ids=["A"],
     )
     assert [output["name"] for output in metadata["outputs"]] == [
         declaration["name"] for declaration in EXPECTED_DECLARATIONS[encoder.name]

@@ -13,7 +13,7 @@ The source must be a `.npz` archive readable with `np.load(path, allow_pickle=Fa
 | `values` | yes | real numeric matrix `(N,D)` with `N,D >= 1`; converted to contiguous `float32` |
 | `residue_ids` | yes | unique string vector `(N,)` |
 | `source_name` | yes | non-empty scalar string used in public feature keys |
-| `chain_id` | yes | scalar string for the source chain |
+| `chain_ids` | yes | non-empty unique Unicode vector in selected-model chain order |
 | `model_index` | yes | scalar integer greater than or equal to zero |
 | `feature_keys` | no | unique non-empty string vector of length `D` |
 | `source_version` | no | scalar string |
@@ -46,8 +46,9 @@ A:42:A:GLY
 ```
 
 The only alignment policy is `strict_residue_id`. Rows may be shuffled; Eris reorders them by
-exact ID. Missing, extra, duplicate, or malformed IDs fail. Chain, model, insertion-code, and
-residue-name mismatches also fail.
+exact ID. Missing, extra, duplicate, or malformed IDs fail. Every residue-ID chain must be
+declared by `chain_ids`; the declared chain set and order must exactly match the resolved Eris
+selection. Chain, model, insertion-code, and residue-name mismatches also fail.
 
 Alignment uses the exact residue nodes retained by structure extraction. If extraction omits a
 residue that remains in the NPZ, that row is extra. Eris never truncates, pads, matches by position,
@@ -59,7 +60,7 @@ Configuration resolution validates the payload and records:
 
 - resolved absolute invocation path;
 - source name, version, and model;
-- chain and model identity;
+- chain-set and model identity;
 - feature dimension and ordered keys;
 - alignment policy;
 - canonical `content_sha256`.
@@ -118,7 +119,7 @@ np.savez(
     source_name=np.asarray("custom_descriptor_v2"),
     source_version=np.asarray("1.0"),
     feature_keys=np.asarray(["score_a", "score_b"]),
-    chain_id=np.asarray("A"),
+    chain_ids=np.asarray(["A"]),
     model_index=np.asarray(0, dtype=np.int64),
 )
 

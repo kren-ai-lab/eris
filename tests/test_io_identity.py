@@ -168,21 +168,25 @@ def test_old_residue_cache_key_cannot_satisfy_new_output_contract(tmp_path: Path
         representation_name=encoder.name,
         encoder_implementation=encoder.encoder_implementation,
         encoder_version="0.1.0",
-        config_fingerprint=compute_config_fingerprint(encoder.name, parameters),
+        config_fingerprint=compute_config_fingerprint(
+            encoder.name, parameters, chain_ids=structure_input.chain_id
+        ),
         source_sha256=sha256_file(Path(structure_input.source)),
         parser_hint=".pdb",
         model_index=structure_input.model_index,
-        chain_id=structure_input.chain_id,
+        chain_ids=structure_input.chain_id,
     )
     current_key = compute_cache_key_v2(
         representation_name=encoder.name,
         encoder_implementation=encoder.encoder_implementation,
         encoder_version=encoder.version,
-        config_fingerprint=compute_config_fingerprint(encoder.name, parameters),
+        config_fingerprint=compute_config_fingerprint(
+            encoder.name, parameters, chain_ids=structure_input.chain_id
+        ),
         source_sha256=sha256_file(Path(structure_input.source)),
         parser_hint=".pdb",
         model_index=structure_input.model_index,
-        chain_id=structure_input.chain_id,
+        chain_ids=structure_input.chain_id,
     )
     cache.set_v2(old_key, stale)
 

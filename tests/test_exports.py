@@ -47,7 +47,7 @@ def _input_metadata():
         source_sha256="a" * 64,
         input_format="pdb",
         model_index=0,
-        chain_id=None,
+        chain_ids=["A"],
     )
 
 
@@ -183,6 +183,7 @@ def test_cloud_export_maps_positions_and_features_and_preserves_auxiliary_ids() 
     _assert_tensor_equal(out["x"], artifact.data["node_attr"])
     _assert_tensor_equal(out["centroid"], artifact.data["centroid"])
     assert out["extra"]["residue_ids"] == artifact.data["residue_ids"].tolist()
+    assert out["extra"]["chain_id"] == artifact.data["chain_id"].tolist()
     _assert_tensor_equal(out["extra"]["aa_index"], artifact.data["aa_index"])
 
 
@@ -256,6 +257,7 @@ def test_learned_node_export_preserves_node_ids_mask_and_dtype() -> None:
     assert out["node_embedding"].shape == (2, 3)
     assert out["node_embedding"].dtype == torch.float64
     assert out["node_ids"] == ["A:1::ALA", "opaque-node-β"]
+    assert out["chain_id"] == ["A", "A"]
     assert torch.equal(out["valid_mask"], torch.tensor([True, False]))
     assert "edge_index" not in out
     assert "batch" not in out
@@ -281,7 +283,13 @@ def test_learned_both_export_preserves_all_outputs_and_collate_compatibility() -
     first = to_torch(_learned_artifact("both"))
     second = to_torch(_learned_artifact("both"))
 
-    assert {"node_embedding", "global_embedding", "node_ids", "valid_mask"} <= first.keys()
+    assert {
+        "node_embedding",
+        "global_embedding",
+        "node_ids",
+        "chain_id",
+        "valid_mask",
+    } <= first.keys()
     out = collate_learned([first, second])
 
     assert out["node_embedding"].shape == (4, 3)
@@ -292,6 +300,7 @@ def test_learned_both_export_preserves_all_outputs_and_collate_compatibility() -
         "A:1::ALA",
         "opaque-node-β",
     ]
+    assert out["chain_id"] == ["A", "A", "A", "A"]
 
 
 def test_learned_export_rejects_malformed_programmatic_artifacts() -> None:

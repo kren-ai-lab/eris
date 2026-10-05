@@ -70,6 +70,26 @@ def _artifact_metadata(
             }
         ]
     parameters = {"fixture": representation_name}
+    requires_chain_id = granularity == "residue" or (
+        granularity == "mixed" and "node_embedding" in data
+    )
+    if requires_chain_id and "chain_id" not in data:
+        node_count = (
+            int(data["node_embedding"].shape[0])
+            if "node_embedding" in data
+            else int(data[next(iter(data))].shape[0])
+        )
+        if representation_type == "grid":
+            node_count = 1
+        data["chain_id"] = np.full((node_count,), "A", dtype=np.str_)
+        outputs.append(
+            {
+                "name": "chain_id",
+                "role": "chain_id",
+                "granularity": "residue",
+                "layout": "N",
+            }
+        )
     kwargs: dict[str, object] = {}
     if representation_family == "learned":
         kwargs["model"] = {
@@ -98,12 +118,13 @@ def _artifact_metadata(
             source_sha256="a" * 64,
             input_format="pdb",
             model_index=0,
-            chain_id=None,
+            chain_ids=["A"],
         ),
         parameters=parameters,
         provenance=build_provenance(
             representation_name=representation_name,
             parameters=parameters,
+            chain_ids=["A"],
         ),
         output_declarations=outputs,
         feature_keys=build_feature_keys(),
@@ -513,6 +534,7 @@ def test_dataset_loads_synthetic_learned_artifact_without_gearnet_runtime(
     assert item["representation_family"] == "learned"
     assert item["representation_type"] == "embedding"
     np.testing.assert_array_equal(item["node_ids"], np.asarray(["A:1::ALA", "A:2::GLY"]))
+    np.testing.assert_array_equal(item["chain_id"], np.asarray(["A", "A"]))
 
 
 def test_dataset_accepts_mixed_index_without_collating(tmp_path: Path) -> None:

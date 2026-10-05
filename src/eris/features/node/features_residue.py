@@ -388,7 +388,7 @@ register_residue_node_feature(
     FeatureSpec(
         token="external",
         order=80,
-        requires={"residue_ids", "chain_id", "model_index"},
+        requires={"residue_ids", "chain_ids", "model_index"},
         fn=external_feature_values,
         keys_fn=external_feature_keys,
         params_fn=normalize_external_params,

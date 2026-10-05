@@ -31,6 +31,7 @@ _GRAPH_OUTPUTS: OutputDeclarations = (
 )
 
 _ATOM_AUX_OUTPUTS: OutputDeclarations = (
+    _output("chain_id", "chain_id", granularity="atom", layout="N"),
     _output("elem_index", "element_index", granularity="atom", layout="N"),
     _output("atom_role", "atom_role", granularity="atom", layout="N"),
     _output("bfactor", "bfactor", granularity="atom", layout="N"),
@@ -51,6 +52,7 @@ _RESIDUE_AUX_OUTPUTS: OutputDeclarations = (
     _output("pos", "coordinates", granularity="residue", layout="N3"),
     _CENTROID_OUTPUT,
     _output("residue_ids", "node_ids", granularity="residue", layout="N"),
+    _output("chain_id", "chain_id", granularity="residue", layout="N"),
     _output("omitted_residue_ids", "omitted_residue_ids", granularity="residue", layout="N"),
     _output("resname", "residue_names", granularity="residue", layout="N"),
     _output("aa_index", "amino_acid_index", granularity="residue", layout="N"),
@@ -106,6 +108,7 @@ VOXEL_OUTPUTS: OutputDeclarations = (
     _output("origin", "origin"),
     _CENTROID_OUTPUT,
     _output("residue_ids", "residue_ids", granularity="residue", layout="N"),
+    _output("chain_id", "chain_id", granularity="residue", layout="N"),
     _output("omitted_residue_ids", "omitted_residue_ids", granularity="residue", layout="N"),
     _output("resname", "residue_names", granularity="residue", layout="N"),
     _output("aa_index", "amino_acid_index", granularity="residue", layout="N"),

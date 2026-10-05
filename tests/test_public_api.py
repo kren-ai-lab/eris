@@ -13,12 +13,30 @@ import eris.core.base_encoder.base_encoder as base_encoder_module
 from eris.core.artifacts import StructureArtifact
 from eris.core.cache import DiskCache
 from eris.core.config import ResidueContactGraphConfig, ResidueKNNGraphConfig
+from eris.core.io import StructureLoadError
 from eris.core.registry import get_encoder
 from eris.core.types import StructureInput
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
 from eris.exceptions import ConfigError, RepresentationNotFoundError
 
 PDB = Path("tests/data/1AQ2.pdb")
+
+
+def _write_multichain_structure(path: Path) -> Path:
+    lines = [
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
+        "TER",
+        "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
+        "TER",
+        "HETATM    3  C1  LIG C   1       2.000   0.000   0.000  1.00 30.00           C  ",
+        "TER",
+        "HETATM    4  O   HOH D   1       3.000   0.000   0.000  1.00 40.00           O  ",
+        "TER",
+        "END",
+        "",
+    ]
+    path.write_text("\n".join(lines), encoding="ascii")
+    return path
 
 
 def _assert_equivalent(left: StructureArtifact, right: StructureArtifact) -> None:
@@ -125,8 +143,141 @@ def test_path_input_applies_explicit_structure_selection():
     )
 
     assert artifact.meta["input"]["source"] == str(PDB)
-    assert artifact.meta["input"]["chain_id"] == "A"
+    assert artifact.meta["input"]["chain_ids"] == ["A"]
     assert artifact.meta["input"]["model_index"] == 0
+
+
+def test_multichain_selection_is_canonical_and_excludes_nonprotein_chains(tmp_path: Path):
+    source = _write_multichain_structure(tmp_path / "multi.pdb")
+
+    default = eris.encode(source, representation="residue_point_cloud", use_cache=False)
+    reversed_selection = eris.encode(
+        source,
+        representation="residue_point_cloud",
+        chain_id=["B", "A"],
+        use_cache=False,
+    )
+    scalar = eris.encode(
+        source,
+        representation="residue_point_cloud",
+        chain_id="B",
+        use_cache=False,
+    )
+
+    assert default.meta["input"]["chain_ids"] == ["A", "B"]
+    assert default.data["chain_id"].tolist() == ["A", "B"]
+    assert reversed_selection.meta["input"]["chain_ids"] == ["A", "B"]
+    assert (
+        reversed_selection.meta["provenance"]["config_fingerprint"]
+        == default.meta["provenance"]["config_fingerprint"]
+    )
+    assert scalar.meta["input"]["chain_ids"] == ["B"]
+    assert scalar.data["residue_ids"].tolist() == ["B:1::GLY"]
+    assert (
+        scalar.meta["provenance"]["config_fingerprint"]
+        != default.meta["provenance"]["config_fingerprint"]
+    )
+
+    cache = DiskCache(tmp_path / "cache")
+    encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
+    first = encoder.encode(StructureInput(source=str(source), chain_id=["A", "B"]))
+    reordered = encoder.encode(StructureInput(source=str(source), chain_id=["B", "A"]))
+    encoder.encode(StructureInput(source=str(source), chain_id="B"))
+    np.testing.assert_array_equal(first.data["residue_ids"], reordered.data["residue_ids"])
+    assert len(list((cache.cache_dir / "v2").iterdir())) == 2
+
+
+@pytest.mark.parametrize("chain_id", [[], ["A", "A"]])
+def test_invalid_multichain_requests_fail_before_execution(chain_id):
+    with pytest.raises((ConfigError, ValueError), match="empty|duplicate|must not be empty"):
+        eris.encode(
+            PDB,
+            representation="residue_point_cloud",
+            chain_id=chain_id,
+            use_cache=False,
+        )
+
+
+def test_unknown_chain_request_fails_clearly(tmp_path: Path):
+    source = _write_multichain_structure(tmp_path / "multi.pdb")
+    with pytest.raises(StructureLoadError, match="not found"):
+        eris.encode(
+            source,
+            representation="residue_point_cloud",
+            chain_id=["A", "Z"],
+            use_cache=False,
+        )
+
+
+def test_all_explicit_residue_representations_support_multichain_selection(tmp_path: Path):
+    source = _write_multichain_structure(tmp_path / "all-residue.pdb")
+    residue_names = [
+        name
+        for name in eris.list_representations()
+        if eris.get_representation_info(name)["granularity"] == "residue"
+    ]
+
+    for name in residue_names:
+        artifact = eris.encode(source, representation=name, use_cache=False)
+        assert artifact.meta["input"]["chain_ids"] == ["A", "B"]
+        assert artifact.data["chain_id"].tolist() == ["A", "B"]
+
+
+def test_multichain_selection_is_resolved_independently_per_model(tmp_path: Path):
+    source = tmp_path / "models.pdb"
+    source.write_text(
+        "\n".join(
+            [
+                "MODEL        1",
+                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
+                "TER",
+                "ENDMDL",
+                "MODEL        2",
+                "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
+                "TER",
+                "ENDMDL",
+                "END",
+                "",
+            ]
+        ),
+        encoding="ascii",
+    )
+
+    first = eris.encode(
+        source, representation="residue_point_cloud", model_index=0, use_cache=False
+    )
+    second = eris.encode(
+        source, representation="residue_point_cloud", model_index=1, use_cache=False
+    )
+
+    assert first.meta["input"]["chain_ids"] == ["A"]
+    assert first.data["residue_ids"].tolist() == ["A:1::ALA"]
+    assert second.meta["input"]["chain_ids"] == ["B"]
+    assert second.data["residue_ids"].tolist() == ["B:1::GLY"]
+
+
+def test_default_selection_includes_parser_identified_noncanonical_polymer_chain(
+    tmp_path: Path,
+):
+    source = tmp_path / "noncanonical.pdb"
+    source.write_text(
+        "\n".join(
+            [
+                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
+                "TER",
+                "ATOM      2  CA  MSE B   1       1.000   0.000   0.000  1.00 20.00           C  ",
+                "TER",
+                "END",
+                "",
+            ]
+        ),
+        encoding="ascii",
+    )
+
+    artifact = eris.encode(source, representation="residue_point_cloud", use_cache=False)
+
+    assert artifact.meta["input"]["chain_ids"] == ["A", "B"]
+    assert artifact.data["chain_id"].tolist() == ["A"]
 
 
 def test_structure_input_preserves_identity_and_allows_identical_overrides(monkeypatch):

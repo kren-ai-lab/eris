@@ -106,6 +106,7 @@ class DistogramCA(BaseResidueEncoder):
             "pos": pos_out.astype(np.float32),
             "centroid": centroid.astype(np.float32),
             "residue_ids": strc["residue_ids"].astype(np.str_),
+            "chain_id": strc["chain_id"].astype(np.str_),
             "omitted_residue_ids": np.asarray(strc.get("omitted_residue_ids", []), dtype=np.str_),
             "resname": strc["resname"].astype(np.str_),
             "aa_index": strc["aa_index"].astype(np.int16),

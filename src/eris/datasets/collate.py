@@ -558,6 +558,15 @@ def collate_learned(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
                 index=index,
             )
         ]
+        chain_ids = [
+            chain_id
+            for index, sample in enumerate(samples)
+            for chain_id in _node_ids(
+                _require_key(sample, index, "chain_id"),
+                expected=node_counts[index],
+                index=index,
+            )
+        ]
         valid_masks = _optional_tensors(samples, "valid_mask", ndim=1)
         if valid_masks is not None:
             _validate_same_dtype_device(valid_masks, "valid_mask")
@@ -572,6 +581,7 @@ def collate_learned(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             {
                 "node_embedding": torch.cat(embeddings, dim=0),
                 "node_ids": node_ids,
+                "chain_id": chain_ids,
                 "batch": torch.cat(
                     [
                         torch.full(

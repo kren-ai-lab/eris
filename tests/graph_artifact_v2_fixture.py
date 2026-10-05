@@ -24,6 +24,7 @@ def save_graph_artifact_v2(
         "node_attr": np.asarray([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32),
         "edge_index": np.asarray([[0, 1], [1, 0]], dtype=np.int64),
         "graph_attr": np.asarray(graph_attr, dtype=np.float32),
+        "chain_id": np.asarray(["A", "A"], dtype=np.str_),
     }
     parameters = {"fixture": "minimal_graph_attr"}
     metadata = build_artifact_metadata(
@@ -42,12 +43,13 @@ def save_graph_artifact_v2(
             source_sha256="a" * 64,
             input_format="pdb",
             model_index=0,
-            chain_id="A",
+            chain_ids=["A"],
         ),
         parameters=parameters,
         provenance=build_provenance(
             representation_name="test_graph_fixture",
             parameters=parameters,
+            chain_ids=["A"],
         ),
         output_declarations=[
             {
@@ -63,6 +65,7 @@ def save_graph_artifact_v2(
                 "granularity": "structure",
                 "layout": "F",
             },
+            {"name": "chain_id", "role": "chain_id", "granularity": "residue", "layout": "N"},
         ],
         feature_keys=build_feature_keys(
             node_attr_keys=["node.first", "node.second"],

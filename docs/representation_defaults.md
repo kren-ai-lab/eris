@@ -184,11 +184,11 @@ as a non-default output dtype.
 | binned matrices | `uint8` by default |
 | voxel grid | `float32` by default; `float16` is optional |
 
-## Frozen final-v0.1 defaults not yet implemented
+## Final-v0.1 structural defaults
 
-The following targets are frozen for the final v0.1 implementation but do not
-claim current runtime support. Their complete scientific definitions, feature
-orders, missing-value behavior, and provenance requirements live in
+The multi-chain `chain_id` and selected-model behavior below are implemented. The remaining
+targets are frozen for later final-v0.1 work units and do not claim current runtime support.
+Their complete scientific definitions, feature orders, missing-value behavior, and provenance requirements live in
 [`structural_features.md`](structural_features.md).
 
 | Setting | Frozen default |

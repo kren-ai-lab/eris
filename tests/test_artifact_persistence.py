@@ -24,7 +24,7 @@ def _input_metadata(digest: str = "a") -> dict:
         source_sha256=digest * 64,
         input_format="pdb",
         model_index=0,
-        chain_id=None,
+        chain_ids=["A"],
     )
 
 
@@ -33,6 +33,7 @@ def _explicit_artifact() -> StructureArtifact:
         "edge_index": np.array([[0, 1], [1, 0]], dtype=np.int64),
         "pos": np.array([[0, 0, 0], [1, 0, 0]], dtype=np.float32),
         "node_attr": np.array([[1, 0], [0, 1]], dtype=np.float32),
+        "chain_id": np.array(["A", "A"], dtype=np.str_),
     }
     parameters = {"features": ["mass", "charge"]}
     meta = build_artifact_metadata(
@@ -51,6 +52,7 @@ def _explicit_artifact() -> StructureArtifact:
         provenance=build_provenance(
             representation_name="synthetic_explicit_graph",
             parameters=parameters,
+            chain_ids=["A"],
         ),
         output_declarations=[
             {
@@ -66,6 +68,7 @@ def _explicit_artifact() -> StructureArtifact:
                 "layout": "NF",
             },
             {"name": "edge_index", "role": "edge_index", "layout": "2E"},
+            {"name": "chain_id", "role": "chain_id", "granularity": "residue", "layout": "N"},
         ],
         feature_keys=build_feature_keys(node_attr_keys=["mass", "charge"]),
         counts={"n_nodes": 2, "n_edges": 2, "n_self_loops": 0},
@@ -78,6 +81,7 @@ def _learned_artifact() -> StructureArtifact:
     data = {
         "valid_mask": np.array([True, False], dtype=np.bool_),
         "node_ids": np.array(["A:1", "A:2"], dtype=np.str_),
+        "chain_id": np.array(["A", "A"], dtype=np.str_),
         "global_embedding": np.array([0.2, 0.3], dtype=np.float32),
         "node_embedding": np.array([[0.1, 0.2], [0.3, 0.4]], dtype=np.float32),
     }
@@ -98,6 +102,7 @@ def _learned_artifact() -> StructureArtifact:
         provenance=build_provenance(
             representation_name="synthetic_learned_embedding",
             parameters=parameters,
+            chain_ids=["A"],
         ),
         output_declarations=[
             {"name": "node_embedding", "role": "node_embedding", "layout": "ND"},
@@ -112,6 +117,7 @@ def _learned_artifact() -> StructureArtifact:
                 "granularity": "residue",
                 "layout": "N",
             },
+            {"name": "chain_id", "role": "chain_id", "granularity": "residue", "layout": "N"},
             {
                 "name": "valid_mask",
                 "role": "valid_mask",
@@ -202,6 +208,7 @@ def test_learned_v2_validate_finalize_and_save(tmp_path):
         "node_embedding",
         "global_embedding",
         "node_ids",
+        "chain_id",
         "valid_mask",
     ]
     _assert_data_unchanged(artifact, data_before)

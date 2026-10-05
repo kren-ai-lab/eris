@@ -202,12 +202,13 @@ class BaseEncoder(ABC):
                 source_sha256=ctx.source_sha256,
                 input_format=ctx.input_format,
                 model_index=ctx.inp.model_index,
-                chain_id=ctx.inp.chain_id,
+                chain_ids=ctx.inp.chain_id,
             ),
             parameters=parameters,
             provenance=build_provenance(
                 representation_name=representation_name,
                 parameters=parameters,
+                chain_ids=ctx.inp.chain_id,
             ),
             output_declarations=self.output_declarations_v2,
             feature_keys=self._feature_keys_v2(data, ctx),
@@ -249,7 +250,7 @@ class BaseEncoder(ABC):
             and provenance.get("config_fingerprint") == config_fingerprint
             and input_meta.get("source_sha256") == source_sha256
             and input_meta.get("model_index") == inp.model_index
-            and input_meta.get("chain_id") == inp.chain_id
+            and input_meta.get("chain_ids") == list(inp.chain_id)
             and isinstance(input_meta.get("format"), str)
             and parser_hint_matches_format(parser_hint, input_meta["format"])
             and "model" not in meta
@@ -271,7 +272,7 @@ class BaseEncoder(ABC):
             source_sha256=source_sha256,
             input_format=artifact.meta["input"]["format"],
             model_index=inp.model_index,
-            chain_id=inp.chain_id,
+            chain_ids=inp.chain_id,
         )
         if extensions is not None:
             refreshed_extensions = deepcopy(meta.get("extensions", {}))
@@ -294,6 +295,9 @@ class BaseEncoder(ABC):
     def encode(self, inp: StructureInput) -> StructureArtifact:
         from eris.core.artifact_schema_v2 import compute_config_fingerprint
         from eris.core.hashing import sha256_file
+        from eris.core.io import resolve_structure_input
+
+        inp = resolve_structure_input(inp)
 
         source_sha256 = sha256_file(Path(inp.source))
         invocation_parameters = self.config.to_dict()
@@ -303,6 +307,7 @@ class BaseEncoder(ABC):
         config_fingerprint = compute_config_fingerprint(
             self.config.representation_name,
             parameters,
+            chain_ids=inp.chain_id,
         )
         cache = None
         key = None
@@ -317,7 +322,7 @@ class BaseEncoder(ABC):
                 source_sha256=source_sha256,
                 parser_hint=parser_hint,
                 model_index=inp.model_index,
-                chain_id=inp.chain_id,
+                chain_ids=inp.chain_id,
                 model=None,
             )
             artifact = cache.get_v2(key)

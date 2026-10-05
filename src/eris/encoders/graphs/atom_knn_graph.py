@@ -160,6 +160,7 @@ class AtomKNNGraph(BaseAtomEncoder):
             edge_index=edge_index,
             mode=self.config.edge_attr_mode.to_list(),
             seq_pos=strc["seq_pos_residue"],
+            chain_id=strc["chain_id"],
             rbf_k=self.config.rbf_k,
             rbf_dmax=self.config.rbf_dmax,
             local_cutoff=self.config.local_cutoff,
@@ -183,6 +184,7 @@ class AtomKNNGraph(BaseAtomEncoder):
             "graph_attr": graph_attr.astype(np.float32),
             # raw atom fields (useful + deterministic)
             "elem_index": strc["elem_index"].astype(np.int16),
+            "chain_id": strc["chain_id"].astype(np.str_),
             "atom_role": strc["atom_role"].astype(np.int8),
             "bfactor": strc["bfactor"].astype(np.float32),
             "occ": strc["occ"].astype(np.float32),

@@ -15,8 +15,8 @@ from eris.core.residue_identity import format_residue_id
 
 
 ALIGNMENT_POLICY = "strict_residue_id"
-_HASH_DOMAIN = b"eris.external-residue-features.v1\x00"
-_REQUIRED_FIELDS = {"values", "residue_ids", "source_name", "chain_id", "model_index"}
+_HASH_DOMAIN = b"eris.external-residue-features.v2\x00"
+_REQUIRED_FIELDS = {"values", "residue_ids", "source_name", "chain_ids", "model_index"}
 _OPTIONAL_FIELDS = {"feature_keys", "source_version", "source_model"}
 _ALLOWED_FIELDS = _REQUIRED_FIELDS | _OPTIONAL_FIELDS
 _DESCRIPTOR_FIELDS = {
@@ -25,7 +25,7 @@ _DESCRIPTOR_FIELDS = {
     "source_name",
     "source_version",
     "source_model",
-    "chain_id",
+    "chain_ids",
     "model_index",
     "feature_dim",
     "feature_keys",
@@ -47,7 +47,7 @@ class ExternalResiduePayload:
     source_name: str
     source_version: str | None
     source_model: str | None
-    chain_id: str
+    chain_ids: tuple[str, ...]
     model_index: int
     feature_keys: tuple[str, ...]
     content_sha256: str
@@ -63,7 +63,7 @@ class ExternalResiduePayload:
             "source_name": self.source_name,
             "source_version": self.source_version,
             "source_model": self.source_model,
-            "chain_id": self.chain_id,
+            "chain_ids": list(self.chain_ids),
             "model_index": self.model_index,
             "feature_dim": self.feature_dim,
             "feature_keys": list(self.feature_keys),
@@ -247,12 +247,12 @@ def _content_sha256(
     source_name: str,
     source_version: str | None,
     source_model: str | None,
-    chain_id: str,
+    chain_ids: Sequence[str],
     model_index: int,
 ) -> str:
     header = {
         "alignment": ALIGNMENT_POLICY,
-        "chain_id": chain_id,
+        "chain_ids": list(chain_ids),
         "feature_keys": list(feature_keys),
         "model_index": model_index,
         "residue_ids": list(residue_ids),
@@ -305,18 +305,25 @@ def load_external_payload(path: str | Path) -> ExternalResiduePayload:
         _text_scalar(arrays["source_name"], field="source_name"),
         field="source_name",
     )
-    chain_id = _text_scalar(arrays["chain_id"], field="chain_id", allow_empty=True)
-    if chain_id != chain_id.strip() or ":" in chain_id:
+    chain_ids = _text_vector(arrays["chain_ids"], field="chain_ids")
+    if not chain_ids:
+        raise ExternalFeatureError("External field 'chain_ids' must not be empty")
+    if any(chain != chain.strip() or ":" in chain for chain in chain_ids):
         raise ExternalFeatureError(
-            "External field 'chain_id' must not contain surrounding whitespace or ':'"
+            "External field 'chain_ids' entries must not contain surrounding whitespace or ':'"
         )
-    mismatched_row_chains = sorted(
-        {row_chain for row_chain in residue_chains if row_chain != chain_id}
-    )
-    if mismatched_row_chains:
+    duplicate_chains = _duplicates(chain_ids)
+    if duplicate_chains:
         raise ExternalFeatureError(
-            "External residue_ids do not match payload chain_id "
-            f"{chain_id!r}; observed chains={_preview(mismatched_row_chains)}"
+            f"External field 'chain_ids' contains duplicates: {_preview(duplicate_chains)}"
+        )
+    observed_chains = set(residue_chains)
+    declared_chains = set(chain_ids)
+    undeclared_chains = observed_chains - declared_chains
+    if undeclared_chains:
+        raise ExternalFeatureError(
+            "External residue_ids contain chains outside payload chain_ids: "
+            f"declared={_preview(chain_ids)}, undeclared={_preview(undeclared_chains)}"
         )
 
     model_index = _integer_scalar(arrays["model_index"], field="model_index")
@@ -350,7 +357,7 @@ def load_external_payload(path: str | Path) -> ExternalResiduePayload:
         source_name=source_name,
         source_version=source_version,
         source_model=source_model,
-        chain_id=chain_id,
+        chain_ids=chain_ids,
         model_index=model_index,
     )
     return ExternalResiduePayload(
@@ -360,7 +367,7 @@ def load_external_payload(path: str | Path) -> ExternalResiduePayload:
         source_name=source_name,
         source_version=source_version,
         source_model=source_model,
-        chain_id=chain_id,
+        chain_ids=tuple(chain_ids),
         model_index=model_index,
         feature_keys=tuple(feature_keys),
         content_sha256=content_sha256,
@@ -421,13 +428,14 @@ def strict_align_external_payload(
     payload: ExternalResiduePayload,
     target_residue_ids: np.ndarray,
     *,
-    chain_id: str,
+    chain_ids: Sequence[str],
     model_index: int,
 ) -> np.ndarray:
-    if payload.chain_id != chain_id:
+    selected_chain_ids = tuple(chain_ids)
+    if payload.chain_ids != selected_chain_ids:
         raise ExternalFeatureError(
-            f"External chain mismatch: expected selected chain {chain_id!r}, "
-            f"observed payload chain {payload.chain_id!r}"
+            f"External chain-set mismatch: expected selected chains {selected_chain_ids!r}, "
+            f"observed payload chains {payload.chain_ids!r}"
         )
     if payload.model_index != model_index:
         raise ExternalFeatureError(
@@ -474,7 +482,7 @@ def external_feature_values(
     return strict_align_external_payload(
         payload,
         data["residue_ids"],
-        chain_id=ctx["chain_id"],
+        chain_ids=ctx["chain_ids"],
         model_index=ctx["model_index"],
     )
 

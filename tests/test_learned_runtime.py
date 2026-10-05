@@ -241,12 +241,17 @@ def test_scientific_fingerprint_is_independent_of_execution_requests():
         representation_name="synthetic_embedding",
         output_mode="both",
     )
-    fingerprint = compute_config_fingerprint(config.representation_name, config.to_dict())
+    fingerprint = compute_config_fingerprint(
+        config.representation_name, config.to_dict(), chain_ids=["A"]
+    )
 
     assert StructuralExecutionConfig(device="auto", precision="fp32") != (
         StructuralExecutionConfig(device="cpu", precision="fp16")
     )
-    assert compute_config_fingerprint(config.representation_name, config.to_dict()) == fingerprint
+    assert (
+        compute_config_fingerprint(config.representation_name, config.to_dict(), chain_ids=["A"])
+        == fingerprint
+    )
     assert set(config.to_dict()) == {"representation_name", "output_mode"}
 
 

@@ -16,6 +16,7 @@ def build_edge_attr(
     rbf_k: int = 16,
     rbf_dmax: float = 20.0,
     seq_pos: Optional[np.ndarray] = None,
+    chain_id: Optional[np.ndarray] = None,
     local_cutoff: int = 4,
     return_keys: bool = False,
 ) -> Union[np.ndarray, Tuple[np.ndarray, List[str]]]:
@@ -48,6 +49,11 @@ def build_edge_attr(
             src = ei[0]
             dst = ei[1]
             seq_sep = np.abs(sp[src] - sp[dst]).astype(np.float32)
+            if chain_id is not None:
+                chains = np.asarray(chain_id).reshape(-1)
+                if chains.shape[0] != sp.shape[0]:
+                    raise ValueError("chain_id must align with seq_pos")
+                seq_sep[chains[src] != chains[dst]] = -1.0
 
     data = {"ei": ei, "dist": dist, "E": E}
 

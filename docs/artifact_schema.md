@@ -77,13 +77,15 @@ The required `input` block is:
   "source_sha256": "64-lowercase-hex-characters",
   "format": "pdb",
   "model_index": 0,
-  "chain_id": "A"
+  "chain_ids": ["A", "B"]
 }
 ```
 
 `source` is the invocation locator. `source_sha256` identifies the input bytes. `format` is the
 parser-confirmed format, not an unchecked filename inference. `model_index` is an integer greater
-than or equal to zero; `chain_id` is a string or `null`.
+than or equal to zero. `chain_ids` is a non-empty JSON list of unique strings in selected-model
+chain order. Single-chain artifacts use a one-element list. Legacy scalar `chain_id` metadata is
+rejected. Residue- and atom-aligned explicit artifacts also carry a Unicode `chain_id` array.
 
 The only optional input keys are string-valued `original_filename`, `structure_id`, and
 `source_database`.
@@ -99,7 +101,7 @@ Invocation details that do not alter scientific output do not belong in `paramet
 fingerprint. External residue features demonstrate this split:
 
 - scientific parameters retain content hash, source metadata, feature keys and dimension,
-  chain/model identity, and alignment policy;
+  chain-set/model identity, and alignment policy;
 - the local NPZ path is recorded under `extensions.org.eris.external_features`.
 
 Do not omit values that change scientific output. Requested values remain canonical even when an
@@ -108,19 +110,21 @@ encoder computes an effective runtime value; for example, voxel `voxel_size=null
 
 ## Configuration fingerprint
 
-`compute_config_fingerprint(representation_name, parameters)` hashes canonical UTF-8 JSON for:
+`compute_config_fingerprint(representation_name, parameters, chain_ids=...)` hashes canonical
+UTF-8 JSON for:
 
 ```json
 {
   "representation_name": "...",
-  "parameters": {}
+  "parameters": {},
+  "input_selection": {"chain_ids": ["A", "B"]}
 }
 ```
 
 Canonical JSON uses sorted keys, compact separators, UTF-8 characters, and rejects NaN. The
-fingerprint changes with the public representation name or scientific parameters. It excludes
-payload arrays, timestamps, environment, package/encoder versions, input identity, and
-invocation-only paths.
+fingerprint changes with the public representation name, scientific parameters, or canonical
+resolved chain set. It excludes payload arrays, timestamps, environment, package/encoder
+versions, source/model identity, and invocation-only paths.
 
 The fingerprint is not a complete cache key.
 
@@ -228,24 +232,21 @@ provenance.
 Cache entries live under `v2/<key>/`. Invalid, corrupt, or older entries are misses; Eris does not
 migrate or delete them automatically.
 
-## Frozen pre-v0.1 Schema v2 finalization
+## Pre-v0.1 Schema v2 finalization
 
-The final-v0.1 structural-feature contracts require two explicit Schema v2
-extensions. They are frozen targets and are not claims about current runtime
-support. Because v0.1 has not been released, these changes finalize Schema v2
-without introducing a competing legacy format or incrementing the schema
-version. Validators, serializers, fixtures, and tests must change atomically
-when the corresponding implementation lands.
+Because v0.1 has not been released, the multi-chain changes finalized Schema v2 without a
+competing legacy format or schema-version increment.
 
-First, collection-valued `input.chain_ids` replaces scalar `input.chain_id` for
+Collection-valued `input.chain_ids` replaces scalar `input.chain_id` for
 every artifact. It is a non-empty JSON list of unique strings in selected-model
 chain order. Single-chain artifacts use a one-element list. Residue-aligned
 artifacts additionally carry a Unicode `chain_id` array aligned with their
-rows or nodes. The resolved selection is included in canonical parameters, the
-configuration fingerprint, and cache identity. Legacy scalar metadata is then
-rejected rather than maintained as a parallel permanent contract.
+rows or nodes. The resolved selection is included in the configuration fingerprint and cache
+identity. Legacy scalar metadata is rejected rather than maintained as a parallel permanent
+contract.
 
-Second, structure-level pooling adds these declarations:
+Structure-level pooling remains a separate frozen target and will add these declarations when
+implemented:
 
 | Field | Value/contract |
 | --- | --- |
@@ -265,9 +266,7 @@ source data. The source artifact remains immutable.
 All other frozen derived features fit Schema v2's ordered node/edge attributes
 and declared auxiliary arrays. Exact feature keys, array roles, shapes, units,
 provider information, and scientific parameters are recorded as specified in
-[`structural_features.md`](structural_features.md). In particular, new
-multi-chain residue graphs carry complementary `edge.same_chain` and
-`edge.inter_chain` attributes. Cross-chain sequence separation uses the
-sentinel `-1`. Same-chain sequence separation retains its existing
-chain-relative meaning, while the local flag is forced to zero across a
-physical continuity break.
+[`structural_features.md`](structural_features.md). Current multi-chain graphs permit spatial
+edges between chains. Cross-chain sequence separation uses the sentinel `-1` and the local flag
+is zero. Complementary `edge.same_chain` and `edge.inter_chain` columns and physical-continuity
+refinement are not implemented by WU2.

@@ -95,7 +95,7 @@ def _synthetic_learned_artifact(source: Path) -> StructureArtifact:
             source_sha256=sha256_file(source),
             input_format="pdb",
             model_index=0,
-            chain_id=None,
+            chain_ids=["A"],
         ),
         encoder_metadata={"implementation": "tests.synthetic", "version": "1"},
     )

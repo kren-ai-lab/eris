@@ -34,7 +34,10 @@ PDB = Path("tests/data/1AQ2.pdb")
 
 
 def _artifact() -> StructureArtifact:
-    data = {"pos": np.array([[0, 0, 0], [1, 0, 0]], dtype=np.float32)}
+    data = {
+        "pos": np.array([[0, 0, 0], [1, 0, 0]], dtype=np.float32),
+        "chain_id": np.array(["A", "A"], dtype=np.str_),
+    }
     parameters = {"center": True}
     meta = build_artifact_metadata(
         data=data,
@@ -49,12 +52,13 @@ def _artifact() -> StructureArtifact:
             source_sha256="a" * 64,
             input_format="pdb",
             model_index=0,
-            chain_id=None,
+            chain_ids=["A"],
         ),
         parameters=parameters,
         provenance=build_provenance(
             representation_name="synthetic_cloud",
             parameters=parameters,
+            chain_ids=["A"],
         ),
         output_declarations=[
             {
@@ -62,7 +66,8 @@ def _artifact() -> StructureArtifact:
                 "role": "coordinates",
                 "granularity": "residue",
                 "layout": "N3",
-            }
+            },
+            {"name": "chain_id", "role": "chain_id", "granularity": "residue", "layout": "N"},
         ],
         feature_keys=build_feature_keys(),
         counts={"n_nodes": 2},
@@ -99,7 +104,7 @@ def _identity(**overrides) -> dict:
         "source_sha256": "a" * 64,
         "parser_hint": ".pdb",
         "model_index": 0,
-        "chain_id": None,
+        "chain_ids": ["A"],
         "model": None,
     }
     values.update(overrides)
@@ -127,7 +132,8 @@ def test_compute_cache_key_v2_is_deterministic_and_has_explicit_inputs():
     parameters = inspect.signature(compute_cache_key_v2).parameters
 
     assert first == second
-    assert first == "6d8d2365bec8aacb3a6a93d688e7c9386300c9d9aa79dfe1abf4af9f5e2280e9"
+    # WU2 intentionally changes cache identity from scalar chain_id to canonical chain_ids.
+    assert first == "f8b4199d0e5e6b6c7ffb4055e5e9d08f1c9fdec2d90b3ace11b824c764fbbc9f"
     assert len(first) == 64
     assert "source" not in parameters
     assert "source_locator" not in parameters
@@ -192,7 +198,7 @@ def test_cache_key_payload_contains_exact_namespaces_and_identity(monkeypatch):
         "config_fingerprint": "b" * 64,
         "source_sha256": "a" * 64,
         "parser_hint": ".pdb",
-        "input_selection": {"model_index": 0, "chain_id": None},
+        "input_selection": {"model_index": 0, "chain_ids": ["A"]},
     }
 
 
@@ -247,8 +253,8 @@ def test_equivalent_model_mapping_order_produces_same_key():
 
 
 def test_parameter_mapping_order_is_abstracted_by_config_fingerprint():
-    left = compute_config_fingerprint("residue_point_cloud", {"a": 1, "b": 2})
-    right = compute_config_fingerprint("residue_point_cloud", {"b": 2, "a": 1})
+    left = compute_config_fingerprint("residue_point_cloud", {"a": 1, "b": 2}, chain_ids=["A"])
+    right = compute_config_fingerprint("residue_point_cloud", {"b": 2, "a": 1}, chain_ids=["A"])
 
     assert left == right
     assert _key(config_fingerprint=left) == _key(config_fingerprint=right)
@@ -434,7 +440,9 @@ def test_parser_hint_prevents_pdb_cache_from_satisfying_cif_parse(tmp_path):
             StructureInput(source=str(cif_source))
         )
 
-    assert cache.v2_get_keys[0] != cache.v2_get_keys[1]
+    # Chain resolution parses the structure before cache lookup, so the mislabeled
+    # coordinate file fails without consulting the PDB cache entry.
+    assert len(cache.v2_get_keys) == 1
     assert len(list((cache.cache_dir / "v2").iterdir())) == 1
 
 
@@ -447,11 +455,13 @@ def test_strict_valid_cache_artifact_with_wrong_identity_is_a_miss(tmp_path):
         representation_name=expected_encoder.name,
         encoder_implementation=expected_encoder.encoder_implementation,
         encoder_version=expected_encoder.version,
-        config_fingerprint=compute_config_fingerprint(expected_encoder.name, parameters),
+        config_fingerprint=compute_config_fingerprint(
+            expected_encoder.name, parameters, chain_ids=["A"]
+        ),
         source_sha256=sha256_file(PDB),
         parser_hint=".pdb",
         model_index=0,
-        chain_id=None,
+        chain_ids=["A"],
     )
     wrong = AtomPointCloud(use_cache=False).encode(inp)
     cache.set_v2(key, wrong)

@@ -12,7 +12,7 @@ from typing import Any
 import gemmi
 import numpy as np
 
-from eris.core.io import _parsed_input_format, _select_atom_altloc, load_structure, select_chain
+from eris.core.io import _parsed_input_format, _select_atom_altloc, load_structure, select_chains
 from eris.core.learned.backends.gearnet.metadata import GEARNET_EDGE_CANONICAL_RESIDUES
 from eris.core.residue_identity import format_residue_id
 from eris.core.types import StructureInput
@@ -131,7 +131,10 @@ def load_selected_biological_structure(
     """Load and select one model/chain while deliberately applying no residue policy."""
 
     structure = load_structure(Path(structure_input.source))
-    chain = select_chain(structure, structure_input.chain_id, structure_input.model_index)
+    chains = select_chains(structure, structure_input.chain_id, structure_input.model_index)
+    if len(chains) != 1:
+        raise GearNetPreprocessingError("GearNet v0.1 requires exactly one selected chain")
+    chain = chains[0]
     return SelectedBiologicalStructure(
         structure=structure,
         chain=chain,

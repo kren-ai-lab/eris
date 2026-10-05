@@ -186,6 +186,36 @@ def test_residue_graphs_select_one_chain_without_cross_chain_edges(
 
 
 @pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
+def test_residue_graphs_include_cross_chain_edges_with_frozen_sequence_sentinel(
+    encoder_type: type,
+    tmp_path: Path,
+) -> None:
+    explicit_a = _write_structure(
+        tmp_path / "two-chains-all.pdb",
+        [
+            (1, " ", 0.0, "ALA", "CA", "A"),
+            (2, " ", 1.0, "GLY", "CA", "A"),
+            (1, " ", 1.5, "SER", "CA", "B"),
+            (2, " ", 2.5, "THR", "CA", "B"),
+        ],
+    )
+    structure_input = StructureInput(source=explicit_a.source)
+
+    artifact = _encode(encoder_type, structure_input)
+
+    assert artifact.meta["input"]["chain_ids"] == ["A", "B"]
+    assert artifact.data["chain_id"].tolist() == ["A", "A", "B", "B"]
+    assert artifact.data["residue_ids"].tolist() == [
+        "A:1::ALA",
+        "A:2::GLY",
+        "B:1::SER",
+        "B:2::THR",
+    ]
+    assert _edge_feature(artifact, "A:2::GLY", "B:1::SER", "seq_sep") == -1.0
+    assert _edge_feature(artifact, "A:2::GLY", "B:1::SER", "flag.is_local_le_1") == 0.0
+
+
+@pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
 def test_sequence_edge_features_remain_aligned_and_symmetric(
     encoder_type: type,
     tmp_path: Path,
@@ -237,11 +267,13 @@ def test_corrected_graph_cache_version_cannot_reuse_previous_version(
     common = {
         "representation_name": encoder.name,
         "encoder_implementation": encoder.encoder_implementation,
-        "config_fingerprint": compute_config_fingerprint(encoder.name, parameters),
+        "config_fingerprint": compute_config_fingerprint(
+            encoder.name, parameters, chain_ids=structure_input.chain_id
+        ),
         "source_sha256": sha256_file(Path(structure_input.source)),
         "parser_hint": ".pdb",
         "model_index": structure_input.model_index,
-        "chain_id": structure_input.chain_id,
+        "chain_ids": structure_input.chain_id,
     }
     old_key = compute_cache_key_v2(encoder_version="0.1.1", **common)
     current_key = compute_cache_key_v2(encoder_version=encoder.version, **common)

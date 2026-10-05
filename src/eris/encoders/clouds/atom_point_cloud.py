@@ -129,6 +129,7 @@ class AtomPointCloud(BaseAtomEncoder):
             "centroid": centroid.astype(np.float32),
             "node_attr": node_attr.astype(np.float32),
             "elem_index": strc["elem_index"].astype(np.int16),
+            "chain_id": strc["chain_id"].astype(np.str_),
             "atom_role": strc["atom_role"].astype(np.int8),
             "bfactor": strc["bfactor"].astype(np.float32),
             "occ": strc["occ"].astype(np.float32),
