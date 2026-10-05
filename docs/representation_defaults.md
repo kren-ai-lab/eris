@@ -181,3 +181,34 @@ as a non-default output dtype.
 | contact map | `uint8` by default; `bool` is optional |
 | binned matrices | `uint8` by default |
 | voxel grid | `float32` by default; `float16` is optional |
+
+## Frozen final-v0.1 defaults not yet implemented
+
+The following targets are frozen for the final v0.1 implementation but do not
+claim current runtime support. Their complete scientific definitions, feature
+orders, missing-value behavior, and provenance requirements live in
+[`structural_features.md`](structural_features.md).
+
+| Setting | Frozen default |
+| --- | --- |
+| `chain_id` | `None`, meaning all relevant protein/polymer chains in the selected model |
+| `model_index` | explicit selected model; no averaging |
+| `max_peptide_bond_distance` | `2.0` A, inclusive |
+| `backbone_torsion_mode` | `"sincos"` |
+| `sidechain_torsion_mode` | `"sincos"` |
+| local-frame epsilon | `1e-6` A |
+| secondary-structure provider | Biotite 1.6 P-SEA (`biotite==1.6.0`) |
+| SASA provider | Biotite 1.6 Shrake-Rupley |
+| SASA probe radius | `1.4` A |
+| SASA sphere points | `1000`, Fibonacci distribution |
+| SASA radii/context | ProtOr; selected-chain polymer heavy atoms; no ions |
+| RSA normalization | Tien et al. theoretical maximum ASA; no clipping |
+| interface cutoff | `5.0` A minimum inter-chain polymer-heavy-atom distance, inclusive |
+| pooling mode | `mean` |
+| pooling NaN policy | `omit`, with all-NaN output remaining `NaN` |
+| pooling standard deviation | population (`ddof=0`) |
+| alternate-location policy | highest finite occupancy; ties blank, then `A`, then lexicographic |
+
+These values are part of canonical configuration and cache identity wherever
+they affect scientific output. Atom-level retention of all alternate locations
+requires explicit `altloc="all"`; it is not the default.

@@ -126,6 +126,20 @@ External producers must also satisfy [the external NPZ contract](external_residu
 
 ## Contracts that extensions must preserve
 
+The final-v0.1 contracts for multi-chain selection, polymer continuity,
+torsions, local frames, secondary structure, solvent accessibility, interfaces,
+and structure-level pooling are frozen in
+[`structural_features.md`](structural_features.md). They are future-facing
+contracts until their focused implementation work units land; their presence
+in the documentation does not imply current runtime support.
+
+Those features must follow the same architecture described above. Public APIs
+construct canonical configuration, registries resolve implementations, runners
+execute them, and immutable artifacts carry the results. Optional scientific
+providers stay lazy and feature-local. No derived-feature implementation may
+bypass the canonical validators, serializers, fingerprints, or cache identity,
+and no new registry, runner, backend, or provider object becomes public API.
+
 - Optional dependencies remain lazy and feature-local.
 - Schema v2 remains `meta.json` plus `data.npz`; `feature_keys` is authoritative.
 - Scientific parameters and invocation provenance remain distinct.

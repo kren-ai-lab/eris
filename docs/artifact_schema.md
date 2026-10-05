@@ -227,3 +227,47 @@ provenance.
 
 Cache entries live under `v2/<key>/`. Invalid, corrupt, or older entries are misses; Eris does not
 migrate or delete them automatically.
+
+## Frozen pre-v0.1 Schema v2 finalization
+
+The final-v0.1 structural-feature contracts require two explicit Schema v2
+extensions. They are frozen targets and are not claims about current runtime
+support. Because v0.1 has not been released, these changes finalize Schema v2
+without introducing a competing legacy format or incrementing the schema
+version. Validators, serializers, fixtures, and tests must change atomically
+when the corresponding implementation lands.
+
+First, collection-valued `input.chain_ids` replaces scalar `input.chain_id` for
+every artifact. It is a non-empty JSON list of unique strings in selected-model
+chain order. Single-chain artifacts use a one-element list. Residue-aligned
+artifacts additionally carry a Unicode `chain_id` array aligned with their
+rows or nodes. The resolved selection is included in canonical parameters, the
+configuration fingerprint, and cache identity. Legacy scalar metadata is then
+rejected rather than maintained as a parallel permanent contract.
+
+Second, structure-level pooling adds these declarations:
+
+| Field | Value/contract |
+| --- | --- |
+| `representation_type` | `"vector"` |
+| `granularity` | `"structure"` |
+| data array | `pooled_attr`, shape `(F,)`, numeric dtype |
+| data role | `pooled_features` |
+| feature-key field | `feature_keys.pooled_attr_keys`, exactly `F` ordered strings |
+
+A pooled artifact has `representation_name = "residue_pool"`, uses
+`representation_family = "explicit"`, and copies the source artifact's
+coordinate source.
+Its canonical parameters identify the source array and ordered keys, reduction
+mode, NaN policy, and a source-artifact fingerprint covering the selected
+source data. The source artifact remains immutable.
+
+All other frozen derived features fit Schema v2's ordered node/edge attributes
+and declared auxiliary arrays. Exact feature keys, array roles, shapes, units,
+provider information, and scientific parameters are recorded as specified in
+[`structural_features.md`](structural_features.md). In particular, new
+multi-chain residue graphs carry complementary `edge.same_chain` and
+`edge.inter_chain` attributes. Cross-chain sequence separation uses the
+sentinel `-1`. Same-chain sequence separation retains its existing
+chain-relative meaning, while the local flag is forced to zero across a
+physical continuity break.
