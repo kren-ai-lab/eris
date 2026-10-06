@@ -21,6 +21,7 @@ Both families return `StructureArtifact` objects and use Artifact Schema v2 for 
 | `src/eris/core/artifact_schema_v2.py` | Executable Schema v2 metadata and array contract |
 | `src/eris/core/cache.py` | Path-independent artifact cache identity and storage |
 | `src/eris/features/` | Node, edge, voxel, and graph-statistic feature definitions |
+| `src/eris/pooling.py` | Residue-feature pooling and source-artifact identity |
 | `src/eris/encoders/` | Explicit cloud, graph, matrix, and grid encoders |
 | `src/eris/core/learned/` | Learned registry, execution, checkpoints, runner, and artifacts |
 | `src/eris/core/learned/backends/gearnet/` | Native GearNet-Edge preprocessing and inference |
@@ -67,8 +68,17 @@ Residue kNN and contact graphs can use the edge registry to add exact same/inter
 and directed relative displacement in an internal right-handed N-CA-C source frame. Invalid
 source frames yield `NaN` direction components without removing nodes or changing topology; the
 frames themselves are not public node attributes.
+Opt-in paired interface tokens derive residue flags and existing-edge annotations from selected
+inter-chain polymer-heavy-atom contacts. Their auxiliary residue-ID subset preserves canonical
+node order and does not alter topology.
 Matrix encoders use positions without fabricating node features. The voxel encoder uses the grid
 feature registry.
+
+`eris.pool()` is a separate derived-artifact operation. It validates one explicitly named
+residue-aligned feature matrix, computes a configured column-wise reduction, and returns a new
+structure-level `residue_pool` vector artifact. Its source-artifact fingerprint covers source
+identity, ordered keys, dtype, shape, and canonical selected-array bytes; the input artifact is
+not mutated.
 
 ## Learned encoding flow
 
@@ -96,6 +106,7 @@ checkpoint inference.
 The primary Python entry points are:
 
 - `eris.encode(...)` and `eris.embed(...)`;
+- `eris.pool(...)`;
 - `eris.list_representations()` and `eris.get_representation_info(...)`;
 - `eris.list_embedders()` and `eris.get_embedder_info(...)`;
 - `eris.batch_encode(...)`, `eris.batch_embed(...)`, and `eris.batch_export(...)`;
@@ -112,7 +123,8 @@ lists directly and CSV stores a JSON list in the field. Python
 `params`; the CLI accepts global parameters only. `pack()` writes a metadata index consumed by
 `ErisFolderDataset`.
 
-`to_torch()` supports explicit graphs, clouds, matrices, grids, and learned embeddings.
+`to_torch()` supports explicit graphs, clouds, matrices, grids, pooled vectors, and learned
+embeddings.
 `to_pyg()` accepts only explicit graph artifacts with a public `edge_index`; it never infers
 topology or reconstructs GearNet internals.
 
@@ -145,8 +157,9 @@ External producers must also satisfy [the external NPZ contract](external_residu
 The final-v0.1 contracts for polymer continuity, torsions, local frames, secondary structure,
 solvent accessibility, interfaces, and structure-level pooling are frozen in
 [`structural_features.md`](structural_features.md). Polymer continuity and backbone torsions are
-implemented, as are local frames and relative edge direction; the other contracts remain
-future-facing until their focused work units land.
+implemented, as are local frames, relative edge direction, inter-chain interface features, and
+structure-level pooling; the other contracts remain future-facing until their focused work units
+land.
 
 Those features must follow the same architecture described above. Public APIs
 construct canonical configuration, registries resolve implementations, runners

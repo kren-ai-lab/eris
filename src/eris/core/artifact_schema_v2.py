@@ -16,7 +16,7 @@ from eris.exceptions import ErisError
 ARTIFACT_SCHEMA_V2_VERSION = 2
 
 RepresentationFamily = Literal["explicit", "learned"]
-RepresentationType = Literal["cloud", "graph", "matrix", "grid", "embedding"]
+RepresentationType = Literal["cloud", "graph", "matrix", "grid", "vector", "embedding"]
 Granularity = Literal["atom", "residue", "structure", "mixed"]
 CoordinateSource = Literal["atom", "ca", "residue_mean", "residue_com", "model_specific"]
 JSONValue = Union[  # noqa: UP007 - explicit Union keeps the recursive alias runtime-safe
@@ -125,7 +125,7 @@ _REQUIRED_TOP_LEVEL = {
     "counts",
 }
 _OPTIONAL_TOP_LEVEL = {"model", "extensions"}
-_EXPLICIT_TYPES = {"cloud", "graph", "matrix", "grid"}
+_EXPLICIT_TYPES = {"cloud", "graph", "matrix", "grid", "vector"}
 _LEARNED_TYPES = {"embedding"}
 _GRANULARITIES = {"atom", "residue", "structure", "mixed"}
 _COORDINATE_SOURCES = {"atom", "ca", "residue_mean", "residue_com", "model_specific"}
@@ -134,6 +134,7 @@ _FEATURE_KEY_FIELDS = {
     "edge_attr_keys",
     "graph_attr_keys",
     "grid_channels",
+    "pooled_attr_keys",
 }
 _DATA_KEY = re.compile(r"^[a-z][a-z0-9_]*$")
 _IMPLEMENTATION_PATH = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
@@ -526,6 +527,7 @@ def build_feature_keys(
     edge_attr_keys: Sequence[str] | None = None,
     graph_attr_keys: Sequence[str] | None = None,
     grid_channels: Sequence[str] | None = None,
+    pooled_attr_keys: Sequence[str] | None = None,
 ) -> dict[str, list[str]]:
     """Copy producer-owned ordered feature semantics without inference or sorting."""
     feature_keys: dict[str, list[str]] = {}
@@ -534,6 +536,7 @@ def build_feature_keys(
         "edge_attr_keys": edge_attr_keys,
         "graph_attr_keys": graph_attr_keys,
         "grid_channels": grid_channels,
+        "pooled_attr_keys": pooled_attr_keys,
     }
     for field, keys in supplied.items():
         if keys is None:
@@ -654,6 +657,8 @@ def _validate_strict_roles(
             "node_ids",
             "chain_id",
             "valid_mask",
+            "pooled_features",
+            "interface_residue_ids",
         )
     }
 
@@ -708,6 +713,26 @@ def _validate_strict_roles(
         if not np.isfinite(global_embedding).all():
             _fail("role='global_embedding' requires finite values")
 
+    pooled_features = arrays["pooled_features"]
+    if pooled_features is not None:
+        _require_shape(pooled_features, (None,), "pooled_features")
+        if pooled_features.dtype.kind not in {"i", "u", "f"}:
+            _fail("role='pooled_features' requires a numeric dtype")
+        if pooled_features.shape[0] == 0:
+            _fail("role='pooled_features' requires F > 0")
+    if meta["representation_type"] == "vector" and pooled_features is None:
+        _fail("representation_type='vector' requires role='pooled_features'")
+    if meta["representation_type"] == "vector" and "pooled_attr_keys" not in meta["feature_keys"]:
+        _fail("representation_type='vector' requires feature_keys.pooled_attr_keys")
+    if pooled_features is not None and meta["representation_type"] != "vector":
+        _fail("role='pooled_features' requires representation_type='vector'")
+
+    interface_residue_ids = arrays["interface_residue_ids"]
+    if interface_residue_ids is not None:
+        _require_shape(interface_residue_ids, (None,), "interface_residue_ids")
+        if interface_residue_ids.dtype.kind != "U":
+            _fail("role='interface_residue_ids' requires a Unicode dtype")
+
     node_ids = arrays["node_ids"]
     if node_ids is not None:
         _require_shape(node_ids, (None,), "node_ids")
@@ -754,12 +779,26 @@ def _validate_strict_roles(
             _fail("valid_mask requires a node_embedding output")
         if valid_mask.shape[0] != node_embedding.shape[0]:
             _fail("valid_mask must align with node_embedding rows")
+    if interface_residue_ids is not None:
+        if node_ids is None:
+            _fail("interface_residue_ids requires a node_ids output")
+        identifiers = interface_residue_ids.tolist()
+        node_identifier_list = node_ids.tolist()
+        if len(identifiers) != len(set(identifiers)):
+            _fail("interface_residue_ids must contain unique identifiers")
+        try:
+            positions = [node_identifier_list.index(identifier) for identifier in identifiers]
+        except ValueError:
+            _fail("interface_residue_ids must be a subset of node_ids")
+        if positions != sorted(positions):
+            _fail("interface_residue_ids must preserve node_ids order")
 
     feature_roles = {
         "node_attr_keys": "node_features",
         "edge_attr_keys": "edge_features",
         "graph_attr_keys": "graph_features",
         "grid_channels": "grid",
+        "pooled_attr_keys": "pooled_features",
     }
     for field, role in feature_roles.items():
         if field not in meta["feature_keys"]:
@@ -777,6 +816,9 @@ def _validate_strict_roles(
             )
 
     counts = meta["counts"]
+    if pooled_features is not None and "n_features" in counts:
+        if counts["n_features"] != pooled_features.shape[0]:
+            _fail("meta.counts.n_features does not match pooled_features")
     if edge_count is not None and "n_edges" in counts and counts["n_edges"] != edge_count:
         _fail("meta.counts.n_edges does not match edge_index")
     if edge_index is not None and "n_self_loops" in counts:
@@ -854,6 +896,8 @@ def validate_schema_v2(
     if family == "learned" and normalized["granularity"] in {"structure", "mixed"}:
         if normalized["coordinate_source"] != "model_specific":
             _fail("learned structure/mixed granularity requires coordinate_source='model_specific'")
+    if representation_type == "vector" and normalized["granularity"] != "structure":
+        _fail("representation_type='vector' requires granularity='structure'")
 
     _validate_encoder(normalized["encoder"])
     _validate_input(normalized["input"])

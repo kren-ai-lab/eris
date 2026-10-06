@@ -68,6 +68,7 @@ Registered residue feature tokens are:
 | `flags` | glycine, proline, unknown, and CA-presence flags |
 | `backbone_geometry` | physical-continuity-aware phi, psi, and omega torsions |
 | `external` | aligned external numerical values |
+| `interface` | opt-in inter-chain polymer-heavy-atom interface flag for residue graphs |
 
 Physical blocks follow `FeatureSpec.order`, not request order. `node_attr_keys` is authoritative.
 The parameterized `aaindex` token requires one or more accession IDs and preserves their
@@ -109,15 +110,28 @@ Registered edge-feature tokens are:
 | `same_chain` | `edge.same_chain`, the binary chain-identity relation |
 | `inter_chain` | `edge.inter_chain`, the exact complement of `same_chain` |
 | `relative_direction` | directed unit CA displacement in the source N-CA-C frame |
+| `interface_contact` | whether an existing edge joins an inter-chain interface-contact pair |
 
-The last three tokens are residue-graph-only and opt-in, so the default edge width remains 19.
+The last four tokens are residue-graph-only and opt-in, so the default edge width remains 19.
 `relative_direction` records the frozen right-handed frame convention, `1e-6` A degeneracy
 tolerance, source-frame convention, and `NaN` missing-frame policy in canonical parameters.
 Frames are internal and are not emitted as global-axis node attributes.
+The `interface` and `interface_contact` tokens are enabled as a matched pair with the same
+configurable cutoff, defaulting to an inclusive `5.0` A minimum selected polymer-heavy-atom
+distance. They add `interface.is_interface`, `edge.interface_contact`, and the ordered
+`interface_residue_ids` subset without changing graph topology or the contact-graph cutoff.
 
 For residue graphs, sequence separation is the absolute difference between chain-relative
 biological positions. Numeric residue-number gaps are retained; insertion-code residues advance in
 source order. Cross-chain spatial edges retain `seq_sep=-1` and a zero locality flag.
+
+### Structure-level pooling
+
+`eris.pool(artifact, source="node_attr", mode="mean", nan_policy="omit")` creates a new
+`residue_pool` vector artifact with `float64` `pooled_attr`. Modes are `mean`, `sum`, `max`, and
+`mean_std`; the last uses population standard deviation and emits all mean keys before all
+standard-deviation keys. NaN policies are `omit`, `propagate`, and `error`. Under `omit`, reduction
+is column-wise and an all-NaN column remains NaN, including for `sum`.
 
 ### Voxel channels
 

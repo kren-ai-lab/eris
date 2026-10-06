@@ -258,6 +258,18 @@ def _selected_atom_coordinate(
     return coordinate, valid
 
 
+def _selected_heavy_atom_coordinates(res: gemmi.Residue, altloc: str) -> np.ndarray:
+    coordinates: list[list[float]] = []
+    for atom in _selected_atoms_from_residue(res, altloc):
+        element = atom.element.name.upper() if atom.element is not None else ""
+        if element in {"H", "D"}:
+            continue
+        coordinate = [float(atom.pos.x), float(atom.pos.y), float(atom.pos.z)]
+        if np.isfinite(coordinate).all():
+            coordinates.append(coordinate)
+    return np.asarray(coordinates, dtype=np.float32).reshape((-1, 3))
+
+
 def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
     """
     Returns:
@@ -363,6 +375,8 @@ def extract_residue_bundle(
         bfactor_ca : (N,) float32
         backbone_n/backbone_ca/backbone_c : (N,3) float32
         backbone_n_mask/backbone_ca_mask/backbone_c_mask : (N,) bool
+        polymer_heavy_atom_coordinates : (M,3) float32
+        polymer_heavy_atom_residue_index : (M,) int64
         structural_residue_index : (N,) int64
     """
     missing_policy = (missing_residue or "skip").strip().lower()
@@ -395,6 +409,8 @@ def extract_residue_bundle(
     backbone_n_mask: List[bool] = []
     backbone_ca_mask: List[bool] = []
     backbone_c_mask: List[bool] = []
+    polymer_heavy_atom_coordinates: List[List[float]] = []
+    polymer_heavy_atom_residue_index: List[int] = []
     previous_residue_number: int | None = None
     previous_sequence_position: int | None = None
     structural_residue_index = -1
@@ -422,6 +438,7 @@ def extract_residue_bundle(
         n_coord, n_valid = _selected_atom_coordinate(res, "N", altloc)
         ca_coord, ca_valid = _selected_atom_coordinate(res, "CA", altloc)
         c_coord, c_valid = _selected_atom_coordinate(res, "C", altloc)
+        heavy_atom_coordinates = _selected_heavy_atom_coordinates(res, altloc)
         if plddt_source == "none" or not np.isfinite(bfactor_ca):
             plddt_ca = float("nan")
         elif 0.0 <= bfactor_ca <= 100.0:
@@ -457,6 +474,11 @@ def extract_residue_bundle(
             backbone_n_mask.append(n_valid)
             backbone_ca_mask.append(ca_valid)
             backbone_c_mask.append(c_valid)
+            residue_index = len(ids) - 1
+            polymer_heavy_atom_coordinates.extend(heavy_atom_coordinates.tolist())
+            polymer_heavy_atom_residue_index.extend(
+                [residue_index] * heavy_atom_coordinates.shape[0]
+            )
             continue
 
         coords.append(center.tolist())
@@ -474,6 +496,9 @@ def extract_residue_bundle(
         backbone_n_mask.append(n_valid)
         backbone_ca_mask.append(ca_valid)
         backbone_c_mask.append(c_valid)
+        residue_index = len(ids) - 1
+        polymer_heavy_atom_coordinates.extend(heavy_atom_coordinates.tolist())
+        polymer_heavy_atom_residue_index.extend([residue_index] * heavy_atom_coordinates.shape[0])
 
     if missing_policy == "error" and missing_ids:
         preview = ", ".join(missing_ids[:10])
@@ -497,6 +522,14 @@ def extract_residue_bundle(
         "backbone_n_mask": np.asarray(backbone_n_mask, dtype=bool),
         "backbone_ca_mask": np.asarray(backbone_ca_mask, dtype=bool),
         "backbone_c_mask": np.asarray(backbone_c_mask, dtype=bool),
+        "polymer_heavy_atom_coordinates": np.asarray(
+            polymer_heavy_atom_coordinates,
+            dtype=np.float32,
+        ).reshape((-1, 3)),
+        "polymer_heavy_atom_residue_index": np.asarray(
+            polymer_heavy_atom_residue_index,
+            dtype=np.int64,
+        ),
     }
 
 
@@ -510,6 +543,15 @@ def load_select_and_extract(
         bundles = [extractor(chain) for chain in chains]
         keys = bundles[0].keys()
         data = {key: np.concatenate([bundle[key] for bundle in bundles], axis=0) for key in keys}
+        if "polymer_heavy_atom_residue_index" in keys:
+            residue_offsets = np.cumsum([0, *(bundle["pos"].shape[0] for bundle in bundles[:-1])])
+            data["polymer_heavy_atom_residue_index"] = np.concatenate(
+                [
+                    bundle["polymer_heavy_atom_residue_index"] + offset
+                    for bundle, offset in zip(bundles, residue_offsets, strict=True)
+                ],
+                axis=0,
+            ).astype(np.int64)
         if data["pos"].shape[0] == 0:
             raise StructureLoadError(
                 "No positions found in selected chains (after filters/policies)."

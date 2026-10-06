@@ -3,9 +3,9 @@
 This document freezes the scientific and persistence contracts for the final
 Eris v0.1 structural-feature work. The contracts in this document are
 **approved targets**. Multi-chain selection, physical polymer continuity,
-backbone torsions, and residue local-frame edge geometry are implemented; the
-remaining groups become runtime claims only after their focused work units
-land with tests.
+backbone torsions, residue local-frame edge geometry, inter-chain interface
+features, and structure-level pooling are implemented; the remaining groups
+become runtime claims only after their focused work units land with tests.
 
 The existing architecture remains authoritative: public APIs build canonical
 configuration, resolve registered implementations, run feature-local optional
@@ -368,6 +368,11 @@ selected chain tuple are part of canonical parameters and provenance. This is
 not a docking interface, biological-assembly inference, or water-mediated
 contact definition.
 
+The implemented paired feature tokens are residue-node `interface` and
+residue-edge `interface_contact`. They must use the same cutoff. Enabling the
+pair also emits `interface_residue_ids`; default graph feature modes remain
+unchanged.
+
 ## Structure-level pooling
 
 Pooling is a dedicated public operation:
@@ -427,6 +432,11 @@ source hash/model/chain selection, source configuration fingerprint, selected
 array name, ordered source keys, and selected array dtype, shape, and canonical
 byte-content hash. This makes pooling scientifically cache-safe without
 changing the source artifact.
+
+The implemented public operation is `eris.pool()`. It emits `float64`
+`pooled_attr`, supports in-memory artifacts and persisted artifact directories,
+and can optionally save the new artifact. Torch export preserves the vector as
+`pooled_attr`; pooling is not an embedding operation.
 
 ## Parsing and missing-data policy
 

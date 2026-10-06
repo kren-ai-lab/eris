@@ -56,6 +56,22 @@ def test_all_discovered_explicit_representations_encode_strict_v2_artifacts():
         artifact.validate(strict=True)
 
 
+def test_public_pool_aggregates_real_residue_node_features_without_mutation():
+    source = eris.encode(PDB, representation="residue_point_cloud", use_cache=False)
+    source_values = source.data["node_attr"].copy()
+
+    pooled = eris.pool(source)
+
+    np.testing.assert_allclose(
+        pooled.data["pooled_attr"],
+        np.mean(source_values.astype(np.float64), axis=0),
+    )
+    assert pooled.data["pooled_attr"].shape == (source_values.shape[1],)
+    assert pooled.meta["coordinate_source"] == source.meta["coordinate_source"]
+    assert pooled.meta["parameters"]["source"] == "node_attr"
+    np.testing.assert_array_equal(source.data["node_attr"], source_values)
+
+
 @pytest.mark.parametrize(
     "representation",
     ["residue_knn_graph", "residue_voxel_grid"],

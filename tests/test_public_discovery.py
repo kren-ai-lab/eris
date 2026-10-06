@@ -80,6 +80,7 @@ def test_root_exports_public_m6_surface_without_learned_execution():
         "get_representation_info",
         "list_embedders",
         "list_representations",
+        "pool",
     ]
     assert eris.RepresentationNotFoundError is RepresentationNotFoundError
     assert callable(eris.encode)

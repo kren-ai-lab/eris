@@ -228,6 +228,18 @@ def test_grid_export_preserves_grid_shape_and_spatial_metadata() -> None:
     _assert_tensor_equal(out["centroid"], artifact.data["centroid"])
 
 
+@requires_torch
+def test_pooled_vector_export_preserves_pooled_features() -> None:
+    source = eris.encode(PDB, representation="residue_point_cloud", use_cache=False)
+    artifact = eris.pool(source, mode="mean_std")
+
+    out = to_torch(artifact, prefer="vector")
+
+    _assert_tensor_equal(out["pooled_attr"], artifact.data["pooled_attr"])
+    assert out["representation_type"] == "vector"
+    assert out["feature_keys"] == artifact.meta["feature_keys"]
+
+
 def test_save_torch_strictly_loads_artifact_dir_and_writes_downstream_pt(tmp_path: Path) -> None:
     torch = _torch()
     artifact_dir = tmp_path / "artifact"

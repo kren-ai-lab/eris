@@ -23,6 +23,7 @@ def build_edge_attr(
     backbone_n_mask: Optional[np.ndarray] = None,
     backbone_ca_mask: Optional[np.ndarray] = None,
     backbone_c_mask: Optional[np.ndarray] = None,
+    interface_contact: Optional[np.ndarray] = None,
     local_cutoff: int = 4,
     return_keys: bool = False,
 ) -> Union[np.ndarray, Tuple[np.ndarray, List[str]]]:
@@ -35,6 +36,7 @@ def build_edge_attr(
       - local   (is_local flag based on seq_sep <= local_cutoff)
       - same_chain / inter_chain
       - relative_direction (residue graphs only)
+      - interface_contact (residue graphs only)
     """
     ei = np.asarray(edge_index, dtype=np.int64)
     if ei.ndim != 2 or ei.shape[0] != 2:
@@ -93,6 +95,11 @@ def build_edge_attr(
         ctx["seq_sep"] = seq_sep
     if needs_chain_relation:
         ctx["same_chain"] = chains[src] == chains[dst]
+    if interface_contact is not None:
+        interface_contact = np.asarray(interface_contact, dtype=bool).reshape(-1)
+        if interface_contact.shape != (E,):
+            raise ValueError("interface_contact must have shape (E,)")
+        ctx["interface_contact"] = interface_contact
 
     return build_from_registry(
         data=data, mode=mode, registry=GRAPH_EDGE_REGISTRY, feat_ctx=ctx, return_keys=return_keys

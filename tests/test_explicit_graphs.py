@@ -340,6 +340,137 @@ def _orientation_residues() -> list[tuple[str, int, str, dict[str, np.ndarray]]]
     ]
 
 
+def _interface_residues() -> list[tuple[str, int, str, dict[str, np.ndarray]]]:
+    def backbone(ca_x: float) -> dict[str, np.ndarray]:
+        return {
+            "N": np.asarray([ca_x - 1.0, 0.0, 0.0]),
+            "CA": np.asarray([ca_x, 0.0, 0.0]),
+            "C": np.asarray([ca_x + 1.0, 0.0, 0.0]),
+        }
+
+    return [
+        ("A", 1, "ALA", backbone(0.0)),
+        ("A", 2, "GLY", backbone(30.0)),
+        ("B", 1, "SER", backbone(7.0)),
+        ("C", 1, "THR", backbone(60.0)),
+    ]
+
+
+def _encode_interface_graph(
+    encoder_type: type,
+    structure_input: StructureInput,
+    *,
+    interface_cutoff: float,
+):
+    kwargs: dict[str, object] = {
+        "node_attr_mode": [{"interface": {"cutoff": interface_cutoff}}],
+        "edge_attr_mode": [{"interface_contact": {"cutoff": interface_cutoff}}],
+        "use_cache": False,
+    }
+    if encoder_type is ResidueKNNGraph:
+        kwargs.update(k=8, cutoff=None, symmetric=True)
+    else:
+        kwargs.update(cutoff=7.0)
+    return encoder_type(**kwargs).encode(structure_input)
+
+
+@pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
+def test_interface_features_use_heavy_atoms_without_changing_topology(
+    encoder_type: type,
+    tmp_path: Path,
+) -> None:
+    structure_input = _write_backbone_graph_structure(
+        tmp_path / "interface.pdb",
+        _interface_residues(),
+    )
+    baseline_kwargs: dict[str, object] = {"use_cache": False}
+    if encoder_type is ResidueKNNGraph:
+        baseline_kwargs.update(k=8, cutoff=None, symmetric=True)
+    else:
+        baseline_kwargs.update(cutoff=7.0)
+    baseline = encoder_type(**baseline_kwargs).encode(structure_input)
+    artifact = _encode_interface_graph(
+        encoder_type,
+        structure_input,
+        interface_cutoff=5.0,
+    )
+
+    np.testing.assert_array_equal(artifact.data["edge_index"], baseline.data["edge_index"])
+    assert artifact.meta["feature_keys"]["node_attr_keys"] == ["interface.is_interface"]
+    assert artifact.meta["feature_keys"]["edge_attr_keys"] == ["edge.interface_contact"]
+    assert artifact.data["interface_residue_ids"].tolist() == ["A:1::ALA", "B:1::SER"]
+    np.testing.assert_array_equal(artifact.data["node_attr"][:, 0], [1.0, 0.0, 1.0, 0.0])
+    assert (
+        _edge_feature(
+            artifact,
+            "A:1::ALA",
+            "B:1::SER",
+            "edge.interface_contact",
+        )
+        == 1.0
+    )
+    for source, target in artifact.data["edge_index"].T.tolist():
+        source_id = artifact.data["residue_ids"][source]
+        target_id = artifact.data["residue_ids"][target]
+        if {source_id, target_id} != {"A:1::ALA", "B:1::SER"}:
+            assert (
+                _edge_feature(
+                    artifact,
+                    str(source_id),
+                    str(target_id),
+                    "edge.interface_contact",
+                )
+                == 0.0
+            )
+
+    params = artifact.meta["parameters"]
+    assert params["node_attr_mode"][0]["interface"]["cutoff"] == 5.0
+    assert params["edge_attr_mode"][0]["interface_contact"]["cutoff"] == 5.0
+
+
+@pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
+def test_interface_cutoff_chain_filtering_round_trip_and_fingerprint(
+    encoder_type: type,
+    tmp_path: Path,
+) -> None:
+    structure_input = _write_backbone_graph_structure(
+        tmp_path / "interface-selection.pdb",
+        _interface_residues(),
+    )
+    contacting = _encode_interface_graph(encoder_type, structure_input, interface_cutoff=5.0)
+    below_contact = _encode_interface_graph(encoder_type, structure_input, interface_cutoff=4.9)
+    filtered = _encode_interface_graph(
+        encoder_type,
+        StructureInput(source=structure_input.source, chain_id=("A", "C")),
+        interface_cutoff=5.0,
+    )
+
+    assert contacting.data["interface_residue_ids"].tolist() == ["A:1::ALA", "B:1::SER"]
+    assert below_contact.data["interface_residue_ids"].tolist() == []
+    assert (
+        _edge_feature(
+            below_contact,
+            "A:1::ALA",
+            "B:1::SER",
+            "edge.interface_contact",
+        )
+        == 0.0
+    )
+    assert filtered.meta["input"]["chain_ids"] == ["A", "C"]
+    assert filtered.data["interface_residue_ids"].tolist() == []
+    assert (
+        contacting.meta["provenance"]["config_fingerprint"]
+        != below_contact.meta["provenance"]["config_fingerprint"]
+    )
+
+    output = tmp_path / f"{encoder_type.__name__}-interface"
+    contacting.save(output)
+    loaded = StructureArtifact.load(output, strict=True)
+    assert loaded.meta == contacting.meta
+    for name in contacting.data:
+        np.testing.assert_equal(loaded.data[name], contacting.data[name])
+
+
 def _encode_orientation_graph(encoder_type: type, structure_input: StructureInput):
     edge_mode = [
         "relative_direction",

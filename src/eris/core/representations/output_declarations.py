@@ -86,6 +86,19 @@ RESIDUE_GRAPH_OUTPUTS: OutputDeclarations = (
     *RESIDUE_POINT_CLOUD_OUTPUTS[3:],
 )
 
+_INTERFACE_RESIDUE_IDS_OUTPUT = _output(
+    "interface_residue_ids",
+    "interface_residue_ids",
+    granularity="residue",
+    layout="K",
+)
+
+
+def residue_graph_output_declarations(data: Mapping[str, object]) -> OutputDeclarations:
+    if "interface_residue_ids" not in data:
+        return RESIDUE_GRAPH_OUTPUTS
+    return (*RESIDUE_GRAPH_OUTPUTS, _INTERFACE_RESIDUE_IDS_OUTPUT)
+
 
 def _matrix_outputs(primary_name: str, *, binned: bool) -> OutputDeclarations:
     bin_outputs = (_output("bin_edges", "bin_edges"),) if binned else ()
@@ -127,4 +140,5 @@ __all__ = [
     "RESIDUE_GRAPH_OUTPUTS",
     "RESIDUE_POINT_CLOUD_OUTPUTS",
     "VOXEL_OUTPUTS",
+    "residue_graph_output_declarations",
 ]

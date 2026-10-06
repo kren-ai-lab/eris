@@ -16,6 +16,8 @@ from eris.core.artifact_schema_v2 import (
     build_provenance,
 )
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
+from eris.exceptions import ConfigError
+from eris.pooling import pool
 
 
 def _input_metadata(digest: str = "a") -> dict:
@@ -147,6 +149,153 @@ def _assert_data_unchanged(
     assert list(artifact.data) == list(before)
     for name, expected in before.items():
         np.testing.assert_array_equal(artifact.data[name], expected)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected", "expected_keys"),
+    [
+        ("mean", [2.0, np.nan], ["pool.mean.mass", "pool.mean.charge"]),
+        ("sum", [4.0, np.nan], ["pool.sum.mass", "pool.sum.charge"]),
+        ("max", [3.0, np.nan], ["pool.max.mass", "pool.max.charge"]),
+        (
+            "mean_std",
+            [2.0, np.nan, 1.0, np.nan],
+            [
+                "pool.mean.mass",
+                "pool.mean.charge",
+                "pool.std.mass",
+                "pool.std.charge",
+            ],
+        ),
+    ],
+)
+def test_residue_pool_math_nan_omit_and_schema_vector(mode, expected, expected_keys):
+    source = _explicit_artifact()
+    source.data["node_attr"] = np.asarray([[1.0, np.nan], [3.0, np.nan]], dtype=np.float32)
+    meta_before = deepcopy(source.meta)
+    data_before = {name: array.copy() for name, array in source.data.items()}
+
+    pooled = pool(source, mode=mode)
+
+    np.testing.assert_equal(pooled.data["pooled_attr"], np.asarray(expected, dtype=np.float64))
+    assert pooled.meta["representation_name"] == "residue_pool"
+    assert pooled.meta["representation_family"] == "explicit"
+    assert pooled.meta["representation_type"] == "vector"
+    assert pooled.meta["granularity"] == "structure"
+    assert pooled.meta["feature_keys"]["pooled_attr_keys"] == expected_keys
+    assert pooled.meta["outputs"] == [
+        {
+            "name": "pooled_attr",
+            "role": "pooled_features",
+            "granularity": "structure",
+            "layout": "F",
+        }
+    ]
+    pooled.validate(strict=True)
+    assert source.meta == meta_before
+    _assert_data_unchanged(source, data_before)
+
+
+def test_residue_pool_nan_policies_round_trip_and_fingerprints(tmp_path: Path):
+    source = _explicit_artifact()
+    source.data["node_attr"] = np.asarray([[1.0, np.nan], [3.0, np.nan]], dtype=np.float32)
+
+    omit = pool(source, mode="mean", nan_policy="omit")
+    repeat = pool(source, mode="mean", nan_policy="omit")
+    propagate = pool(source, mode="mean", nan_policy="propagate")
+    summed = pool(source, mode="sum", nan_policy="omit")
+
+    assert (
+        omit.meta["provenance"]["config_fingerprint"]
+        == repeat.meta["provenance"]["config_fingerprint"]
+    )
+    assert (
+        omit.meta["parameters"]["source_artifact_fingerprint"]
+        == repeat.meta["parameters"]["source_artifact_fingerprint"]
+    )
+    assert (
+        omit.meta["provenance"]["config_fingerprint"]
+        != propagate.meta["provenance"]["config_fingerprint"]
+    )
+    assert (
+        omit.meta["provenance"]["config_fingerprint"]
+        != summed.meta["provenance"]["config_fingerprint"]
+    )
+    reordered = _explicit_artifact()
+    reordered.data["node_attr"] = source.data["node_attr"].copy()
+    reordered.meta["feature_keys"]["node_attr_keys"] = ["charge", "mass"]
+    reordered_pool = pool(reordered)
+    assert (
+        reordered_pool.meta["parameters"]["source_artifact_fingerprint"]
+        != omit.meta["parameters"]["source_artifact_fingerprint"]
+    )
+    np.testing.assert_equal(propagate.data["pooled_attr"], [2.0, np.nan])
+    with pytest.raises(ConfigError, match="nan_policy='error'"):
+        pool(source, nan_policy="error")
+
+    source.data["node_attr"][0, 0] = 2.0
+    changed = pool(source)
+    assert (
+        changed.meta["parameters"]["source_artifact_fingerprint"]
+        != omit.meta["parameters"]["source_artifact_fingerprint"]
+    )
+
+    source_target = tmp_path / "source"
+    source.save(source_target)
+    from_path = pool(source_target, output=tmp_path / "pooled-from-path")
+    assert from_path.meta == changed.meta
+    np.testing.assert_equal(from_path.data["pooled_attr"], changed.data["pooled_attr"])
+
+    target = tmp_path / "pooled"
+    omit.save(target)
+    loaded = StructureArtifact.load(target, strict=True)
+    assert loaded.meta == omit.meta
+    np.testing.assert_equal(loaded.data["pooled_attr"], omit.data["pooled_attr"])
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"source": "missing"}, "not present"),
+        ({"mode": "median"}, "mode must be one of"),
+        ({"nan_policy": "zero"}, "nan_policy must be one of"),
+    ],
+)
+def test_residue_pool_rejects_invalid_requests(kwargs, match):
+    with pytest.raises(ConfigError, match=match):
+        pool(_explicit_artifact(), **kwargs)
+
+
+def test_residue_pool_rejects_incompatible_granularity_and_malformed_source():
+    learned = _learned_artifact()
+    with pytest.raises(ConfigError, match="residue granularity"):
+        pool(learned, source="node_embedding")
+
+    malformed = _explicit_artifact()
+    malformed.data["node_attr"] = malformed.data["node_attr"].reshape(-1)
+    with pytest.raises(ArtifactValidationError, match="shape|dimensions"):
+        pool(malformed)
+
+    missing_keys = _explicit_artifact()
+    missing_keys.meta["feature_keys"] = {}
+    with pytest.raises(ConfigError, match="one ordered key"):
+        pool(missing_keys)
+
+    infinite = _explicit_artifact()
+    infinite.data["node_attr"][0, 0] = np.inf
+    with pytest.raises(ConfigError, match="infinities"):
+        pool(infinite)
+
+    empty = _explicit_artifact()
+    empty.data["pos"] = np.zeros((0, 3), dtype=np.float32)
+    empty.data["node_attr"] = np.zeros((0, 2), dtype=np.float32)
+    empty.data["edge_index"] = np.zeros((2, 0), dtype=np.int64)
+    empty.data["chain_id"] = np.asarray([], dtype=np.str_)
+    empty.meta["shapes"] = {name: list(array.shape) for name, array in empty.data.items()}
+    empty.meta["dtypes"] = {name: str(array.dtype) for name, array in empty.data.items()}
+    empty.meta["counts"] = {"n_nodes": 0, "n_edges": 0, "n_self_loops": 0}
+    with pytest.raises(ConfigError, match="N,D > 0"):
+        pool(empty)
 
 
 def test_explicit_v2_finalize_is_idempotent_and_save_preserves_contract(tmp_path):

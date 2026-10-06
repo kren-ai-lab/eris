@@ -21,7 +21,7 @@ No undeclared top-level fields are accepted.
 | `schema_version` | exactly `2` |
 | `representation_name` | non-empty public identifier |
 | `representation_family` | `explicit` or `learned` |
-| `representation_type` | `cloud`, `graph`, `matrix`, or `grid` for explicit; `embedding` for learned |
+| `representation_type` | `cloud`, `graph`, `matrix`, `grid`, or `vector` for explicit; `embedding` for learned |
 | `granularity` | `atom`, `residue`, `structure`, or `mixed` |
 | `coordinate_source` | `atom`, `ca`, `residue_mean`, `residue_com`, or `model_specific` |
 | `encoder` | producer implementation and version |
@@ -157,7 +157,8 @@ arrays are rejected. Loading always uses `allow_pickle=False`.
 - `node_attr_keys`;
 - `edge_attr_keys`;
 - `graph_attr_keys`;
-- `grid_channels`.
+- `grid_channels`; or
+- `pooled_attr_keys`.
 
 Each value is an ordered list of strings whose length matches the corresponding feature dimension.
 An empty mapping is correct for outputs such as learned embeddings whose dimensions have no
@@ -200,7 +201,9 @@ producer-specific provenance but cannot replace a required field or alter the co
 
 Generic role invariants include `edge_index (2,E)`, aligned edge features, `node_features (N,F)`,
 square matrices, four-dimensional grids, `node_embedding (N,D)`, and
-`global_embedding (D,)`. Learned node embeddings require aligned unique Unicode `node_ids`.
+`global_embedding (D,)`. The additive vector contract validates one-dimensional numeric
+`pooled_features` with matching `pooled_attr_keys`. Learned node embeddings require aligned
+unique Unicode `node_ids`.
 Representation-specific scientific validation remains with the producer.
 
 ## Persistence limits
@@ -245,8 +248,7 @@ rows or nodes. The resolved selection is included in the configuration fingerpri
 identity. Legacy scalar metadata is rejected rather than maintained as a parallel permanent
 contract.
 
-Structure-level pooling remains a separate frozen target and will add these declarations when
-implemented:
+Structure-level pooling adds these declarations:
 
 | Field | Value/contract |
 | --- | --- |
@@ -268,5 +270,5 @@ and declared auxiliary arrays. Exact feature keys, array roles, shapes, units,
 provider information, and scientific parameters are recorded as specified in
 [`structural_features.md`](structural_features.md). Current multi-chain graphs permit spatial
 edges between chains. Cross-chain sequence separation uses the sentinel `-1` and the local flag
-is zero. Complementary `edge.same_chain` and `edge.inter_chain` columns and physical-continuity
-refinement are not implemented by WU2.
+is zero. Opt-in `edge.same_chain`, `edge.inter_chain`, relative-direction, and interface-contact
+columns annotate existing residue-graph edges without changing topology.

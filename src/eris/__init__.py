@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from importlib.metadata import version as distribution_version
 
-from eris.api import embed, encode
+from eris.api import embed, encode, pool
 from eris.discovery import (
     get_embedder_info,
     get_representation_info,
@@ -34,6 +34,7 @@ __all__ = [
     "get_representation_info",
     "list_embedders",
     "list_representations",
+    "pool",
 ]
 
 # register built-in encoders

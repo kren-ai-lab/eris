@@ -26,6 +26,7 @@ def build_node_attr(
     backbone_n_mask: Optional[np.ndarray] = None,
     backbone_ca_mask: Optional[np.ndarray] = None,
     backbone_c_mask: Optional[np.ndarray] = None,
+    interface_flags: Optional[np.ndarray] = None,
     # contract
     mode: str = "onehot+physchem+bfactor_ca",
     missing: str = "zero",
@@ -78,6 +79,12 @@ def build_node_attr(
     ):
         if value is not None:
             data[name] = ensure_1d(value, n, name).astype(bool)
+    if interface_flags is not None:
+        data["interface_flags"] = ensure_1d(
+            interface_flags,
+            n,
+            "interface_flags",
+        ).astype(bool)
 
     feat_ctx = {
         "missing": missing,

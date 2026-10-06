@@ -38,6 +38,7 @@ _AUXILIARY_KEYS = (
     "occ",
     "seq_pos_residue",
     "aa_index_residue",
+    "interface_residue_ids",
 )
 
 
@@ -187,6 +188,17 @@ def _grid_to_torch(artifact: StructureArtifact) -> dict[str, Any]:
     return out
 
 
+def _vector_to_torch(artifact: StructureArtifact) -> dict[str, Any]:
+    out = _metadata(artifact.meta)
+    pooled_attr = _to_tensor(_require_array(artifact.data, "pooled_attr"))
+    if pooled_attr.ndim != 1:
+        raise TorchExportError(
+            f"Vector pooled_attr must have shape (F,), got {tuple(pooled_attr.shape)}"
+        )
+    out["pooled_attr"] = pooled_attr
+    return out
+
+
 def _as_flat_python_list(value: Any, *, key: str) -> list[Any]:
     array = np.asarray(value)
     if array.ndim == 0:
@@ -309,8 +321,8 @@ def to_torch(
     artifact.validate(strict=True)
     family, representation_type = _representation_identity(artifact)
     prefer = (prefer or "grid_or_graph").strip().lower()
-    if prefer not in {"grid_or_graph", "grid", "graph", "matrix", "cloud"}:
-        raise ValueError("prefer must be one of: grid_or_graph, grid, graph, matrix, cloud")
+    if prefer not in {"grid_or_graph", "grid", "graph", "matrix", "cloud", "vector"}:
+        raise ValueError("prefer must be one of: grid_or_graph, grid, graph, matrix, cloud, vector")
 
     if family == "learned":
         if representation_type != "embedding":
@@ -338,6 +350,10 @@ def to_torch(
         if prefer not in {"grid_or_graph", "grid"}:
             raise TorchExportError(f"Cannot export grid artifact with prefer={prefer!r}.")
         out = _grid_to_torch(artifact)
+    elif representation_type == "vector":
+        if prefer not in {"grid_or_graph", "vector"}:
+            raise TorchExportError(f"Cannot export vector artifact with prefer={prefer!r}.")
+        out = _vector_to_torch(artifact)
     else:
         raise TorchExportError(f"Unsupported explicit representation_type={representation_type!r}.")
 

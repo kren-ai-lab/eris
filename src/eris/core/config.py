@@ -15,6 +15,7 @@ from eris.features.feature_registry import (
     RESIDUE_NODE_REGISTRY,
 )
 from eris.features.utils import parse_mode
+from eris.features.interface import resolve_interface_cutoff
 
 
 def _metadata(
@@ -502,7 +503,12 @@ class _AtomGraphFeatureConfig(_AtomNodeFeatureConfig):
     def __post_init__(self) -> None:
         super().__post_init__()
         _validate_edge_feature_fields(self)
-        residue_only = {"same_chain", "inter_chain", "relative_direction"}
+        residue_only = {
+            "same_chain",
+            "inter_chain",
+            "relative_direction",
+            "interface_contact",
+        }
         invalid = sorted(
             token.name for token in self.edge_attr_mode.tokens if token.name in residue_only
         )
@@ -529,6 +535,10 @@ class _ResidueGraphFeatureConfig(_ResidueNodeFeatureConfig):
     def __post_init__(self) -> None:
         super().__post_init__()
         _validate_edge_feature_fields(self)
+        resolve_interface_cutoff(
+            self.node_attr_mode.to_list(),
+            self.edge_attr_mode.to_list(),
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -602,6 +612,11 @@ class AtomPointCloudConfig(_AtomNodeFeatureConfig):
 class ResiduePointCloudConfig(_ResidueNodeFeatureConfig):
     representation_name: ClassVar[str] = "residue_point_cloud"
     granularity: ClassVar[Literal["residue"]] = "residue"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if any(token.name == "interface" for token in self.node_attr_mode.tokens):
+            raise ValueError("interface characterization is supported only by residue graphs")
 
 
 @dataclass(frozen=True, kw_only=True)

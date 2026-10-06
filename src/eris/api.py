@@ -13,6 +13,7 @@ from eris.core.registry import (
 )
 from eris.core.types import StructureInput
 from eris.exceptions import ConfigError, ExecutionError, RepresentationNotFoundError
+from eris.pooling import pool
 
 
 class _NoOverride:
@@ -199,4 +200,4 @@ def embed(
     return artifact
 
 
-__all__ = ["embed", "encode"]
+__all__ = ["embed", "encode", "pool"]

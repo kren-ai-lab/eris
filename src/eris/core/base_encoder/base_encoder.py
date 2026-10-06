@@ -153,6 +153,9 @@ class BaseEncoder(ABC):
     def _counts_v2(self, data: dict[str, Any]):
         return self.representation.counts_v2(data)
 
+    def _output_declarations_v2(self, data: dict[str, np.ndarray]):
+        return self.output_declarations_v2
+
     def _build_metadata_v2(
         self,
         ctx: EncodingContext,
@@ -210,7 +213,7 @@ class BaseEncoder(ABC):
                 parameters=parameters,
                 chain_ids=ctx.inp.chain_id,
             ),
-            output_declarations=self.output_declarations_v2,
+            output_declarations=self._output_declarations_v2(data),
             feature_keys=self._feature_keys_v2(data, ctx),
             counts=self._counts_v2(data),
             extensions=extensions,

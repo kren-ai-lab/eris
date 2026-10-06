@@ -133,6 +133,42 @@ def _learned_embedding() -> tuple[dict, dict[str, np.ndarray]]:
     return meta, data
 
 
+def _pooled_vector() -> tuple[dict, dict[str, np.ndarray]]:
+    data = {"pooled_attr": np.asarray([1.0, np.nan], dtype=np.float64)}
+    meta = _common_meta(data)
+    parameters = {
+        "mode": "mean",
+        "nan_policy": "omit",
+        "source": "node_attr",
+        "source_artifact_fingerprint": "b" * 64,
+        "source_feature_keys": ["mass", "charge"],
+    }
+    meta.update(
+        {
+            "representation_name": "residue_pool",
+            "representation_type": "vector",
+            "granularity": "structure",
+            "parameters": parameters,
+            "outputs": [
+                {
+                    "name": "pooled_attr",
+                    "role": "pooled_features",
+                    "granularity": "structure",
+                    "layout": "F",
+                }
+            ],
+            "feature_keys": {"pooled_attr_keys": ["pool.mean.mass", "pool.mean.charge"]},
+            "counts": {"n_features": 2},
+        }
+    )
+    meta["provenance"]["config_fingerprint"] = compute_config_fingerprint(
+        "residue_pool",
+        parameters,
+        chain_ids=["A"],
+    )
+    return meta, data
+
+
 def _assert_invalid(meta: dict, data: dict[str, np.ndarray], match: str) -> None:
     with pytest.raises(ArtifactSchemaV2ValidationError, match=match):
         validate_schema_v2(meta, data, strict=True)
@@ -154,6 +190,19 @@ def test_learned_synthetic_embedding_is_strict_valid():
 
     assert normalized["model"]["checkpoint"]["identifier"] == "fake-checkpoint"
     assert normalized["feature_keys"] == {}
+
+
+def test_explicit_pooled_vector_is_strict_valid_and_preserves_nan():
+    meta, data = _pooled_vector()
+
+    normalized = validate_schema_v2(meta, data, strict=True)
+
+    assert normalized["representation_type"] == "vector"
+    assert normalized["feature_keys"]["pooled_attr_keys"] == [
+        "pool.mean.mass",
+        "pool.mean.charge",
+    ]
+    assert np.isnan(data["pooled_attr"][1])
 
 
 @pytest.mark.parametrize(

@@ -16,6 +16,7 @@ from eris.features.node.constants import (
 from eris.features.utils import onehot, safe_float
 from eris.features.feature_registry import FeatureSpec, register_residue_node_feature
 from eris.features.geometry import backbone_torsions
+from eris.features.interface import normalize_interface_params
 from eris.features.node.external import (
     external_feature_keys,
     external_feature_values,
@@ -527,5 +528,36 @@ register_residue_node_feature(
         keys_fn=external_feature_keys,
         params_fn=normalize_external_params,
         fingerprint_params_fn=project_external_fingerprint_params,
+    )
+)
+
+
+# -------------------------
+# inter-chain interface
+# -------------------------
+def interface_fn(
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> np.ndarray:
+    return np.asarray(data["interface_flags"], dtype=np.float32).reshape(-1, 1)
+
+
+def interface_keys(
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> List[str]:
+    return ["interface.is_interface"]
+
+
+register_residue_node_feature(
+    FeatureSpec(
+        token="interface",
+        order=90,
+        requires={"interface_flags"},
+        fn=interface_fn,
+        keys_fn=interface_keys,
+        params_fn=normalize_interface_params,
     )
 )

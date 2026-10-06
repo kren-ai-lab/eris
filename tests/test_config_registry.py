@@ -424,6 +424,36 @@ def test_relative_direction_parameters_are_canonical_and_residue_graph_only():
         )
 
 
+def test_interface_features_require_a_matched_residue_graph_pair():
+    config = ResidueContactGraphConfig(
+        node_attr_mode=[{"interface": {"cutoff": 4.5}}],
+        edge_attr_mode=[{"interface_contact": {"cutoff": 4.5}}],
+    )
+
+    node_params = config.node_attr_mode.to_list()[0]["interface"]
+    edge_params = config.edge_attr_mode.to_list()[0]["interface_contact"]
+    assert node_params == edge_params
+    assert node_params == {
+        "atom_selection": "selected_polymer_heavy_atoms",
+        "chain_relation": "different_selected_chains_only",
+        "cutoff": 4.5,
+        "cutoff_inclusive": True,
+        "distance_definition": "minimum_inter_residue_atom_distance",
+    }
+
+    with pytest.raises(ValueError, match="requires both"):
+        ResidueKNNGraphConfig(node_attr_mode=["interface"])
+    with pytest.raises(ValueError, match="same cutoff"):
+        ResidueKNNGraphConfig(
+            node_attr_mode=[{"interface": {"cutoff": 4.0}}],
+            edge_attr_mode=[{"interface_contact": {"cutoff": 5.0}}],
+        )
+    with pytest.raises(ValueError, match="only by residue graphs"):
+        ResiduePointCloudConfig(node_attr_mode=["interface"])
+    with pytest.raises(ValueError, match="residue-only edge features"):
+        AtomKNNGraphConfig(edge_attr_mode=["interface_contact"])
+
+
 @pytest.mark.parametrize(
     "value",
     [

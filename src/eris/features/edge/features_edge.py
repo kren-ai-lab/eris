@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 from eris.features.feature_registry import FeatureSpec, register_graph_edge_feature
 from eris.features.geometry import FRAME_EPSILON, local_frames, relative_directions
+from eris.features.interface import normalize_interface_params
 from eris.features.rbf import compute_rbf as rbf_encode
 
 
@@ -179,6 +180,37 @@ register_graph_edge_feature(
         fn=relative_direction_fn,
         keys_fn=relative_direction_keys,
         params_fn=normalize_relative_direction_params,
+    )
+)
+
+
+# -------------------------
+# inter-chain interface contact
+# -------------------------
+def interface_contact_fn(
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> np.ndarray:
+    return np.asarray(ctx["interface_contact"], dtype=np.float32).reshape(-1, 1)
+
+
+def interface_contact_keys(
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> List[str]:
+    return ["edge.interface_contact"]
+
+
+register_graph_edge_feature(
+    FeatureSpec(
+        token="interface_contact",
+        order=80,
+        requires={"interface_contact"},
+        fn=interface_contact_fn,
+        keys_fn=interface_contact_keys,
+        params_fn=normalize_interface_params,
     )
 )
 

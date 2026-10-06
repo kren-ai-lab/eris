@@ -9,9 +9,17 @@ from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueContactGraphConfig
 from eris.core.io import load_and_extract_residue
 from eris.core.representations import GraphRepresentation
-from eris.core.representations.output_declarations import RESIDUE_GRAPH_OUTPUTS
+from eris.core.representations.output_declarations import (
+    RESIDUE_GRAPH_OUTPUTS,
+    residue_graph_output_declarations,
+)
 from eris.features.edge.edge import build_edge_attr
 from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
+from eris.features.interface import (
+    compute_interface_contacts,
+    interface_edge_flags,
+    resolve_interface_cutoff,
+)
 from eris.features.node.residue import build_node_attr
 from eris.spatial.contact_graph import neighbor_search_edges
 
@@ -130,6 +138,20 @@ class ResidueContactGraph(BaseResidueEncoder):
             cutoff=self.config.cutoff,
         )
 
+        interface_cutoff = resolve_interface_cutoff(
+            self.config.node_attr_mode.to_list(),
+            self.config.edge_attr_mode.to_list(),
+        )
+        interface_flags = None
+        interface_pairs = None
+        if interface_cutoff is not None:
+            interface_flags, interface_pairs = compute_interface_contacts(
+                strc["polymer_heavy_atom_coordinates"],
+                strc["polymer_heavy_atom_residue_index"],
+                strc["chain_id"],
+                cutoff=interface_cutoff,
+            )
+
         seq_pos = np.asarray(strc["biological_sequence_positions"], dtype=np.int64)
 
         node_attr, node_attr_keys = build_node_attr(
@@ -147,6 +169,7 @@ class ResidueContactGraph(BaseResidueEncoder):
             backbone_n_mask=strc["backbone_n_mask"],
             backbone_ca_mask=strc["backbone_ca_mask"],
             backbone_c_mask=strc["backbone_c_mask"],
+            interface_flags=interface_flags,
             mode=self.config.node_attr_mode.to_list(),
             return_keys=True,
         )
@@ -158,6 +181,12 @@ class ResidueContactGraph(BaseResidueEncoder):
 
             edge_index = np.concatenate([edge_index, loop_edges], axis=1)
             edge_dist = np.concatenate([edge_dist, loop_dist], axis=0)
+
+        interface_edges = (
+            interface_edge_flags(edge_index, interface_pairs)
+            if interface_pairs is not None
+            else None
+        )
 
         edge_attr, edge_attr_keys = build_edge_attr(
             edge_index=edge_index,
@@ -173,6 +202,7 @@ class ResidueContactGraph(BaseResidueEncoder):
             backbone_n_mask=strc["backbone_n_mask"],
             backbone_ca_mask=strc["backbone_ca_mask"],
             backbone_c_mask=strc["backbone_c_mask"],
+            interface_contact=interface_edges,
             local_cutoff=self.config.local_cutoff,
             return_keys=True,
         )
@@ -203,5 +233,10 @@ class ResidueContactGraph(BaseResidueEncoder):
             data["plddt"] = strc["plddt"].astype(np.float32)
         if strc["bfactor_ca"] is not None:
             data["bfactor_ca"] = strc["bfactor_ca"].astype(np.float32)
+        if interface_flags is not None:
+            data["interface_residue_ids"] = strc["residue_ids"][interface_flags].astype(np.str_)
 
         return data
+
+    def _output_declarations_v2(self, data: dict[str, np.ndarray]):
+        return residue_graph_output_declarations(data)
