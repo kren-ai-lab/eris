@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from importlib import metadata
 from importlib.util import find_spec
 from pathlib import Path
@@ -139,7 +140,7 @@ def _write_heavy_atom_structure(
     for chain_id, residue_number, residue_name, atoms in residues:
         if previous_chain is not None and chain_id != previous_chain:
             lines.append("TER")
-        record = "HETATM" if residue_name in {"MSE", "HOH", "LIG", "ZN"} else "ATOM  "
+        record = "HETATM" if residue_name in {"MSE", "HOH", "LIG", "ZN", "FAD"} else "ATOM  "
         for atom_name, coordinate in atoms.items():
             x, y, z = coordinate
             element = atom_name if atom_name in {"SE", "ZN"} else atom_name[0]
@@ -241,6 +242,25 @@ def _write_external_features(
         model_index=np.asarray(model_index, dtype=np.int64),
     )
     return path
+
+
+def _rigid_transform_pdb(source: Path, target: Path) -> None:
+    rotation = np.asarray(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    translation = np.asarray([13.0, -8.0, 4.0], dtype=np.float64)
+    lines = []
+    for line in source.read_text(encoding="ascii").splitlines():
+        if line.startswith(("ATOM  ", "HETATM")):
+            coordinate = np.asarray(
+                [float(line[30:38]), float(line[38:46]), float(line[46:54])],
+                dtype=np.float64,
+            )
+            x, y, z = coordinate @ rotation.T + translation
+            line = f"{line[:30]}{x:8.3f}{y:8.3f}{z:8.3f}{line[54:]}"
+        lines.append(line)
+    target.write_text("\n".join([*lines, ""]), encoding="ascii")
 
 
 def _aaindex_mode(
@@ -1117,6 +1137,42 @@ def test_external_detects_source_mutation_after_config_resolution(tmp_path: Path
     assert config.to_dict()["node_attr_mode"][0]["external"] == resolved
 
 
+def test_external_path_relocation_preserves_scientific_identity(tmp_path: Path) -> None:
+    inp = _write_ca_structure(tmp_path / "protein.pdb", [("ALA", 12.0), ("GLY", 34.0)])
+    first_path = _write_external_features(
+        tmp_path / "first-external.npz",
+        values=[[1.0, 2.0], [3.0, 4.0]],
+        residue_ids=["A:1::ALA", "A:2::GLY"],
+    )
+    relocated_path = tmp_path / "relocated" / "external.npz"
+    relocated_path.parent.mkdir()
+    relocated_path.write_bytes(first_path.read_bytes())
+
+    first = ResiduePointCloudCA(
+        node_attr_mode=[{"external": {"path": str(first_path)}}],
+        use_cache=False,
+    ).encode(inp)
+    relocated = ResiduePointCloudCA(
+        node_attr_mode=[{"external": {"path": str(relocated_path)}}],
+        use_cache=False,
+    ).encode(inp)
+
+    assert (
+        first.meta["provenance"]["config_fingerprint"]
+        == relocated.meta["provenance"]["config_fingerprint"]
+    )
+    assert (
+        first.meta["parameters"]["node_attr_mode"][0]["external"]["content_sha256"]
+        == relocated.meta["parameters"]["node_attr_mode"][0]["external"]["content_sha256"]
+    )
+    first_invocation = first.meta["extensions"]["org.eris.external_features"]["invocations"][0]
+    relocated_invocation = relocated.meta["extensions"]["org.eris.external_features"][
+        "invocations"
+    ][0]
+    assert first_invocation["path"] != relocated_invocation["path"]
+    np.testing.assert_array_equal(first.data["node_attr"], relocated.data["node_attr"])
+
+
 def test_high_dimensional_external_hybrid_round_trip_and_identity(tmp_path: Path) -> None:
     torch = pytest.importorskip("torch")
     inp = _write_ca_structure(tmp_path / "protein.pdb", [("ALA", 12.0), ("GLY", 34.0)])
@@ -1368,6 +1424,7 @@ def test_sasa_rsa_selected_complex_context_and_tien_normalization(tmp_path: Path
             ("A", 2, "HOH", {"O": (1.0, 1.0, 0.0)}),
             ("A", 3, "LIG", {"C1": (1.0, 1.0, 0.0)}),
             ("A", 4, "ZN", {"ZN": (1.0, 1.0, 0.0)}),
+            ("C", 1, "FAD", {"C1": (1.0, 1.0, 0.0)}),
             ("B", 1, "GLY", _complete_gly_atoms((0.0, 2.8, 0.0))),
         ],
     )
@@ -1377,7 +1434,7 @@ def test_sasa_rsa_selected_complex_context_and_tien_normalization(tmp_path: Path
     complex_artifact = encoder.encode(StructureInput(source=inp.source, chain_id=["B", "A"]))
     repeated = encoder.encode(StructureInput(source=inp.source, chain_id=["A", "B"]))
     excluded = encoder.encode(
-        StructureInput(source=with_excluded_context.source, chain_id=["A", "B"])
+        StructureInput(source=with_excluded_context.source, chain_id=["A", "B", "C"])
     )
 
     assert isolated.meta["feature_keys"]["node_attr_keys"] == ["sasa", "rsa"]
@@ -1664,6 +1721,59 @@ def test_sidechain_torsions_are_translation_and_rotation_invariant() -> None:
     np.testing.assert_allclose(rotated, expected, atol=1e-6, equal_nan=True)
 
 
+def test_disulfide_geometry_panel_retains_cysteine_sidechain_atoms(tmp_path: Path) -> None:
+    inp = _write_heavy_atom_structure(
+        tmp_path / "cysteine-pair.pdb",
+        [
+            (
+                "A",
+                1,
+                "CYS",
+                {
+                    "N": (0.0, 1.0, 0.0),
+                    "CA": (0.0, 0.0, 0.0),
+                    "C": (1.0, -1.0, 0.0),
+                    "O": (2.0, -1.0, 0.0),
+                    "CB": (0.0, 0.0, 1.0),
+                    "SG": (1.0, 0.0, 1.0),
+                },
+            ),
+            (
+                "A",
+                2,
+                "CYS",
+                {
+                    "N": (5.0, 1.0, 0.0),
+                    "CA": (4.0, 0.0, 0.0),
+                    "C": (5.0, -1.0, 0.0),
+                    "O": (6.0, -1.0, 0.0),
+                    "CB": (4.0, 0.0, 1.0),
+                    "SG": (3.0, 0.0, 1.0),
+                },
+            ),
+        ],
+    )
+    loaded = load_and_extract_residue(inp)
+    sulfur_mask = loaded["polymer_heavy_atom_name"] == "SG"
+    sulfur_coordinates = loaded["polymer_heavy_atom_coordinates"][sulfur_mask]
+    assert sulfur_coordinates.shape == (2, 3)
+    assert np.linalg.norm(sulfur_coordinates[0] - sulfur_coordinates[1]) == pytest.approx(2.0)
+
+    artifact = ResiduePointCloudCA(
+        node_attr_mode=[{"sidechain_geometry": {"mode": "raw"}}],
+        use_cache=False,
+    ).encode(inp)
+    assert artifact.data["residue_ids"].tolist() == ["A:1::CYS", "A:2::CYS"]
+    assert artifact.meta["feature_keys"]["node_attr_keys"] == [
+        "sidechain.chi1",
+        "sidechain.chi2",
+        "sidechain.chi3",
+        "sidechain.chi4",
+    ]
+    assert np.isfinite(artifact.data["node_attr"][:, 0]).all()
+    assert np.isnan(artifact.data["node_attr"][:, 1:]).all()
+
+
 def test_sidechain_geometry_hybrid_composition_and_artifact_round_trip(tmp_path: Path) -> None:
     inp = _write_heavy_atom_structure(
         tmp_path / "sidechain-hybrid.pdb",
@@ -1743,3 +1853,217 @@ def test_sidechain_geometry_hybrid_composition_and_artifact_round_trip(tmp_path:
         "torsion_convention": "standard_signed_atan2[-pi,pi)",
         "units": "radians",
     }
+
+
+def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
+    tmp_path: Path,
+) -> None:
+    transformed_source = tmp_path / "1AQ2-rigid-transform.pdb"
+    _rigid_transform_pdb(PDB, transformed_source)
+    selected = load_and_extract_residue(StructureInput(source=str(PDB)))
+    external_keys = [f"embedding_{index:02d}" for index in range(32)]
+    external_path = _write_external_features(
+        tmp_path / "external-high-dimensional.npz",
+        values=(
+            np.arange(
+                len(selected["residue_ids"]) * len(external_keys),
+                dtype=np.float32,
+            ).reshape(len(selected["residue_ids"]), len(external_keys))
+            / 100.0
+        ),
+        residue_ids=selected["residue_ids"].tolist(),
+        feature_keys=external_keys,
+        chain_ids=list(selected.chain_ids),
+        model_index=selected.model_index,
+    )
+    node_mode = [
+        "rsa",
+        "sasa",
+        "bfactor_ca",
+        "secondary_structure",
+        {"sidechain_geometry": {"mode": "both"}},
+        {"backbone_geometry": {"mode": "both"}},
+        {"external": {"path": str(external_path)}},
+        *_aaindex_mode(["KYTJ820101", "FAUJ880103"]),
+        "physchem",
+        "onehot",
+        "interface",
+    ]
+    edge_mode = [
+        {"interface_contact": {"cutoff": 5.0}},
+        "relative_direction",
+        "inter_chain",
+        "same_chain",
+        "seq",
+        "rbf",
+        "dist",
+    ]
+
+    def encode(path: Path):
+        return ResidueKNNGraph(
+            k=3,
+            node_attr_mode=node_mode,
+            edge_attr_mode=edge_mode,
+            use_cache=False,
+        ).encode(StructureInput(source=str(path)))
+
+    original = encode(PDB)
+    transformed = encode(transformed_source)
+    periodic_backbone_keys = [
+        "backbone.phi_sin",
+        "backbone.phi_cos",
+        "backbone.psi_sin",
+        "backbone.psi_cos",
+        "backbone.omega_sin",
+        "backbone.omega_cos",
+    ]
+    raw_backbone_keys = ["backbone.phi", "backbone.psi", "backbone.omega"]
+    periodic_sidechain_keys = [
+        f"sidechain.chi{chi}_{component}" for chi in range(1, 5) for component in ("sin", "cos")
+    ]
+    raw_sidechain_keys = [f"sidechain.chi{chi}" for chi in range(1, 5)]
+    expected_node_keys = [
+        *[f"aa_onehot.{name}" for name in AA_VOCAB],
+        *PHYSchem_KEYS,
+        "aaindex.KYTJ820101",
+        "aaindex.FAUJ880103",
+        "bfactor_ca",
+        *periodic_backbone_keys,
+        *raw_backbone_keys,
+        *periodic_sidechain_keys,
+        *raw_sidechain_keys,
+        *[f"external.custom.{key}" for key in external_keys],
+        "interface.is_interface",
+        "secondary_structure.helix",
+        "secondary_structure.sheet",
+        "secondary_structure.coil",
+        "secondary_structure.unassigned",
+        "sasa",
+        "rsa",
+    ]
+    expected_edge_keys = [
+        "dist",
+        *[f"rbf.{index}" for index in range(16)],
+        "seq_sep",
+        "edge.same_chain",
+        "edge.inter_chain",
+        "edge.relative_direction_x",
+        "edge.relative_direction_y",
+        "edge.relative_direction_z",
+        "edge.interface_contact",
+    ]
+    assert original.meta["feature_keys"]["node_attr_keys"] == expected_node_keys
+    assert original.meta["feature_keys"]["edge_attr_keys"] == expected_edge_keys
+    assert original.data["node_attr"].shape == (
+        len(selected["residue_ids"]),
+        len(expected_node_keys),
+    )
+    assert original.data["edge_attr"].shape == (original.data["edge_index"].shape[1], 24)
+    assert original.data["node_attr"].dtype == np.float32
+    assert original.data["edge_attr"].dtype == np.float32
+    assert original.meta["input"]["chain_ids"] == ["A"]
+    assert (
+        original.meta["provenance"]["config_fingerprint"]
+        == transformed.meta["provenance"]["config_fingerprint"]
+    )
+    assert original.meta["input"]["source_sha256"] != transformed.meta["input"]["source_sha256"]
+    assert not np.allclose(original.data["pos"], transformed.data["pos"])
+    sasa_index = expected_node_keys.index("sasa")
+    rsa_index = expected_node_keys.index("rsa")
+    invariant_indices = [
+        index for index in range(len(expected_node_keys)) if index not in {sasa_index, rsa_index}
+    ]
+    np.testing.assert_allclose(
+        original.data["node_attr"][:, invariant_indices],
+        transformed.data["node_attr"][:, invariant_indices],
+        atol=1e-5,
+        equal_nan=True,
+    )
+    valid_sasa = np.isfinite(original.data["node_attr"][:, sasa_index]) & np.isfinite(
+        transformed.data["node_attr"][:, sasa_index]
+    )
+    original_sasa = original.data["node_attr"][valid_sasa, sasa_index]
+    transformed_sasa = transformed.data["node_attr"][valid_sasa, sasa_index]
+    assert abs(original_sasa.sum() - transformed_sasa.sum()) / original_sasa.sum() < 0.002
+    valid_rsa = np.isfinite(original.data["node_attr"][:, rsa_index]) & np.isfinite(
+        transformed.data["node_attr"][:, rsa_index]
+    )
+    rsa_delta = np.abs(
+        original.data["node_attr"][valid_rsa, rsa_index]
+        - transformed.data["node_attr"][valid_rsa, rsa_index]
+    )
+    assert np.mean(rsa_delta) < 0.003
+    np.testing.assert_array_equal(original.data["edge_index"], transformed.data["edge_index"])
+    np.testing.assert_allclose(original.data["edge_dist"], transformed.data["edge_dist"], atol=1e-5)
+    np.testing.assert_allclose(original.data["edge_attr"], transformed.data["edge_attr"], atol=1e-5)
+    rotation = np.asarray(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+    np.testing.assert_allclose(
+        transformed.data["pos"],
+        original.data["pos"] @ rotation.T,
+        atol=2e-4,
+    )
+
+    artifact_path = tmp_path / "high-content-graph"
+    original.save(artifact_path)
+    loaded = StructureArtifact.load(artifact_path, strict=True)
+    assert loaded.meta["schema_version"] == 2
+    assert loaded.meta["feature_keys"] == original.meta["feature_keys"]
+    assert loaded.meta["provenance"] == original.meta["provenance"]
+    assert loaded.data["chain_id"].tolist() == original.data["chain_id"].tolist()
+    for name, values in original.data.items():
+        assert loaded.data[name].dtype == values.dtype
+        assert loaded.data[name].shape == values.shape
+        np.testing.assert_equal(loaded.data[name], values)
+
+    torch = pytest.importorskip("torch")
+    torch_graph = eris.to_torch(loaded, prefer="graph")
+    for exported_name, artifact_name in (
+        ("x", "node_attr"),
+        ("edge_attr", "edge_attr"),
+        ("edge_index", "edge_index"),
+    ):
+        np.testing.assert_equal(
+            torch_graph[exported_name].cpu().numpy(),
+            loaded.data[artifact_name],
+        )
+    assert torch_graph["x"].dtype == torch.float32
+    if find_spec("torch_geometric") is not None:
+        pyg_graph = eris.to_pyg(loaded, prefer="graph")
+        np.testing.assert_equal(pyg_graph.x.cpu().numpy(), loaded.data["node_attr"])
+        np.testing.assert_equal(pyg_graph.edge_attr.cpu().numpy(), loaded.data["edge_attr"])
+
+    meta_before_pool = deepcopy(loaded.meta)
+    data_before_pool = {name: values.copy() for name, values in loaded.data.items()}
+    pooled = eris.pool(loaded, mode="mean_std")
+    transformed_pool = eris.pool(transformed, mode="mean_std")
+    expected_pooled_keys = [
+        *[f"pool.mean.{key}" for key in expected_node_keys],
+        *[f"pool.std.{key}" for key in expected_node_keys],
+    ]
+    assert pooled.data["pooled_attr"].shape == (2 * len(expected_node_keys),)
+    assert pooled.data["pooled_attr"].dtype == np.float64
+    assert pooled.meta["feature_keys"]["pooled_attr_keys"] == expected_pooled_keys
+    invariant_pool_indices = [
+        *invariant_indices,
+        *(index + len(expected_node_keys) for index in invariant_indices),
+    ]
+    np.testing.assert_allclose(
+        pooled.data["pooled_attr"][invariant_pool_indices],
+        transformed_pool.data["pooled_attr"][invariant_pool_indices],
+        atol=1e-5,
+        equal_nan=True,
+    )
+    assert loaded.meta == meta_before_pool
+    for name, values in data_before_pool.items():
+        np.testing.assert_equal(loaded.data[name], values)
+
+    pooled_path = tmp_path / "high-content-pooled"
+    pooled.save(pooled_path)
+    loaded_pool = StructureArtifact.load(pooled_path, strict=True)
+    assert loaded_pool.meta["schema_version"] == 2
+    assert loaded_pool.data["pooled_attr"].dtype == np.float64
+    assert loaded_pool.meta["feature_keys"]["pooled_attr_keys"] == expected_pooled_keys
+    np.testing.assert_equal(loaded_pool.data["pooled_attr"], pooled.data["pooled_attr"])

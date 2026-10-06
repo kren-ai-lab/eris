@@ -475,6 +475,7 @@ def _encode_orientation_graph(encoder_type: type, structure_input: StructureInpu
     edge_mode = [
         "relative_direction",
         "inter_chain",
+        "rbf",
         "dist",
         "same_chain",
         "seq",
@@ -521,6 +522,7 @@ def test_orientation_edges_are_invariant_directed_and_multichain(
     ]
     expected_keys = [
         "dist",
+        *[f"rbf.{index}" for index in range(16)],
         "seq_sep",
         "flag.is_local_le_4",
         "edge.same_chain",
@@ -570,6 +572,93 @@ def test_orientation_edges_are_invariant_directed_and_multichain(
         "frame_origin": "CA",
         "missing_frame_policy": "nan",
     }
+
+
+def test_multichain_edge_feature_composition_is_deterministic_and_round_trips(
+    tmp_path: Path,
+) -> None:
+    residues = _orientation_residues()
+    rotation = np.asarray(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    translation = np.asarray([9.0, -6.0, 2.0], dtype=np.float64)
+
+    def encode(path: Path):
+        return ResidueKNNGraph(
+            k=2,
+            cutoff=None,
+            symmetric=True,
+            node_attr_mode=["interface"],
+            edge_attr_mode=[
+                {"interface_contact": {"cutoff": 5.0}},
+                "relative_direction",
+                "inter_chain",
+                "same_chain",
+                "seq",
+                "rbf",
+                "dist",
+            ],
+            use_cache=False,
+        ).encode(StructureInput(source=str(path)))
+
+    original = encode(
+        _write_backbone_graph_structure(tmp_path / "edge-original.pdb", residues).source
+    )
+    transformed = encode(
+        _write_backbone_graph_structure(
+            tmp_path / "edge-transformed.pdb",
+            _transform_residues(residues, rotation, translation),
+        ).source
+    )
+    expected_keys = [
+        "dist",
+        *[f"rbf.{index}" for index in range(16)],
+        "seq_sep",
+        "edge.same_chain",
+        "edge.inter_chain",
+        "edge.relative_direction_x",
+        "edge.relative_direction_y",
+        "edge.relative_direction_z",
+        "edge.interface_contact",
+    ]
+
+    assert original.meta["feature_keys"]["edge_attr_keys"] == expected_keys
+    assert original.data["edge_attr"].shape == (original.data["edge_index"].shape[1], 24)
+    assert original.data["edge_attr"].dtype == np.float32
+    assert original.data["chain_id"].tolist() == ["A", "A", "B"]
+    assert original.data["interface_residue_ids"].tolist() == [
+        "A:1::ALA",
+        "A:2::GLY",
+        "B:1::SER",
+    ]
+    np.testing.assert_array_equal(original.data["edge_index"], transformed.data["edge_index"])
+    np.testing.assert_array_equal(
+        original.data["interface_residue_ids"],
+        transformed.data["interface_residue_ids"],
+    )
+    np.testing.assert_array_equal(original.data["node_attr"], transformed.data["node_attr"])
+    np.testing.assert_allclose(original.data["edge_dist"], transformed.data["edge_dist"], atol=1e-6)
+    np.testing.assert_allclose(
+        original.data["edge_attr"],
+        transformed.data["edge_attr"],
+        atol=1e-6,
+    )
+
+    key_index = {key: index for index, key in enumerate(expected_keys)}
+    same_chain = original.data["edge_attr"][:, key_index["edge.same_chain"]]
+    inter_chain = original.data["edge_attr"][:, key_index["edge.inter_chain"]]
+    interface_contact = original.data["edge_attr"][:, key_index["edge.interface_contact"]]
+    np.testing.assert_array_equal(same_chain + inter_chain, np.ones_like(same_chain))
+    assert np.all(interface_contact <= inter_chain)
+    assert np.any(interface_contact == 1.0)
+
+    target = tmp_path / "edge-composition"
+    original.save(target)
+    loaded = StructureArtifact.load(target, strict=True)
+    assert loaded.meta["feature_keys"]["edge_attr_keys"] == expected_keys
+    for name, values in original.data.items():
+        np.testing.assert_equal(loaded.data[name], values)
 
 
 def test_relative_direction_missing_frame_nan_round_trip_and_exports(tmp_path: Path) -> None:

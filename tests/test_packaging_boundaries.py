@@ -17,11 +17,16 @@ OPTIONAL_FRAMEWORKS = {
 }
 
 
-def _run_without_optional_frameworks(script: str) -> None:
+def _run_without_optional_frameworks(
+    script: str,
+    *,
+    additionally_blocked: set[str] | None = None,
+) -> None:
+    blocked_packages = OPTIONAL_FRAMEWORKS | set(additionally_blocked or ())
     guard = f"""
 import builtins
 
-_optional = {OPTIONAL_FRAMEWORKS!r}
+_optional = {blocked_packages!r}
 _real_import = builtins.__import__
 
 def _blocked_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -35,6 +40,30 @@ builtins.__import__ = _blocked_import
         [sys.executable, "-c", guard + script],
         cwd=ROOT,
         check=True,
+    )
+
+
+def test_biotite_is_loaded_only_when_its_feature_family_is_requested() -> None:
+    _run_without_optional_frameworks(
+        f"""
+import sys
+
+import eris
+
+if "biotite" in sys.modules:
+    raise SystemExit("Biotite imported during the normal Eris import")
+
+artifact = eris.encode(
+    {str(PDB)!r},
+    representation="residue_contact_map",
+    use_cache=False,
+)
+if artifact.meta["schema_version"] != 2:
+    raise SystemExit("core explicit encoding failed without Biotite")
+if "biotite" in sys.modules:
+    raise SystemExit("unrelated explicit encoding imported Biotite")
+""",
+        additionally_blocked={"biotite"},
     )
 
 

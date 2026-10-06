@@ -31,9 +31,11 @@ from eris.encoders.graphs.atom_knn_graph import AtomKNNGraph
 from eris.encoders.graphs.residue_contact_graph import ResidueContactGraph
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
+from eris.features.node.constants import AA_VOCAB
 
 PDB = Path("tests/data/1AQ2.pdb")
 MMCIF = Path("tests/data/1AQ2.cif")
+MULTIMER_PDB = Path("tests/data/3EC1.pdb")
 
 ENCODER_TYPES = (
     AtomPointCloud,
@@ -324,6 +326,89 @@ def test_distance_and_contact_maps_preserve_metric_and_cutoff(tmp_path: Path) ->
     np.testing.assert_array_equal(
         contact_map.data["contact"],
         np.asarray([[0, 1, 0], [1, 0, 0], [0, 0, 0]], np.uint8),
+    )
+
+
+def test_distance_contact_and_distogram_matrices_are_rigid_transform_invariant(
+    tmp_path: Path,
+) -> None:
+    coordinates = np.asarray(
+        [
+            [0.0, 0.0, 0.0],
+            [2.0, 1.0, 0.0],
+            [5.0, 0.0, 1.0],
+            [2.0, 4.0, 2.0],
+        ],
+        dtype=np.float64,
+    )
+    rotation = np.asarray(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    translation = np.asarray([13.0, -8.0, 4.0], dtype=np.float64)
+
+    def write_structure(path: Path, values: np.ndarray) -> StructureInput:
+        names = ("ALA", "GLY", "SER", "THR")
+        lines = []
+        for serial, (resname, (x, y, z)) in enumerate(zip(names, values, strict=True), 1):
+            lines.append(
+                f"ATOM  {serial:5d}  CA  {resname:>3s} A{serial:4d}    "
+                f"{x:8.3f}{y:8.3f}{z:8.3f}{1.0:6.2f}{20.0:6.2f}           C  "
+            )
+        path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
+        return StructureInput(source=str(path), chain_id="A")
+
+    original_input = write_structure(tmp_path / "matrix-original.pdb", coordinates)
+    transformed_input = write_structure(
+        tmp_path / "matrix-transformed.pdb",
+        coordinates @ rotation.T + translation,
+    )
+    encoders = (
+        DistogramCA(include_self=True, use_cache=False),
+        DistogramBinsCA(include_self=True, use_cache=False),
+        ContactMapCA(cutoff=4.0, include_self=False, use_cache=False),
+        ContactMapBinsCA(include_self=False, use_cache=False),
+    )
+
+    for encoder in encoders:
+        original = encoder.encode(original_input)
+        transformed = encoder.encode(transformed_input)
+        assert original.data.keys() == transformed.data.keys()
+        for name, values in original.data.items():
+            if name in {"pos", "centroid"}:
+                continue
+            if np.issubdtype(values.dtype, np.floating):
+                np.testing.assert_allclose(values, transformed.data[name], atol=1e-6)
+            else:
+                np.testing.assert_array_equal(values, transformed.data[name])
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_chains"),
+    [(PDB, ["A"]), (MULTIMER_PDB, ["A", "B"])],
+    ids=["experimental-monomer", "experimental-multimer"],
+)
+def test_experimental_structure_validation_panel(source: Path, expected_chains: list[str]) -> None:
+    artifact = ResiduePointCloudCA(
+        node_attr_mode=["onehot", "bfactor_ca"],
+        use_cache=False,
+    ).encode(StructureInput(source=str(source)))
+
+    assert artifact.meta["schema_version"] == 2
+    assert artifact.meta["input"]["chain_ids"] == expected_chains
+    assert list(dict.fromkeys(artifact.data["chain_id"].tolist())) == expected_chains
+    assert artifact.data["node_attr"].dtype == np.float32
+    assert artifact.data["node_attr"].shape == (
+        artifact.data["pos"].shape[0],
+        len(AA_VOCAB) + 1,
+    )
+    assert artifact.meta["feature_keys"]["node_attr_keys"] == [
+        *[f"aa_onehot.{name}" for name in AA_VOCAB],
+        "bfactor_ca",
+    ]
+    np.testing.assert_array_equal(
+        artifact.data["node_attr"][:, -1],
+        artifact.data["bfactor_ca"],
     )
 
 
