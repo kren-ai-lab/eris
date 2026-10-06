@@ -372,6 +372,45 @@ def test_backbone_geometry_parameters_canonicalize_and_fingerprint_scientific_ch
     )
 
 
+def test_sidechain_geometry_parameters_canonicalize_and_fingerprint_modes():
+    minimal = ResiduePointCloudConfig(node_attr_mode=["sidechain_geometry"])
+    explicit = ResiduePointCloudConfig(
+        node_attr_mode=[
+            {
+                "sidechain_geometry": {
+                    "mode": " SINCOS ",
+                    "torsion_convention": "standard_signed_atan2[-pi,pi)",
+                    "units": "radians",
+                    "atom_definition_convention": ("standard_residue_specific_chi1_through_chi4"),
+                    "atom_definition_table": "eris.frozen_sidechain_chi_atoms.v1",
+                    "missing_value_policy": "nan",
+                }
+            }
+        ]
+    )
+    raw = ResiduePointCloudConfig(node_attr_mode=[{"sidechain_geometry": {"mode": "raw"}}])
+    both = ResiduePointCloudConfig(node_attr_mode=[{"sidechain_geometry": {"mode": "both"}}])
+
+    assert minimal == explicit
+    assert minimal.to_dict() == explicit.to_dict()
+    baseline = compute_config_fingerprint(
+        minimal.representation_name,
+        minimal.to_fingerprint_dict(),
+        chain_ids=["A"],
+    )
+    raw_fingerprint = compute_config_fingerprint(
+        raw.representation_name,
+        raw.to_fingerprint_dict(),
+        chain_ids=["A"],
+    )
+    both_fingerprint = compute_config_fingerprint(
+        both.representation_name,
+        both.to_fingerprint_dict(),
+        chain_ids=["A"],
+    )
+    assert len({baseline, raw_fingerprint, both_fingerprint}) == 3
+
+
 def test_secondary_structure_parameters_are_canonical_and_fingerprinted():
     minimal = ResiduePointCloudConfig(node_attr_mode=["secondary_structure"])
     explicit = ResiduePointCloudConfig(
@@ -528,6 +567,9 @@ def test_interface_features_require_a_matched_residue_graph_pair():
         [{"backbone_geometry": {"mode": "degrees"}}],
         [{"backbone_geometry": {"max_peptide_bond_distance": 0.0}}],
         [{"backbone_geometry": {"missing_value_policy": "zero"}}],
+        [{"sidechain_geometry": {"mode": "degrees"}}],
+        [{"sidechain_geometry": {"missing_value_policy": "zero"}}],
+        [{"sidechain_geometry": {"atom_definition_table": "other"}}],
     ],
 )
 def test_residue_feature_parameters_fail_during_config_construction(value):

@@ -15,7 +15,11 @@ from eris.features.node.constants import (
 
 from eris.features.utils import onehot, safe_float
 from eris.features.feature_registry import FeatureSpec, register_residue_node_feature
-from eris.features.geometry import backbone_torsions
+from eris.features.geometry import (
+    SIDECHAIN_CHI_DEFINITION_TABLE,
+    backbone_torsions,
+    sidechain_torsions,
+)
 from eris.features.interface import normalize_interface_params
 from eris.features.structure_annotations import (
     BIOTITE_PACKAGE,
@@ -739,6 +743,101 @@ register_residue_node_feature(
         fn=backbone_geometry_fn,
         keys_fn=backbone_geometry_keys,
         params_fn=normalize_backbone_geometry_params,
+    )
+)
+
+
+# -------------------------
+# sidechain_geometry
+# -------------------------
+
+_SIDECHAIN_ATOM_DEFINITION_CONVENTION = "standard_residue_specific_chi1_through_chi4"
+
+
+def normalize_sidechain_geometry_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    allowed = {
+        "mode",
+        "torsion_convention",
+        "units",
+        "atom_definition_convention",
+        "atom_definition_table",
+        "missing_value_policy",
+    }
+    unknown_params = sorted(set(params) - allowed)
+    if unknown_params:
+        raise ValueError(f"Unknown sidechain_geometry parameters: {unknown_params}")
+
+    mode = params.get("mode", "sincos")
+    if not isinstance(mode, str):
+        raise TypeError("sidechain_geometry parameter 'mode' must be a string")
+    mode = mode.strip().lower()
+    if mode not in {"sincos", "raw", "both"}:
+        raise ValueError("sidechain_geometry parameter 'mode' must be one of: sincos, raw, both")
+
+    fixed_parameters = {
+        "torsion_convention": _BACKBONE_TORSION_CONVENTION,
+        "units": _BACKBONE_TORSION_UNITS,
+        "atom_definition_convention": _SIDECHAIN_ATOM_DEFINITION_CONVENTION,
+        "atom_definition_table": SIDECHAIN_CHI_DEFINITION_TABLE,
+        "missing_value_policy": _BACKBONE_MISSING_VALUE_POLICY,
+    }
+    for name, expected in fixed_parameters.items():
+        if name in params and params[name] != expected:
+            raise ValueError(f"sidechain_geometry parameter '{name}' must be {expected!r}")
+    return {"mode": mode, **fixed_parameters}
+
+
+def sidechain_geometry_fn(
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> np.ndarray:
+    angles = sidechain_torsions(
+        data["polymer_heavy_atom_coordinates"],
+        data["polymer_heavy_atom_residue_index"],
+        data["polymer_heavy_atom_name"],
+        data["resname"],
+    )
+    if params["mode"] == "raw":
+        return angles
+
+    periodic = np.column_stack(
+        [component(angles[:, chi]) for chi in range(4) for component in (np.sin, np.cos)]
+    ).astype(np.float32)
+    if params["mode"] == "both":
+        return np.concatenate([periodic, angles], axis=1).astype(np.float32)
+    return periodic
+
+
+def sidechain_geometry_keys(
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> List[str]:
+    periodic = [
+        f"sidechain.chi{chi}_{component}" for chi in range(1, 5) for component in ("sin", "cos")
+    ]
+    raw = [f"sidechain.chi{chi}" for chi in range(1, 5)]
+    if params["mode"] == "sincos":
+        return periodic
+    if params["mode"] == "raw":
+        return raw
+    return [*periodic, *raw]
+
+
+register_residue_node_feature(
+    FeatureSpec(
+        token="sidechain_geometry",
+        order=76,
+        requires={
+            "polymer_heavy_atom_coordinates",
+            "polymer_heavy_atom_residue_index",
+            "polymer_heavy_atom_name",
+            "resname",
+        },
+        fn=sidechain_geometry_fn,
+        keys_fn=sidechain_geometry_keys,
+        params_fn=normalize_sidechain_geometry_params,
     )
 )
 

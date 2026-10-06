@@ -7,6 +7,49 @@ import numpy as np
 
 
 FRAME_EPSILON = 1e-6
+SIDECHAIN_CHI_DEFINITION_TABLE = "eris.frozen_sidechain_chi_atoms.v1"
+SIDECHAIN_CHI_DEFINITIONS = {
+    "ARG": (
+        ("N", "CA", "CB", "CG"),
+        ("CA", "CB", "CG", "CD"),
+        ("CB", "CG", "CD", "NE"),
+        ("CG", "CD", "NE", "CZ"),
+    ),
+    "ASN": (("N", "CA", "CB", "CG"), ("CA", "CB", "CG", "OD1")),
+    "ASP": (("N", "CA", "CB", "CG"), ("CA", "CB", "CG", "OD1")),
+    "CYS": (("N", "CA", "CB", "SG"),),
+    "GLN": (
+        ("N", "CA", "CB", "CG"),
+        ("CA", "CB", "CG", "CD"),
+        ("CB", "CG", "CD", "OE1"),
+    ),
+    "GLU": (
+        ("N", "CA", "CB", "CG"),
+        ("CA", "CB", "CG", "CD"),
+        ("CB", "CG", "CD", "OE1"),
+    ),
+    "HIS": (("N", "CA", "CB", "CG"), ("CA", "CB", "CG", "ND1")),
+    "ILE": (("N", "CA", "CB", "CG1"), ("CA", "CB", "CG1", "CD1")),
+    "LEU": (("N", "CA", "CB", "CG"), ("CA", "CB", "CG", "CD1")),
+    "LYS": (
+        ("N", "CA", "CB", "CG"),
+        ("CA", "CB", "CG", "CD"),
+        ("CB", "CG", "CD", "CE"),
+        ("CG", "CD", "CE", "NZ"),
+    ),
+    "MET": (
+        ("N", "CA", "CB", "CG"),
+        ("CA", "CB", "CG", "SD"),
+        ("CB", "CG", "SD", "CE"),
+    ),
+    "PHE": (("N", "CA", "CB", "CG"), ("CA", "CB", "CG", "CD1")),
+    "PRO": (("N", "CA", "CB", "CG"), ("CA", "CB", "CG", "CD")),
+    "SER": (("N", "CA", "CB", "OG"),),
+    "THR": (("N", "CA", "CB", "OG1"),),
+    "TRP": (("N", "CA", "CB", "CG"), ("CA", "CB", "CG", "CD1")),
+    "TYR": (("N", "CA", "CB", "CG"), ("CA", "CB", "CG", "CD1")),
+    "VAL": (("N", "CA", "CB", "CG1"),),
+}
 
 
 def signed_dihedral(
@@ -278,11 +321,62 @@ def backbone_torsions(
     return torsions.astype(np.float32)
 
 
+def sidechain_torsions(
+    coordinates: np.ndarray,
+    residue_index: np.ndarray,
+    atom_name: np.ndarray,
+    resname: np.ndarray,
+) -> np.ndarray:
+    """Compute aligned residue ``chi1`` through ``chi4`` signed-radian columns."""
+    coordinates = np.asarray(coordinates, dtype=np.float64)
+    residue_index = np.asarray(residue_index, dtype=np.int64).reshape(-1)
+    atom_name = np.asarray(atom_name, dtype=np.str_).reshape(-1)
+    resname = np.asarray(resname, dtype=np.str_).reshape(-1)
+    n_atoms = coordinates.shape[0]
+    n_residues = resname.shape[0]
+
+    if coordinates.shape != (n_atoms, 3):
+        raise ValueError("side-chain atom coordinates must have shape (M, 3)")
+    if residue_index.shape != (n_atoms,) or atom_name.shape != (n_atoms,):
+        raise ValueError("side-chain atom metadata must align with coordinates")
+    if n_atoms and (residue_index.min() < 0 or residue_index.max() >= n_residues):
+        raise ValueError("side-chain atom residue index is outside the residue rows")
+
+    atoms_by_residue: list[dict[str, np.ndarray]] = [dict() for _ in range(n_residues)]
+    for index, name, coordinate in zip(
+        residue_index.tolist(),
+        atom_name.tolist(),
+        coordinates,
+        strict=True,
+    ):
+        if name in atoms_by_residue[index]:
+            raise ValueError(f"duplicate selected atom name {name!r} for residue row {index}")
+        atoms_by_residue[index][name] = coordinate
+
+    torsions = np.full((n_residues, 4), np.nan, dtype=np.float64)
+    for index, residue_name in enumerate(resname.tolist()):
+        definitions = SIDECHAIN_CHI_DEFINITIONS.get(residue_name)
+        if definitions is None:
+            continue
+        residue_atoms = atoms_by_residue[index]
+        for chi_index, definition in enumerate(definitions):
+            if not all(name in residue_atoms for name in definition):
+                continue
+            torsions[index, chi_index] = signed_dihedral(
+                *(residue_atoms[name] for name in definition)
+            )
+
+    return torsions.astype(np.float32)
+
+
 __all__ = [
     "FRAME_EPSILON",
+    "SIDECHAIN_CHI_DEFINITIONS",
+    "SIDECHAIN_CHI_DEFINITION_TABLE",
     "backbone_torsions",
     "local_frames",
     "peptide_continuity",
     "relative_directions",
+    "sidechain_torsions",
     "signed_dihedral",
 ]

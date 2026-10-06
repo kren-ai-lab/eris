@@ -18,13 +18,15 @@ from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
 from eris.encoders.graphs.atom_knn_graph import AtomKNNGraph
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
-from eris.features.node.constants import AA_VOCAB
+from eris.features.node.constants import AA_VOCAB, PHYSchem_KEYS
 from eris.features.node.external import ExternalFeatureError
 from eris.features.node.residue import build_node_attr
 from eris.features.geometry import (
+    SIDECHAIN_CHI_DEFINITIONS,
     backbone_torsions,
     local_frames,
     peptide_continuity,
+    sidechain_torsions,
     signed_dihedral,
 )
 from eris.pipelines.manifest import StructureManifestRow
@@ -162,6 +164,55 @@ def _complete_gly_atoms(
         "C": (x + 2.45, y + 1.0, z),
         "O": (x + 2.30, y + 2.2, z),
     }
+
+
+_CHI_TEST_COORDINATES = {
+    "N": (1.0, 0.0, 0.0),
+    "CA": (0.0, 0.0, 0.0),
+    "CB": (0.0, 0.0, 1.0),
+    "CG": (0.0, 1.0, 1.0),
+    "CG1": (0.0, 1.0, 1.0),
+    "OG": (0.0, 1.0, 1.0),
+    "OG1": (0.0, 1.0, 1.0),
+    "SG": (0.0, 1.0, 1.0),
+    "CD": (1.0, 1.0, 2.0),
+    "CD1": (1.0, 1.0, 2.0),
+    "ND1": (1.0, 1.0, 2.0),
+    "OD1": (1.0, 1.0, 2.0),
+    "SD": (1.0, 1.0, 2.0),
+    "CE": (1.0, 2.0, 3.0),
+    "NE": (1.0, 2.0, 3.0),
+    "OE1": (1.0, 2.0, 3.0),
+    "CZ": (2.0, 3.0, 3.0),
+    "NZ": (2.0, 3.0, 3.0),
+}
+
+
+def _chi_atoms(residue_name: str) -> dict[str, tuple[float, float, float]]:
+    definitions = SIDECHAIN_CHI_DEFINITIONS.get(residue_name, ())
+    names = sorted({name for definition in definitions for name in definition})
+    return {name: _CHI_TEST_COORDINATES[name] for name in names}
+
+
+def _flatten_test_atoms(
+    residues: list[tuple[str, dict[str, tuple[float, float, float]]]],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    coordinates: list[tuple[float, float, float]] = []
+    residue_indices: list[int] = []
+    atom_names: list[str] = []
+    residue_names: list[str] = []
+    for residue_index, (residue_name, atoms) in enumerate(residues):
+        residue_names.append(residue_name)
+        for atom_name, coordinate in atoms.items():
+            coordinates.append(coordinate)
+            residue_indices.append(residue_index)
+            atom_names.append(atom_name)
+    return (
+        np.asarray(coordinates, dtype=np.float32).reshape((-1, 3)),
+        np.asarray(residue_indices, dtype=np.int64),
+        np.asarray(atom_names, dtype=np.str_),
+        np.asarray(residue_names, dtype=np.str_),
+    )
 
 
 def _aa_indices(sequence: str) -> np.ndarray:
@@ -1452,3 +1503,243 @@ def test_secondary_sasa_rsa_hybrid_graph_round_trip(tmp_path: Path) -> None:
     ]
     np.testing.assert_array_equal(loaded.data["node_attr"], artifact.data["node_attr"])
     np.testing.assert_array_equal(loaded.data["edge_index"], artifact.data["edge_index"])
+
+
+def test_sidechain_definition_table_covers_frozen_depths_and_terminal_choices() -> None:
+    assert {name: len(definitions) for name, definitions in SIDECHAIN_CHI_DEFINITIONS.items()} == {
+        "ARG": 4,
+        "ASN": 2,
+        "ASP": 2,
+        "CYS": 1,
+        "GLN": 3,
+        "GLU": 3,
+        "HIS": 2,
+        "ILE": 2,
+        "LEU": 2,
+        "LYS": 4,
+        "MET": 3,
+        "PHE": 2,
+        "PRO": 2,
+        "SER": 1,
+        "THR": 1,
+        "TRP": 2,
+        "TYR": 2,
+        "VAL": 1,
+    }
+    assert "ALA" not in SIDECHAIN_CHI_DEFINITIONS
+    assert "GLY" not in SIDECHAIN_CHI_DEFINITIONS
+    for residue_name in ("ASN", "ASP"):
+        assert SIDECHAIN_CHI_DEFINITIONS[residue_name][1][-1] == "OD1"
+    for residue_name in ("LEU", "PHE", "TRP", "TYR"):
+        assert SIDECHAIN_CHI_DEFINITIONS[residue_name][1][-1] == "CD1"
+    assert SIDECHAIN_CHI_DEFINITIONS["HIS"][1][-1] == "ND1"
+    assert SIDECHAIN_CHI_DEFINITIONS["ILE"][0][-1] == "CG1"
+    assert SIDECHAIN_CHI_DEFINITIONS["VAL"][0][-1] == "CG1"
+
+
+def test_sidechain_torsions_known_angle_depths_and_undefined_policies() -> None:
+    missing_lys = _chi_atoms("LYS")
+    del missing_lys["CE"]
+    degenerate_ser = _chi_atoms("SER")
+    degenerate_ser["OG"] = degenerate_ser["CB"]
+    nonfinite_ser = _chi_atoms("SER")
+    nonfinite_ser["OG"] = (np.nan, 1.0, 1.0)
+    coordinates, residue_index, atom_name, resname = _flatten_test_atoms(
+        [
+            ("ALA", {name: _CHI_TEST_COORDINATES[name] for name in ("N", "CA", "CB")}),
+            ("GLY", {name: _CHI_TEST_COORDINATES[name] for name in ("N", "CA")}),
+            ("SER", _chi_atoms("SER")),
+            ("ASN", _chi_atoms("ASN")),
+            ("GLN", _chi_atoms("GLN")),
+            ("LYS", _chi_atoms("LYS")),
+            ("MSE", _chi_atoms("MET")),
+            ("LYS", missing_lys),
+            ("SER", degenerate_ser),
+            ("SER", nonfinite_ser),
+        ]
+    )
+
+    angles = sidechain_torsions(coordinates, residue_index, atom_name, resname)
+
+    assert angles.shape == (10, 4)
+    np.testing.assert_array_equal(
+        np.isfinite(angles).sum(axis=1),
+        [0, 0, 1, 2, 3, 4, 0, 2, 0, 0],
+    )
+    assert angles[2, 0] == pytest.approx(np.pi / 2.0, abs=1e-7)
+    assert np.isnan(angles[0]).all()
+    assert np.isnan(angles[1]).all()
+    assert np.isnan(angles[6]).all()
+    assert np.isnan(angles[7, 2:]).all()
+
+
+def test_sidechain_symmetric_terminal_convention_uses_exact_frozen_atom() -> None:
+    atoms = _chi_atoms("ASP")
+    atoms["OD2"] = (2.0, -1.0, 2.0)
+    coordinates, residue_index, atom_name, resname = _flatten_test_atoms([("ASP", atoms)])
+
+    angles = sidechain_torsions(coordinates, residue_index, atom_name, resname)
+    expected = signed_dihedral(*(np.asarray(atoms[name]) for name in ("CA", "CB", "CG", "OD1")))
+    alternate = signed_dihedral(*(np.asarray(atoms[name]) for name in ("CA", "CB", "CG", "OD2")))
+
+    assert angles[0, 1] == pytest.approx(expected, abs=1e-7)
+    assert angles[0, 1] != pytest.approx(alternate, abs=1e-7)
+
+
+def test_sidechain_geometry_modes_have_fixed_width_keys_and_order() -> None:
+    coordinates, residue_index, atom_name, resname = _flatten_test_atoms(
+        [("SER", _chi_atoms("SER"))]
+    )
+    common = {
+        "resname": resname,
+        "polymer_heavy_atom_coordinates": coordinates,
+        "polymer_heavy_atom_residue_index": residue_index,
+        "polymer_heavy_atom_name": atom_name,
+    }
+    periodic_keys = [
+        f"sidechain.chi{chi}_{component}" for chi in range(1, 5) for component in ("sin", "cos")
+    ]
+    raw_keys = [f"sidechain.chi{chi}" for chi in range(1, 5)]
+
+    sincos, sincos_keys = build_node_attr(
+        _aa_indices("S"),
+        mode=["sidechain_geometry"],
+        return_keys=True,
+        **common,
+    )
+    raw, returned_raw_keys = build_node_attr(
+        _aa_indices("S"),
+        mode=[{"sidechain_geometry": {"mode": "raw"}}],
+        return_keys=True,
+        **common,
+    )
+    both, both_keys = build_node_attr(
+        _aa_indices("S"),
+        mode=[{"sidechain_geometry": {"mode": "both"}}],
+        return_keys=True,
+        **common,
+    )
+
+    assert sincos.shape == (1, 8)
+    assert raw.shape == (1, 4)
+    assert both.shape == (1, 12)
+    assert sincos_keys == periodic_keys
+    assert returned_raw_keys == raw_keys
+    assert both_keys == [*periodic_keys, *raw_keys]
+    np.testing.assert_allclose(
+        sincos[:, :2],
+        np.column_stack((np.sin(raw[:, 0]), np.cos(raw[:, 0]))),
+        atol=1e-7,
+    )
+    assert np.isnan(sincos[:, 2:]).all()
+    np.testing.assert_allclose(both[:, :8], sincos, equal_nan=True)
+    np.testing.assert_allclose(both[:, 8:], raw, equal_nan=True)
+
+
+def test_sidechain_torsions_are_translation_and_rotation_invariant() -> None:
+    coordinates, residue_index, atom_name, resname = _flatten_test_atoms(
+        [("LYS", _chi_atoms("LYS"))]
+    )
+    rotation = np.asarray(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+    translation = np.asarray([12.5, -7.25, 3.0], dtype=np.float32)
+
+    expected = sidechain_torsions(coordinates, residue_index, atom_name, resname)
+    translated = sidechain_torsions(
+        coordinates + translation,
+        residue_index,
+        atom_name,
+        resname,
+    )
+    rotated = sidechain_torsions(
+        coordinates @ rotation.T,
+        residue_index,
+        atom_name,
+        resname,
+    )
+
+    np.testing.assert_allclose(translated, expected, atol=1e-6, equal_nan=True)
+    np.testing.assert_allclose(rotated, expected, atol=1e-6, equal_nan=True)
+
+
+def test_sidechain_geometry_hybrid_composition_and_artifact_round_trip(tmp_path: Path) -> None:
+    inp = _write_heavy_atom_structure(
+        tmp_path / "sidechain-hybrid.pdb",
+        [
+            (
+                "A",
+                1,
+                "SER",
+                {
+                    "N": (1.0, 0.0, 0.0),
+                    "CA": (0.0, 0.0, 0.0),
+                    "C": (-1.0, 1.0, 0.0),
+                    "O": (-2.0, 1.0, 0.0),
+                    "CB": (0.0, 0.0, 1.0),
+                    "OG": (0.0, 1.0, 1.0),
+                },
+            )
+        ],
+    )
+    artifact = ResiduePointCloudCA(
+        node_attr_mode=[
+            "rsa",
+            "secondary_structure",
+            "sidechain_geometry",
+            "backbone_geometry",
+            "physchem",
+            "onehot",
+        ],
+        use_cache=False,
+    ).encode(inp)
+    repeated = ResiduePointCloudCA(
+        node_attr_mode=[
+            "onehot",
+            "physchem",
+            "backbone_geometry",
+            "sidechain_geometry",
+            "secondary_structure",
+            "rsa",
+        ],
+        use_cache=False,
+    ).encode(inp)
+    target = tmp_path / "sidechain-artifact"
+    artifact.save(target)
+    loaded = StructureArtifact.load(target, strict=True)
+
+    sidechain_keys = [
+        f"sidechain.chi{chi}_{component}" for chi in range(1, 5) for component in ("sin", "cos")
+    ]
+    keys = loaded.meta["feature_keys"]["node_attr_keys"]
+    assert keys[: len(AA_VOCAB)] == [f"aa_onehot.{aa}" for aa in AA_VOCAB]
+    assert keys[len(AA_VOCAB) : len(AA_VOCAB) + len(PHYSchem_KEYS)] == PHYSchem_KEYS
+    sidechain_start = keys.index("sidechain.chi1_sin")
+    assert keys[sidechain_start : sidechain_start + 8] == sidechain_keys
+    assert keys[-5:] == [
+        "secondary_structure.helix",
+        "secondary_structure.sheet",
+        "secondary_structure.coil",
+        "secondary_structure.unassigned",
+        "rsa",
+    ]
+    np.testing.assert_array_equal(artifact.data["node_attr"], repeated.data["node_attr"])
+    np.testing.assert_array_equal(loaded.data["node_attr"], artifact.data["node_attr"])
+    assert (
+        loaded.meta["feature_keys"]["node_attr_keys"]
+        == artifact.meta["feature_keys"]["node_attr_keys"]
+    )
+    sidechain_params = next(
+        token["sidechain_geometry"]
+        for token in artifact.meta["parameters"]["node_attr_mode"]
+        if isinstance(token, dict) and "sidechain_geometry" in token
+    )
+    assert sidechain_params == {
+        "atom_definition_convention": "standard_residue_specific_chi1_through_chi4",
+        "atom_definition_table": "eris.frozen_sidechain_chi_atoms.v1",
+        "missing_value_policy": "nan",
+        "mode": "sincos",
+        "torsion_convention": "standard_signed_atan2[-pi,pi)",
+        "units": "radians",
+    }
