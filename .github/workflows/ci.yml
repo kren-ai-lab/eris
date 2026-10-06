@@ -53,7 +53,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
       - run: python -m build --outdir dist
-      - run: python -m pytest -q tests/test_m8_release_boundaries.py
+      - run: python -m pytest -q tests/test_packaging_boundaries.py
       - run: python -m venv /tmp/eris-wheel-env
       - run: /tmp/eris-wheel-env/bin/python -m pip install --upgrade pip
       - run: /tmp/eris-wheel-env/bin/python -m pip install dist/*.whl
@@ -81,8 +81,6 @@ jobs:
           python -c
           "import eris; from eris.core.learned.backends.gearnet.dependencies import probe_gearnet_availability; assert eris.list_embedders() == ['gearnet_edge']; assert probe_gearnet_availability().available"
       - run: >-
-          python -m pytest -q tests/test_gearnet_dependencies.py
-          tests/test_gearnet_native_graph.py
-          tests/test_gearnet_native_model.py
-          tests/test_gearnet_inference.py
+          python -m pytest -q tests/test_learned_runtime.py
+          tests/test_gearnet_native.py
       - run: python -m pip check
