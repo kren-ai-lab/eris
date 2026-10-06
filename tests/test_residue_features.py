@@ -21,7 +21,12 @@ from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
 from eris.features.node.constants import AA_VOCAB
 from eris.features.node.external import ExternalFeatureError
 from eris.features.node.residue import build_node_attr
-from eris.features.geometry import backbone_torsions, peptide_continuity, signed_dihedral
+from eris.features.geometry import (
+    backbone_torsions,
+    local_frames,
+    peptide_continuity,
+    signed_dihedral,
+)
 from eris.pipelines.manifest import StructureManifestRow
 
 
@@ -318,6 +323,71 @@ def test_signed_dihedral_is_translation_and_rotation_invariant() -> None:
 
     assert signed_dihedral(*translated) == pytest.approx(expected, abs=1e-12)
     assert signed_dihedral(*rotated) == pytest.approx(expected, abs=1e-12)
+
+
+def test_local_frames_are_right_handed_orthonormal_and_rotation_equivariant() -> None:
+    ca_coord = np.asarray([[2.0, 3.0, 4.0], [0.0, 0.0, 0.0]], dtype=np.float32)
+    c_coord = np.asarray([[3.0, 3.0, 4.0], [0.0, 1.0, 0.0]], dtype=np.float32)
+    n_coord = np.asarray([[2.0, 4.0, 4.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+    valid = np.ones((2,), dtype=bool)
+
+    frames, frame_valid = local_frames(
+        n_coord,
+        ca_coord,
+        c_coord,
+        valid,
+        valid,
+        valid,
+    )
+
+    np.testing.assert_array_equal(frame_valid, [True, True])
+    np.testing.assert_allclose(frames[0], np.eye(3), atol=1e-7)
+    for frame in frames:
+        np.testing.assert_allclose(frame.T @ frame, np.eye(3), atol=1e-7)
+        np.testing.assert_allclose(np.cross(frame[:, 0], frame[:, 1]), frame[:, 2], atol=1e-7)
+        assert np.linalg.det(frame) == pytest.approx(1.0, abs=1e-7)
+
+    rotation = np.asarray(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+    translation = np.asarray([7.0, -3.0, 2.0], dtype=np.float32)
+    transformed, transformed_valid = local_frames(
+        n_coord @ rotation.T + translation,
+        ca_coord @ rotation.T + translation,
+        c_coord @ rotation.T + translation,
+        valid,
+        valid,
+        valid,
+    )
+    np.testing.assert_array_equal(transformed_valid, frame_valid)
+    np.testing.assert_allclose(transformed, rotation @ frames, atol=1e-7)
+
+
+def test_local_frames_preserve_nan_for_missing_nonfinite_and_degenerate_geometry() -> None:
+    ca_coord = np.zeros((4, 3), dtype=np.float32)
+    c_coord = np.asarray(
+        [[1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [np.nan, 0.0, 0.0], [5e-7, 0.0, 0.0]],
+        dtype=np.float32,
+    )
+    n_coord = np.asarray(
+        [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=np.float32,
+    )
+    n_valid = np.asarray([False, True, True, True])
+    valid = np.ones((4,), dtype=bool)
+
+    frames, frame_valid = local_frames(
+        n_coord,
+        ca_coord,
+        c_coord,
+        n_valid,
+        valid,
+        valid,
+    )
+
+    np.testing.assert_array_equal(frame_valid, [False, False, False, False])
+    assert np.isnan(frames).all()
 
 
 def test_physical_peptide_continuity_is_inclusive_and_never_crosses_chains() -> None:

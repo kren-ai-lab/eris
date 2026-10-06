@@ -63,6 +63,10 @@ registry. `FeatureMode` validates requested tokens and parameters; physical bloc
 `node_attr_keys`. The shared residue bundle also retains aligned selected `N`, `CA`, and `C`
 coordinates and validity masks. `backbone_geometry` uses those arrays with same-chain structural
 adjacency and the physical C--N cutoff to emit phi, psi, and omega without crossing breaks.
+Residue kNN and contact graphs can use the edge registry to add exact same/inter-chain relations
+and directed relative displacement in an internal right-handed N-CA-C source frame. Invalid
+source frames yield `NaN` direction components without removing nodes or changing topology; the
+frames themselves are not public node attributes.
 Matrix encoders use positions without fabricating node features. The voxel encoder uses the grid
 feature registry.
 
@@ -141,7 +145,8 @@ External producers must also satisfy [the external NPZ contract](external_residu
 The final-v0.1 contracts for polymer continuity, torsions, local frames, secondary structure,
 solvent accessibility, interfaces, and structure-level pooling are frozen in
 [`structural_features.md`](structural_features.md). Polymer continuity and backbone torsions are
-implemented; the other contracts remain future-facing until their focused work units land.
+implemented, as are local frames and relative edge direction; the other contracts remain
+future-facing until their focused work units land.
 
 Those features must follow the same architecture described above. Public APIs
 construct canonical configuration, registries resolve implementations, runners

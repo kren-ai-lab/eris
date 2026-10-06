@@ -502,6 +502,12 @@ class _AtomGraphFeatureConfig(_AtomNodeFeatureConfig):
     def __post_init__(self) -> None:
         super().__post_init__()
         _validate_edge_feature_fields(self)
+        residue_only = {"same_chain", "inter_chain", "relative_direction"}
+        invalid = sorted(
+            token.name for token in self.edge_attr_mode.tokens if token.name in residue_only
+        )
+        if invalid:
+            raise ValueError(f"atom graphs do not support residue-only edge features: {invalid}")
 
 
 @dataclass(frozen=True, kw_only=True)

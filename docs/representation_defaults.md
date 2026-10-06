@@ -98,9 +98,26 @@ physical continuity uses an inclusive `max_peptide_bond_distance=2.0` A cutoff.
 Graph encoders also emit deterministic `graph_attr` statistics and ordered
 `graph_attr_keys`. Floating graph arrays use `float32` and `edge_index` uses `int64`.
 
+Registered edge-feature tokens are:
+
+| Token | Semantics |
+| --- | --- |
+| `dist` | edge distance |
+| `rbf` | radial-basis expansion of distance |
+| `seq` | chain-relative sequence separation, with `-1` across chains |
+| `local` | sequence-local flag |
+| `same_chain` | `edge.same_chain`, the binary chain-identity relation |
+| `inter_chain` | `edge.inter_chain`, the exact complement of `same_chain` |
+| `relative_direction` | directed unit CA displacement in the source N-CA-C frame |
+
+The last three tokens are residue-graph-only and opt-in, so the default edge width remains 19.
+`relative_direction` records the frozen right-handed frame convention, `1e-6` A degeneracy
+tolerance, source-frame convention, and `NaN` missing-frame policy in canonical parameters.
+Frames are internal and are not emitted as global-axis node attributes.
+
 For residue graphs, sequence separation is the absolute difference between chain-relative
 biological positions. Numeric residue-number gaps are retained; insertion-code residues advance in
-source order. Each explicit residue graph contains one selected chain.
+source order. Cross-chain spatial edges retain `seq_sep=-1` and a zero locality flag.
 
 ### Voxel channels
 

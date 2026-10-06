@@ -73,8 +73,8 @@ def validate_edge_features(data: Dict[str, Any], key: str = "edge_attr"):
     if edge_attr.shape[0] != edge_index.shape[1]:
         raise ValueError(f"Edge feature validation: {key} must have length E")
 
-    if not np.isfinite(edge_attr).all():
-        raise ValueError(f"Edge feature validation: {key} must contain finite values")
+    if np.isinf(edge_attr).any():
+        raise ValueError(f"Edge feature validation: {key} must not contain infinite values")
 
 
 def validate_centroid(data: Dict[str, Any]):

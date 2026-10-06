@@ -192,6 +192,12 @@ class ResidueKNNGraph(BaseResidueEncoder):
             rbf_dmax=self.config.rbf_dmax,
             seq_pos=seq_pos,
             chain_id=strc["chain_id"],
+            backbone_n=strc["backbone_n"],
+            backbone_ca=strc["backbone_ca"],
+            backbone_c=strc["backbone_c"],
+            backbone_n_mask=strc["backbone_n_mask"],
+            backbone_ca_mask=strc["backbone_ca_mask"],
+            backbone_c_mask=strc["backbone_c_mask"],
             local_cutoff=self.config.local_cutoff,
             return_keys=True,
         )

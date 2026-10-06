@@ -372,6 +372,58 @@ def test_backbone_geometry_parameters_canonicalize_and_fingerprint_scientific_ch
     )
 
 
+def test_relative_direction_parameters_are_canonical_and_residue_graph_only():
+    minimal = FeatureMode.from_value(["relative_direction"], kind="edge")
+    explicit = FeatureMode.from_value(
+        [
+            {
+                "relative_direction": {
+                    "direction_convention": "source_frame_transpose_unit_ca_displacement",
+                    "frame_atoms": ["N", "CA", "C"],
+                    "frame_definition": "x=C-CA;y=orthogonalized(N-CA);z=x_cross_y",
+                    "frame_epsilon": 1e-6,
+                    "frame_handedness": "right",
+                    "frame_matrix_layout": "columns_xyz_global",
+                    "frame_origin": "CA",
+                    "missing_frame_policy": "nan",
+                }
+            }
+        ],
+        kind="edge",
+    )
+
+    assert minimal == explicit
+    minimal_config = ResidueKNNGraphConfig(edge_attr_mode=["relative_direction"])
+    explicit_config = ResidueKNNGraphConfig(edge_attr_mode=explicit)
+    assert minimal_config.to_fingerprint_dict() == explicit_config.to_fingerprint_dict()
+    orientation_fingerprint = compute_config_fingerprint(
+        minimal_config.representation_name,
+        minimal_config.to_fingerprint_dict(),
+        chain_ids=["A"],
+    )
+    distance_config = ResidueKNNGraphConfig(edge_attr_mode=["dist"])
+    assert orientation_fingerprint != compute_config_fingerprint(
+        distance_config.representation_name,
+        distance_config.to_fingerprint_dict(),
+        chain_ids=["A"],
+    )
+    assert ResidueKNNGraphConfig(
+        edge_attr_mode=["same_chain", "inter_chain", "relative_direction"]
+    ).edge_attr_mode.to_list() == [
+        "same_chain",
+        "inter_chain",
+        minimal.to_list()[0],
+    ]
+    for token in ("same_chain", "inter_chain", "relative_direction"):
+        with pytest.raises(ValueError, match="residue-only edge features"):
+            AtomKNNGraphConfig(edge_attr_mode=[token])
+    with pytest.raises(ValueError, match="frame_epsilon"):
+        FeatureMode.from_value(
+            [{"relative_direction": {"frame_epsilon": 1e-5}}],
+            kind="edge",
+        )
+
+
 @pytest.mark.parametrize(
     "value",
     [

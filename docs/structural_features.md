@@ -2,9 +2,10 @@
 
 This document freezes the scientific and persistence contracts for the final
 Eris v0.1 structural-feature work. The contracts in this document are
-**approved targets**. Multi-chain selection, physical polymer continuity, and
-backbone torsions are implemented; the remaining groups become runtime claims
-only after their focused work units land with tests.
+**approved targets**. Multi-chain selection, physical polymer continuity,
+backbone torsions, and residue local-frame edge geometry are implemented; the
+remaining groups become runtime claims only after their focused work units
+land with tests.
 
 The existing architecture remains authoritative: public APIs build canonical
 configuration, resolve registered implementations, run feature-local optional
@@ -248,6 +249,13 @@ missing CA, zero-length displacement, non-finite coordinate, or invalid source
 frame produces three `NaN` values. This feature is defined only for
 residue-level graph edges and neither exposes nor reconstructs GearNet-internal
 topology.
+
+The implemented residue-edge tokens are `relative_direction`, `same_chain`,
+and `inter_chain`. They are opt-in for residue kNN and contact graphs and use
+the edge-feature registry's deterministic physical ordering. Atom graphs
+reject these residue-only tokens. Local frames remain internal infrastructure:
+Eris does not expose their global axes as node attributes or persist
+`local_frame` arrays.
 
 Implementations may persist aligned auxiliary arrays `local_frame` with shape
 `(N, 3, 3)` and `local_frame_valid` with shape `(N,)`; when persisted, their

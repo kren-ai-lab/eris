@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from importlib.util import find_spec
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+import eris
 from eris.core.artifact_schema_v2 import compute_config_fingerprint
 from eris.core.artifacts import StructureArtifact
 from eris.core.cache import DiskCache, compute_cache_key_v2
@@ -61,6 +63,72 @@ def _write_structure(
     return StructureInput(source=str(path), chain_id="A")
 
 
+def _backbone_atom_line(
+    serial: int,
+    atom_name: str,
+    residue_name: str,
+    residue_number: int,
+    coordinate: np.ndarray,
+    *,
+    chain_id: str,
+) -> str:
+    x, y, z = coordinate.tolist()
+    return (
+        f"ATOM  {serial:5d} {atom_name:>4s} {residue_name:>3s} {chain_id}"
+        f"{residue_number:4d}    {x:8.3f}{y:8.3f}{z:8.3f}"
+        f"{1.0:6.2f}{10.0:6.2f}           {atom_name[0]:>2s}  "
+    )
+
+
+def _write_backbone_graph_structure(
+    path: Path,
+    residues: list[tuple[str, int, str, dict[str, np.ndarray]]],
+) -> StructureInput:
+    lines: list[str] = []
+    serial = 1
+    previous_chain: str | None = None
+    for chain_id, residue_number, residue_name, atoms in residues:
+        if previous_chain is not None and chain_id != previous_chain:
+            lines.append("TER")
+        for atom_name in ("N", "CA", "C"):
+            coordinate = atoms.get(atom_name)
+            if coordinate is None:
+                continue
+            lines.append(
+                _backbone_atom_line(
+                    serial,
+                    atom_name,
+                    residue_name,
+                    residue_number,
+                    coordinate,
+                    chain_id=chain_id,
+                )
+            )
+            serial += 1
+        previous_chain = chain_id
+    path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
+    return StructureInput(source=str(path))
+
+
+def _transform_residues(
+    residues: list[tuple[str, int, str, dict[str, np.ndarray]]],
+    rotation: np.ndarray,
+    translation: np.ndarray,
+) -> list[tuple[str, int, str, dict[str, np.ndarray]]]:
+    return [
+        (
+            chain_id,
+            residue_number,
+            residue_name,
+            {
+                atom_name: coordinate @ rotation.T + translation
+                for atom_name, coordinate in atoms.items()
+            },
+        )
+        for chain_id, residue_number, residue_name, atoms in residues
+    ]
+
+
 GRAPH_ENCODERS = (ResidueKNNGraph, ResidueContactGraph)
 
 
@@ -80,6 +148,28 @@ def _edge_feature(artifact, source_id: str, target_id: str, feature_key: str) ->
     row = pairs.index((source, target))
     column = artifact.meta["feature_keys"]["edge_attr_keys"].index(feature_key)
     return float(artifact.data["edge_attr"][row, column])
+
+
+def _edge_features(
+    artifact,
+    source_id: str,
+    target_id: str,
+    feature_keys: list[str],
+) -> np.ndarray:
+    source = artifact.data["residue_ids"].tolist().index(source_id)
+    target = artifact.data["residue_ids"].tolist().index(target_id)
+    pairs = [tuple(pair) for pair in artifact.data["edge_index"].T.tolist()]
+    row = pairs.index((source, target))
+    keys = artifact.meta["feature_keys"]["edge_attr_keys"]
+    columns = [keys.index(key) for key in feature_keys]
+    return artifact.data["edge_attr"][row, columns]
+
+
+def _edge_rows(artifact) -> dict[tuple[int, int], tuple[float, np.ndarray]]:
+    return {
+        tuple(pair): (float(artifact.data["edge_dist"][row]), artifact.data["edge_attr"][row])
+        for row, pair in enumerate(artifact.data["edge_index"].T.tolist())
+    }
 
 
 def test_graph_builders_enforce_knn_and_contact_neighborhoods(tmp_path: Path) -> None:
@@ -213,6 +303,185 @@ def test_residue_graphs_include_cross_chain_edges_with_frozen_sequence_sentinel(
     ]
     assert _edge_feature(artifact, "A:2::GLY", "B:1::SER", "seq_sep") == -1.0
     assert _edge_feature(artifact, "A:2::GLY", "B:1::SER", "flag.is_local_le_1") == 0.0
+
+
+def _orientation_residues() -> list[tuple[str, int, str, dict[str, np.ndarray]]]:
+    return [
+        (
+            "A",
+            1,
+            "ALA",
+            {
+                "N": np.asarray([0.0, 1.0, 0.0]),
+                "CA": np.asarray([0.0, 0.0, 0.0]),
+                "C": np.asarray([1.0, 0.0, 0.0]),
+            },
+        ),
+        (
+            "A",
+            2,
+            "GLY",
+            {
+                "N": np.asarray([1.0, 1.0, 1.0]),
+                "CA": np.asarray([1.0, 1.0, 0.0]),
+                "C": np.asarray([1.0, 2.0, 0.0]),
+            },
+        ),
+        (
+            "B",
+            1,
+            "SER",
+            {
+                "N": np.asarray([1.5, 0.5, 1.0]),
+                "CA": np.asarray([0.5, 0.5, 1.0]),
+                "C": np.asarray([0.5, 0.5, 2.0]),
+            },
+        ),
+    ]
+
+
+def _encode_orientation_graph(encoder_type: type, structure_input: StructureInput):
+    edge_mode = [
+        "relative_direction",
+        "inter_chain",
+        "dist",
+        "same_chain",
+        "seq",
+        "local",
+    ]
+    if encoder_type is ResidueKNNGraph:
+        return encoder_type(
+            k=2,
+            cutoff=None,
+            symmetric=True,
+            edge_attr_mode=edge_mode,
+            use_cache=False,
+        ).encode(structure_input)
+    return encoder_type(cutoff=3.0, edge_attr_mode=edge_mode, use_cache=False).encode(
+        structure_input
+    )
+
+
+@pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
+def test_orientation_edges_are_invariant_directed_and_multichain(
+    encoder_type: type,
+    tmp_path: Path,
+) -> None:
+    residues = _orientation_residues()
+    original_input = _write_backbone_graph_structure(tmp_path / "orientation.pdb", residues)
+    rotation = np.asarray(
+        [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    translation = np.asarray([8.0, -5.0, 3.0], dtype=np.float64)
+    translated_input = _write_backbone_graph_structure(
+        tmp_path / "orientation-translated.pdb",
+        _transform_residues(residues, np.eye(3), translation),
+    )
+    rotated_input = _write_backbone_graph_structure(
+        tmp_path / "orientation-rotated.pdb",
+        _transform_residues(residues, rotation, np.zeros(3)),
+    )
+
+    original = _encode_orientation_graph(encoder_type, original_input)
+    transformed_artifacts = [
+        _encode_orientation_graph(encoder_type, translated_input),
+        _encode_orientation_graph(encoder_type, rotated_input),
+    ]
+    expected_keys = [
+        "dist",
+        "seq_sep",
+        "flag.is_local_le_4",
+        "edge.same_chain",
+        "edge.inter_chain",
+        "edge.relative_direction_x",
+        "edge.relative_direction_y",
+        "edge.relative_direction_z",
+    ]
+    assert original.meta["feature_keys"]["edge_attr_keys"] == expected_keys
+    original_rows = _edge_rows(original)
+    for transformed in transformed_artifacts:
+        transformed_rows = _edge_rows(transformed)
+        assert original_rows.keys() == transformed_rows.keys()
+        for pair, (distance, edge_attr) in original_rows.items():
+            transformed_distance, transformed_edge_attr = transformed_rows[pair]
+            assert transformed_distance == pytest.approx(distance, abs=1e-6)
+            np.testing.assert_allclose(transformed_edge_attr, edge_attr, atol=1e-6)
+
+    direction_keys = expected_keys[-3:]
+    forward = _edge_features(original, "A:1::ALA", "A:2::GLY", direction_keys)
+    reverse = _edge_features(original, "A:2::GLY", "A:1::ALA", direction_keys)
+    root_half = np.float32(1.0 / np.sqrt(2.0))
+    np.testing.assert_allclose(forward, [root_half, root_half, 0.0], atol=1e-6)
+    np.testing.assert_allclose(reverse, [-root_half, 0.0, -root_half], atol=1e-6)
+    assert not np.allclose(reverse, -forward)
+
+    assert _edge_feature(original, "A:1::ALA", "A:2::GLY", "edge.same_chain") == 1.0
+    assert _edge_feature(original, "A:1::ALA", "A:2::GLY", "edge.inter_chain") == 0.0
+    assert _edge_feature(original, "A:1::ALA", "B:1::SER", "seq_sep") == -1.0
+    assert _edge_feature(original, "A:1::ALA", "B:1::SER", "flag.is_local_le_4") == 0.0
+    assert _edge_feature(original, "A:1::ALA", "B:1::SER", "edge.same_chain") == 0.0
+    assert _edge_feature(original, "A:1::ALA", "B:1::SER", "edge.inter_chain") == 1.0
+    assert np.isfinite(_edge_features(original, "A:1::ALA", "B:1::SER", direction_keys)).all()
+
+    parameters = next(
+        token["relative_direction"]
+        for token in original.meta["parameters"]["edge_attr_mode"]
+        if isinstance(token, dict) and "relative_direction" in token
+    )
+    assert parameters == {
+        "direction_convention": "source_frame_transpose_unit_ca_displacement",
+        "frame_atoms": ["N", "CA", "C"],
+        "frame_definition": "x=C-CA;y=orthogonalized(N-CA);z=x_cross_y",
+        "frame_epsilon": 1e-6,
+        "frame_handedness": "right",
+        "frame_matrix_layout": "columns_xyz_global",
+        "frame_origin": "CA",
+        "missing_frame_policy": "nan",
+    }
+
+
+def test_relative_direction_missing_frame_nan_round_trip_and_exports(tmp_path: Path) -> None:
+    residues = _orientation_residues()[:2]
+    del residues[0][3]["N"]
+    structure_input = _write_backbone_graph_structure(tmp_path / "missing-frame.pdb", residues)
+    artifact = ResidueKNNGraph(
+        k=1,
+        cutoff=None,
+        symmetric=True,
+        include_self_loops=True,
+        edge_attr_mode=["same_chain", "inter_chain", "relative_direction"],
+        use_cache=False,
+    ).encode(structure_input)
+    direction_keys = [
+        "edge.relative_direction_x",
+        "edge.relative_direction_y",
+        "edge.relative_direction_z",
+    ]
+
+    assert np.isnan(_edge_features(artifact, "A:1::ALA", "A:2::GLY", direction_keys)).all()
+    assert np.isfinite(_edge_features(artifact, "A:2::GLY", "A:1::ALA", direction_keys)).all()
+    assert np.isnan(_edge_features(artifact, "A:2::GLY", "A:2::GLY", direction_keys)).all()
+    relations = artifact.data["edge_attr"][:, :2]
+    np.testing.assert_array_equal(relations[:, 0] + relations[:, 1], 1.0)
+
+    artifact_dir = tmp_path / "orientation-artifact"
+    artifact.save(artifact_dir)
+    loaded = StructureArtifact.load(artifact_dir, strict=True)
+    np.testing.assert_equal(loaded.data["edge_attr"], artifact.data["edge_attr"])
+    assert loaded.meta["feature_keys"]["edge_attr_keys"] == [
+        "edge.same_chain",
+        "edge.inter_chain",
+        *direction_keys,
+    ]
+
+    torch = pytest.importorskip("torch")
+    torch_graph = eris.to_torch(loaded, prefer="graph")
+    assert isinstance(torch_graph["edge_attr"], torch.Tensor)
+    np.testing.assert_equal(torch_graph["edge_attr"].cpu().numpy(), artifact.data["edge_attr"])
+    if find_spec("torch_geometric") is not None:
+        pyg = eris.to_pyg(loaded, prefer="graph")
+        np.testing.assert_equal(pyg.edge_attr.cpu().numpy(), artifact.data["edge_attr"])
 
 
 @pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
