@@ -293,7 +293,8 @@ def test_default_selection_includes_parser_identified_noncanonical_polymer_chain
     artifact = eris.encode(source, representation="residue_point_cloud", use_cache=False)
 
     assert artifact.meta["input"]["chain_ids"] == ["A", "B"]
-    assert artifact.data["chain_id"].tolist() == ["A"]
+    assert artifact.data["chain_id"].tolist() == ["A", "B"]
+    assert artifact.data["resname"].tolist() == ["ALA", "MSE"]
 
 
 def test_structure_input_preserves_identity_and_allows_identical_overrides(monkeypatch):

@@ -13,7 +13,7 @@ construction; `scale=None` preserves ångström-based geometry.
 | all | `center` | `True` | center coordinates once |
 | all | `scale` | `None` | optional positive coordinate divisor |
 | residue | `residue_center` | `"ca"` | alpha-carbon coordinate |
-| residue | `amino_acids_only` | `True` | frozen for v0.1 |
+| residue | `amino_acids_only` | `True` | parser-classified polymer amino acids, including noncanonical residues |
 | residue | `altloc` | `"max_occupancy"` | highest finite occupancy; ties blank, `A`, then lexicographic |
 | residue | `missing_residue_center` | `"skip"` | omit and record missing centers; `"error"` is available |
 | residue | `plddt_source` | `"none"` | use `"bfactor"` only for inputs known to store pLDDT in CA B-factor |
@@ -69,6 +69,9 @@ Registered residue feature tokens are:
 | `backbone_geometry` | physical-continuity-aware phi, psi, and omega torsions |
 | `external` | aligned external numerical values |
 | `interface` | opt-in inter-chain polymer-heavy-atom interface flag for residue graphs |
+| `secondary_structure` | Biotite P-SEA helix/sheet/coil/unassigned one-hot block |
+| `sasa` | Biotite Shrake-Rupley residue SASA in square angstroms |
+| `rsa` | SASA divided by the Tien theoretical maximum-ASA reference |
 
 Physical blocks follow `FeatureSpec.order`, not request order. `node_attr_keys` is authoritative.
 The parameterized `aaindex` token requires one or more accession IDs and preserves their
@@ -85,6 +88,13 @@ The `external` token follows [the external residue feature contract](external_re
 `backbone_geometry` defaults to `mode="sincos"`; `raw` emits signed radians and `both` emits
 the six periodic columns followed by the three raw columns. Undefined values remain `NaN`, and
 physical continuity uses an inclusive `max_peptide_bond_distance=2.0` A cutoff.
+
+`secondary_structure` runs Biotite 1.6 P-SEA independently for each selected chain and physical
+continuity segment. Its four columns are ordered helix, sheet, coil, and unassigned. `sasa` and
+`rsa` share one selected-complex Shrake-Rupley calculation over selected polymer heavy atoms with
+a 1.4 A probe, 1000 Fibonacci points, and ProtOr radii. Incomplete canonical residues receive
+`NaN`; present atoms still occlude other residues. RSA uses the frozen Tien table and is not
+clipped. Biotite is loaded only when one of these features executes.
 
 ### Graph edge and graph features
 
@@ -221,9 +231,10 @@ as a non-default output dtype.
 
 ## Final-v0.1 structural defaults
 
-The multi-chain, selected-model, alternate-location, physical-continuity, and backbone-torsion
-behavior below is implemented. The remaining targets are frozen for later final-v0.1 work units
-and do not claim current runtime support.
+The multi-chain, selected-model, alternate-location, physical-continuity, backbone-torsion,
+local-frame, secondary-structure, solvent-accessibility, interface, and pooling behavior below is
+implemented. Side-chain torsions remain frozen for later final-v0.1 work and do not claim current
+runtime support.
 Their complete scientific definitions, feature orders, missing-value behavior, and provenance requirements live in
 [`structural_features.md`](structural_features.md).
 

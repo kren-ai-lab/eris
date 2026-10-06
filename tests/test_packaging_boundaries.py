@@ -44,7 +44,14 @@ def test_core_declares_direct_runtime_imports_and_python_range() -> None:
 
     assert pyproject["project"]["name"] == "eris-lib"
     assert pyproject["project"]["requires-python"] == ">=3.11,<3.13"
-    for requirement in ("numpy", "gemmi", "platformdirs", "typer>=0.9", "rich"):
+    for requirement in (
+        "numpy",
+        "gemmi",
+        "platformdirs",
+        "typer>=0.9",
+        "rich",
+        "biotite==1.6.0",
+    ):
         assert requirement in dependencies
 
 

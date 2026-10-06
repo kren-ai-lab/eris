@@ -68,6 +68,10 @@ def load_structure(path: Path) -> gemmi.Structure:
         st = gemmi.read_structure(str(path))
         if st is None or len(st) == 0:
             raise StructureLoadError(f"Empty/invalid structure: {path}")
+        # PDB files do not always carry explicit entity records.  Ask Gemmi to
+        # populate parser-level polymer classifications so modified polymer
+        # amino acids remain distinguishable from ligands.
+        st.setup_entities()
         return st
     except Exception as e:
         raise StructureLoadError(f"Failed to parse structure: {path}") from e
@@ -258,8 +262,13 @@ def _selected_atom_coordinate(
     return coordinate, valid
 
 
-def _selected_heavy_atom_coordinates(res: gemmi.Residue, altloc: str) -> np.ndarray:
+def _selected_heavy_atoms(
+    res: gemmi.Residue,
+    altloc: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     coordinates: list[list[float]] = []
+    atom_names: list[str] = []
+    elements: list[str] = []
     for atom in _selected_atoms_from_residue(res, altloc):
         element = atom.element.name.upper() if atom.element is not None else ""
         if element in {"H", "D"}:
@@ -267,7 +276,13 @@ def _selected_heavy_atom_coordinates(res: gemmi.Residue, altloc: str) -> np.ndar
         coordinate = [float(atom.pos.x), float(atom.pos.y), float(atom.pos.z)]
         if np.isfinite(coordinate).all():
             coordinates.append(coordinate)
-    return np.asarray(coordinates, dtype=np.float32).reshape((-1, 3))
+            atom_names.append((atom.name or "").strip().upper())
+            elements.append(element)
+    return (
+        np.asarray(coordinates, dtype=np.float32).reshape((-1, 3)),
+        np.asarray(atom_names, dtype=np.str_),
+        np.asarray(elements, dtype=np.str_),
+    )
 
 
 def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
@@ -350,7 +365,9 @@ def extract_residue_bundle(
     chain
         Selected chain.
     amino_acids_only
-        If True, keep only standard amino acids (3-letter in AA3_TO_AA1).
+        If True, keep parser-classified polymer amino acids, including
+        noncanonical residues.  Sequence-derived values for noncanonical
+        residues use the existing unknown-residue representation.
     altloc
         Altloc policy for atom selection.
     missing_residue
@@ -377,6 +394,7 @@ def extract_residue_bundle(
         backbone_n_mask/backbone_ca_mask/backbone_c_mask : (N,) bool
         polymer_heavy_atom_coordinates : (M,3) float32
         polymer_heavy_atom_residue_index : (M,) int64
+        polymer_heavy_atom_name/polymer_heavy_atom_element : (M,) str
         structural_residue_index : (N,) int64
     """
     missing_policy = (missing_residue or "skip").strip().lower()
@@ -411,6 +429,8 @@ def extract_residue_bundle(
     backbone_c_mask: List[bool] = []
     polymer_heavy_atom_coordinates: List[List[float]] = []
     polymer_heavy_atom_residue_index: List[int] = []
+    polymer_heavy_atom_names: List[str] = []
+    polymer_heavy_atom_elements: List[str] = []
     previous_residue_number: int | None = None
     previous_sequence_position: int | None = None
     structural_residue_index = -1
@@ -418,7 +438,11 @@ def extract_residue_bundle(
     for res in chain:
         r3 = res.name.upper()
 
-        if amino_acids_only and r3 not in AA3_TO_AA1:
+        residue_info = gemmi.find_tabulated_residue(r3)
+        is_polymer_amino_acid = (
+            res.entity_type == gemmi.EntityType.Polymer and residue_info.is_amino_acid()
+        )
+        if amino_acids_only and not is_polymer_amino_acid:
             continue
 
         structural_residue_index += 1
@@ -438,7 +462,10 @@ def extract_residue_bundle(
         n_coord, n_valid = _selected_atom_coordinate(res, "N", altloc)
         ca_coord, ca_valid = _selected_atom_coordinate(res, "CA", altloc)
         c_coord, c_valid = _selected_atom_coordinate(res, "C", altloc)
-        heavy_atom_coordinates = _selected_heavy_atom_coordinates(res, altloc)
+        heavy_atom_coordinates, heavy_atom_names, heavy_atom_elements = _selected_heavy_atoms(
+            res,
+            altloc,
+        )
         if plddt_source == "none" or not np.isfinite(bfactor_ca):
             plddt_ca = float("nan")
         elif 0.0 <= bfactor_ca <= 100.0:
@@ -479,6 +506,8 @@ def extract_residue_bundle(
             polymer_heavy_atom_residue_index.extend(
                 [residue_index] * heavy_atom_coordinates.shape[0]
             )
+            polymer_heavy_atom_names.extend(heavy_atom_names.tolist())
+            polymer_heavy_atom_elements.extend(heavy_atom_elements.tolist())
             continue
 
         coords.append(center.tolist())
@@ -499,6 +528,8 @@ def extract_residue_bundle(
         residue_index = len(ids) - 1
         polymer_heavy_atom_coordinates.extend(heavy_atom_coordinates.tolist())
         polymer_heavy_atom_residue_index.extend([residue_index] * heavy_atom_coordinates.shape[0])
+        polymer_heavy_atom_names.extend(heavy_atom_names.tolist())
+        polymer_heavy_atom_elements.extend(heavy_atom_elements.tolist())
 
     if missing_policy == "error" and missing_ids:
         preview = ", ".join(missing_ids[:10])
@@ -530,6 +561,8 @@ def extract_residue_bundle(
             polymer_heavy_atom_residue_index,
             dtype=np.int64,
         ),
+        "polymer_heavy_atom_name": np.asarray(polymer_heavy_atom_names, dtype=np.str_),
+        "polymer_heavy_atom_element": np.asarray(polymer_heavy_atom_elements, dtype=np.str_),
     }
 
 

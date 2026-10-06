@@ -118,6 +118,52 @@ def _write_backbone_structure(
     return StructureInput(source=str(path))
 
 
+def _write_heavy_atom_structure(
+    path: Path,
+    residues: list[
+        tuple[
+            str,
+            int,
+            str,
+            dict[str, tuple[float, float, float]],
+        ]
+    ],
+    *,
+    header: list[str] | None = None,
+) -> StructureInput:
+    lines = list(header or [])
+    serial = 1
+    previous_chain: str | None = None
+    for chain_id, residue_number, residue_name, atoms in residues:
+        if previous_chain is not None and chain_id != previous_chain:
+            lines.append("TER")
+        record = "HETATM" if residue_name in {"MSE", "HOH", "LIG", "ZN"} else "ATOM  "
+        for atom_name, coordinate in atoms.items():
+            x, y, z = coordinate
+            element = atom_name if atom_name in {"SE", "ZN"} else atom_name[0]
+            lines.append(
+                f"{record}{serial:5d} {atom_name:>4s} {residue_name:>3s} {chain_id}"
+                f"{residue_number:4d}    {x:8.3f}{y:8.3f}{z:8.3f}"
+                f"{1.0:6.2f}{10.0:6.2f}          {element:>2s}  "
+            )
+            serial += 1
+        previous_chain = chain_id
+    path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
+    return StructureInput(source=str(path))
+
+
+def _complete_gly_atoms(
+    offset: tuple[float, float, float],
+) -> dict[str, tuple[float, float, float]]:
+    x, y, z = offset
+    return {
+        "N": (x, y, z),
+        "CA": (x + 1.45, y, z),
+        "C": (x + 2.45, y + 1.0, z),
+        "O": (x + 2.30, y + 2.2, z),
+    }
+
+
 def _aa_indices(sequence: str) -> np.ndarray:
     return np.asarray([AA_VOCAB.index(letter) for letter in sequence], dtype=np.int16)
 
@@ -1143,3 +1189,266 @@ def test_batch_external_params_by_id_preserve_resume_identity(
         resume=True,
     )
     assert [result.status for result in resumed] == ["success", "success"]
+
+
+def test_secondary_structure_assigns_frozen_states_with_provider_provenance() -> None:
+    artifact = ResiduePointCloudCA(
+        node_attr_mode=["secondary_structure"],
+        use_cache=False,
+    ).encode(StructureInput(source=str(PDB), chain_id="A"))
+
+    assert artifact.meta["feature_keys"]["node_attr_keys"] == [
+        "secondary_structure.helix",
+        "secondary_structure.sheet",
+        "secondary_structure.coil",
+        "secondary_structure.unassigned",
+    ]
+    features = artifact.data["node_attr"]
+    np.testing.assert_array_equal(features.sum(axis=1), np.ones(features.shape[0]))
+    assert np.all(features.sum(axis=0)[:3] > 0)
+    params = artifact.meta["parameters"]["node_attr_mode"][0]["secondary_structure"]
+    assert params["provider"] == "biotite"
+    assert params["provider_version"] == "1.6.0"
+    assert params["algorithm"] == "P-SEA"
+    assert params["state_mapping"] == {
+        "": "unassigned",
+        "a": "helix",
+        "b": "sheet",
+        "c": "coil",
+    }
+    assert params["segment_handling"] == "selected_chain_and_peptide_continuity"
+
+
+def test_secondary_structure_missing_ca_is_unassigned(tmp_path: Path) -> None:
+    inp = _write_heavy_atom_structure(
+        tmp_path / "missing-ca.pdb",
+        [("A", 1, "ALA", {"N": (0.0, 0.0, 0.0), "C": (2.5, 0.0, 0.0), "O": (3.5, 0.0, 0.0)})],
+    )
+
+    artifact = ResiduePointCloudCA(
+        residue_center="mean",
+        node_attr_mode=["secondary_structure"],
+        use_cache=False,
+    ).encode(inp)
+
+    np.testing.assert_array_equal(artifact.data["node_attr"], [[0.0, 0.0, 0.0, 1.0]])
+
+
+def test_secondary_structure_uses_geometry_not_header_records(tmp_path: Path) -> None:
+    residues = []
+    for index in range(6):
+        x = index * 3.45
+        residues.append(
+            (
+                "A",
+                index + 1,
+                "GLY",
+                {
+                    "N": (x, 0.0, 0.0),
+                    "CA": (x + 1.2, 0.5, 0.0),
+                    "C": (x + 2.2, 0.0, 0.0),
+                    "O": (x + 2.4, -1.0, 0.0),
+                },
+            )
+        )
+    plain = _write_heavy_atom_structure(tmp_path / "plain.pdb", residues)
+    declared = _write_heavy_atom_structure(
+        tmp_path / "declared.pdb",
+        residues,
+        header=["HELIX    1   1 GLY A    1  GLY A    6  1                                  6"],
+    )
+
+    kwargs = {"node_attr_mode": ["secondary_structure"], "use_cache": False}
+    plain_artifact = ResiduePointCloudCA(**kwargs).encode(plain)
+    declared_artifact = ResiduePointCloudCA(**kwargs).encode(declared)
+
+    np.testing.assert_array_equal(
+        plain_artifact.data["node_attr"],
+        declared_artifact.data["node_attr"],
+    )
+
+
+def test_secondary_structure_multichain_order_matches_independent_chains(tmp_path: Path) -> None:
+    residues = []
+    for chain_index, chain_id in enumerate(("A", "B")):
+        for index in range(6):
+            x = index * 3.45
+            y = chain_index * 12.0
+            residues.append(
+                (
+                    chain_id,
+                    index + 1,
+                    "GLY",
+                    {
+                        "N": (x, y, 0.0),
+                        "CA": (x + 1.2, y + 0.5, 0.0),
+                        "C": (x + 2.2, y, 0.0),
+                        "O": (x + 2.4, y - 1.0, 0.0),
+                    },
+                )
+            )
+    inp = _write_heavy_atom_structure(tmp_path / "two-chains.pdb", residues)
+
+    encoder = ResiduePointCloudCA(node_attr_mode=["secondary_structure"], use_cache=False)
+    chain_a = encoder.encode(StructureInput(source=inp.source, chain_id="A"))
+    chain_b = encoder.encode(StructureInput(source=inp.source, chain_id="B"))
+    combined = encoder.encode(StructureInput(source=inp.source, chain_id=["B", "A"]))
+
+    assert combined.meta["input"]["chain_ids"] == ["A", "B"]
+    np.testing.assert_array_equal(
+        combined.data["node_attr"],
+        np.concatenate([chain_a.data["node_attr"], chain_b.data["node_attr"]]),
+    )
+
+
+def test_sasa_rsa_selected_complex_context_and_tien_normalization(tmp_path: Path) -> None:
+    chain_a_atoms = _complete_gly_atoms((0.0, 0.0, 0.0))
+    inp = _write_heavy_atom_structure(
+        tmp_path / "occlusion.pdb",
+        [
+            ("A", 1, "GLY", chain_a_atoms),
+            ("B", 1, "GLY", _complete_gly_atoms((0.0, 2.8, 0.0))),
+        ],
+    )
+    with_excluded_context = _write_heavy_atom_structure(
+        tmp_path / "excluded-context.pdb",
+        [
+            ("A", 1, "GLY", {**chain_a_atoms, "H": (0.0, 0.5, 0.0)}),
+            ("A", 2, "HOH", {"O": (1.0, 1.0, 0.0)}),
+            ("A", 3, "LIG", {"C1": (1.0, 1.0, 0.0)}),
+            ("A", 4, "ZN", {"ZN": (1.0, 1.0, 0.0)}),
+            ("B", 1, "GLY", _complete_gly_atoms((0.0, 2.8, 0.0))),
+        ],
+    )
+    encoder = ResiduePointCloudCA(node_attr_mode=["sasa", "rsa"], use_cache=False)
+
+    isolated = encoder.encode(StructureInput(source=inp.source, chain_id="A"))
+    complex_artifact = encoder.encode(StructureInput(source=inp.source, chain_id=["B", "A"]))
+    repeated = encoder.encode(StructureInput(source=inp.source, chain_id=["A", "B"]))
+    excluded = encoder.encode(
+        StructureInput(source=with_excluded_context.source, chain_id=["A", "B"])
+    )
+
+    assert isolated.meta["feature_keys"]["node_attr_keys"] == ["sasa", "rsa"]
+    assert complex_artifact.data["node_attr"].shape == (2, 2)
+    assert np.isfinite(complex_artifact.data["node_attr"]).all()
+    assert np.all(complex_artifact.data["node_attr"] >= 0.0)
+    assert complex_artifact.data["node_attr"][0, 0] < isolated.data["node_attr"][0, 0]
+    assert isolated.data["node_attr"][0, 1] > 1.0
+    np.testing.assert_array_equal(complex_artifact.data["node_attr"], repeated.data["node_attr"])
+    np.testing.assert_array_equal(complex_artifact.data["node_attr"], excluded.data["node_attr"])
+    np.testing.assert_allclose(
+        complex_artifact.data["node_attr"][:, 1],
+        complex_artifact.data["node_attr"][:, 0] / 104.0,
+        rtol=1e-6,
+    )
+    params = complex_artifact.meta["parameters"]["node_attr_mode"]
+    assert params[0]["sasa"]["sphere_point_count"] == 1000
+    assert params[0]["sasa"]["vdw_radii"] == "ProtOr"
+    assert params[1]["rsa"]["maximum_asa_table"]["GLY"] == 104.0
+    assert params[1]["rsa"]["clipping"] == "none"
+
+
+def test_sasa_incomplete_canonical_and_noncanonical_rsa_policies(tmp_path: Path) -> None:
+    inp = _write_heavy_atom_structure(
+        tmp_path / "missing-and-noncanonical.pdb",
+        [
+            (
+                "A",
+                1,
+                "ALA",
+                {
+                    "N": (0.0, 0.0, 0.0),
+                    "CA": (1.4, 0.0, 0.0),
+                    "C": (2.4, 1.0, 0.0),
+                    "O": (2.2, 2.2, 0.0),
+                },
+            ),
+            (
+                "A",
+                2,
+                "MSE",
+                {
+                    "N": (3.4, 1.0, 0.0),
+                    "CA": (4.4, 2.0, 0.0),
+                    "C": (5.7, 1.4, 0.0),
+                    "O": (6.0, 0.2, 0.0),
+                    "CB": (4.2, 3.5, 0.0),
+                },
+            ),
+        ],
+    )
+
+    artifact = ResiduePointCloudCA(
+        node_attr_mode=["flags", "sasa", "rsa"],
+        use_cache=False,
+    ).encode(inp)
+
+    np.testing.assert_array_equal(artifact.data["resname"], ["ALA", "MSE"])
+    assert artifact.data["node_attr"][1, 2] == 1.0
+    assert np.isnan(artifact.data["node_attr"][0, -2:]).all()
+    assert np.isfinite(artifact.data["node_attr"][1, -2])
+    assert np.isnan(artifact.data["node_attr"][1, -1])
+
+
+def test_sasa_fails_for_unsupported_required_protor_radius(tmp_path: Path) -> None:
+    mse_atoms = {
+        "N": (0.0, 0.0, 0.0),
+        "CA": (1.4, 0.0, 0.0),
+        "C": (2.4, 1.0, 0.0),
+        "O": (2.2, 2.2, 0.0),
+        "CB": (1.2, -1.5, 0.0),
+        "CG": (2.4, -2.3, 0.0),
+        "QQ": (2.0, -4.1, 0.0),
+        "CE": (3.7, -5.0, 0.0),
+    }
+    inp = _write_heavy_atom_structure(
+        tmp_path / "unsupported-radius.pdb",
+        [
+            ("A", 1, "GLY", _complete_gly_atoms((-4.0, 0.0, 0.0))),
+            ("A", 2, "MSE", mse_atoms),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="ProtOr radius is unavailable.*MSE:QQ"):
+        ResiduePointCloudCA(node_attr_mode=["sasa"], use_cache=False).encode(inp)
+
+
+def test_secondary_sasa_rsa_hybrid_graph_round_trip(tmp_path: Path) -> None:
+    inp = _write_heavy_atom_structure(
+        tmp_path / "hybrid.pdb",
+        [
+            ("A", 1, "GLY", _complete_gly_atoms((0.0, 0.0, 0.0))),
+            ("A", 2, "GLY", _complete_gly_atoms((3.45, 0.0, 0.0))),
+            ("B", 1, "GLY", _complete_gly_atoms((0.0, 4.0, 0.0))),
+            ("B", 2, "GLY", _complete_gly_atoms((3.45, 4.0, 0.0))),
+        ],
+    )
+    artifact = ResidueKNNGraph(
+        k=2,
+        node_attr_mode=[
+            "onehot",
+            "backbone_geometry",
+            "secondary_structure",
+            "sasa",
+            "rsa",
+            "interface",
+        ],
+        edge_attr_mode=["dist", "relative_direction", "interface_contact"],
+        use_cache=False,
+    ).encode(inp)
+    target = tmp_path / "artifact"
+    artifact.save(target)
+    loaded = StructureArtifact.load(target, strict=True)
+
+    assert loaded.meta["feature_keys"]["node_attr_keys"][-7:] == [
+        "interface.is_interface",
+        "secondary_structure.helix",
+        "secondary_structure.sheet",
+        "secondary_structure.coil",
+        "secondary_structure.unassigned",
+        "sasa",
+        "rsa",
+    ]
+    np.testing.assert_array_equal(loaded.data["node_attr"], artifact.data["node_attr"])
+    np.testing.assert_array_equal(loaded.data["edge_index"], artifact.data["edge_index"])

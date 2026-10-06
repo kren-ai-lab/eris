@@ -17,6 +17,15 @@ from eris.features.utils import onehot, safe_float
 from eris.features.feature_registry import FeatureSpec, register_residue_node_feature
 from eris.features.geometry import backbone_torsions
 from eris.features.interface import normalize_interface_params
+from eris.features.structure_annotations import (
+    BIOTITE_PACKAGE,
+    BIOTITE_VERSION,
+    SECONDARY_STRUCTURE_KEYS,
+    SECONDARY_STRUCTURE_STATE_MAPPING,
+    TIEN_MAXIMUM_ASA,
+    secondary_structure_onehot,
+    solvent_accessibility,
+)
 from eris.features.node.external import (
     external_feature_keys,
     external_feature_values,
@@ -63,6 +72,226 @@ register_residue_node_feature(
         requires={"aa_index"},
         fn=aa_onehot_fn,
         keys_fn=aa_onehot_keys,
+    )
+)
+
+
+# -------------------------
+# secondary structure
+# -------------------------
+
+_SECONDARY_STRUCTURE_ALGORITHM = "P-SEA"
+_SECONDARY_STRUCTURE_SEGMENTS = "selected_chain_and_peptide_continuity"
+
+
+def normalize_secondary_structure_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    allowed = {
+        "provider",
+        "provider_version",
+        "algorithm",
+        "coordinate_basis",
+        "state_order",
+        "state_mapping",
+        "segment_handling",
+        "max_peptide_bond_distance",
+        "missing_ca_policy",
+    }
+    unknown_params = sorted(set(params) - allowed)
+    if unknown_params:
+        raise ValueError(f"Unknown secondary_structure parameters: {unknown_params}")
+
+    distance = params.get("max_peptide_bond_distance", 2.0)
+    if isinstance(distance, bool) or not isinstance(distance, Real):
+        raise TypeError(
+            "secondary_structure parameter 'max_peptide_bond_distance' must be a real number"
+        )
+    distance = float(distance)
+    if not np.isfinite(distance) or distance <= 0.0:
+        raise ValueError(
+            "secondary_structure parameter 'max_peptide_bond_distance' "
+            "must be a finite positive number"
+        )
+
+    fixed = {
+        "provider": BIOTITE_PACKAGE,
+        "provider_version": BIOTITE_VERSION,
+        "algorithm": _SECONDARY_STRUCTURE_ALGORITHM,
+        "coordinate_basis": "CA geometry",
+        "state_order": ["helix", "sheet", "coil", "unassigned"],
+        "state_mapping": dict(SECONDARY_STRUCTURE_STATE_MAPPING),
+        "segment_handling": _SECONDARY_STRUCTURE_SEGMENTS,
+        "missing_ca_policy": "unassigned",
+    }
+    for name, expected in fixed.items():
+        if name in params and params[name] != expected:
+            raise ValueError(f"secondary_structure parameter '{name}' must be {expected!r}")
+    return {**fixed, "max_peptide_bond_distance": distance}
+
+
+def secondary_structure_fn(
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> np.ndarray:
+    return secondary_structure_onehot(
+        ca_coord=data["backbone_ca"],
+        ca_valid=data["backbone_ca_mask"],
+        c_coord=data["backbone_c"],
+        n_coord=data["backbone_n"],
+        c_valid=data["backbone_c_mask"],
+        n_valid=data["backbone_n_mask"],
+        chain_id=data["chain_id"],
+        structural_residue_index=data["structural_residue_index"],
+        resname=data["resname"],
+        max_peptide_bond_distance=params["max_peptide_bond_distance"],
+    )
+
+
+def secondary_structure_keys(
+    data: Dict[str, Any],
+    ctx: Dict[str, Any],
+    params: Dict[str, Any],
+) -> List[str]:
+    return list(SECONDARY_STRUCTURE_KEYS)
+
+
+register_residue_node_feature(
+    FeatureSpec(
+        token="secondary_structure",
+        order=100,
+        requires={
+            "backbone_n",
+            "backbone_ca",
+            "backbone_c",
+            "backbone_n_mask",
+            "backbone_ca_mask",
+            "backbone_c_mask",
+            "chain_id",
+            "structural_residue_index",
+            "resname",
+        },
+        fn=secondary_structure_fn,
+        keys_fn=secondary_structure_keys,
+        params_fn=normalize_secondary_structure_params,
+    )
+)
+
+
+# -------------------------
+# SASA and RSA
+# -------------------------
+
+_ACCESSIBILITY_BASE_PARAMS = {
+    "provider": BIOTITE_PACKAGE,
+    "provider_version": BIOTITE_VERSION,
+    "algorithm": "Shrake-Rupley",
+    "probe_radius_angstrom": 1.4,
+    "sphere_point_count": 1000,
+    "sphere_point_distribution": "Fibonacci",
+    "vdw_radii": "ProtOr",
+    "atom_selection": "selected_chain_polymer_heavy_atoms",
+    "hydrogen_handling": "excluded",
+    "ion_handling": "excluded",
+    "calculation_context": "selected_complex",
+    "unsupported_radius_policy": "error",
+    "incomplete_canonical_residue_policy": "nan",
+    "units": "square_angstroms",
+}
+_RSA_PARAMS = {
+    **_ACCESSIBILITY_BASE_PARAMS,
+    "normalization": "Tien et al. theoretical maximum ASA",
+    "maximum_asa_table": dict(TIEN_MAXIMUM_ASA),
+    "noncanonical_normalization_policy": "nan",
+    "clipping": "none",
+}
+
+
+def _normalize_fixed_accessibility_params(
+    token: str,
+    params: Dict[str, Any],
+    fixed: Dict[str, Any],
+) -> Dict[str, Any]:
+    unknown_params = sorted(set(params) - set(fixed))
+    if unknown_params:
+        raise ValueError(f"Unknown {token} parameters: {unknown_params}")
+    for name, expected in fixed.items():
+        if name in params and params[name] != expected:
+            raise ValueError(f"{token} parameter '{name}' must be {expected!r}")
+    return dict(fixed)
+
+
+def normalize_sasa_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    return _normalize_fixed_accessibility_params("sasa", params, _ACCESSIBILITY_BASE_PARAMS)
+
+
+def normalize_rsa_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    return _normalize_fixed_accessibility_params("rsa", params, _RSA_PARAMS)
+
+
+def _accessibility_values(
+    data: Dict[str, Any], ctx: Dict[str, Any]
+) -> tuple[np.ndarray, np.ndarray]:
+    cache_key = "_eris_solvent_accessibility"
+    cached = ctx.get(cache_key)
+    if cached is None:
+        cached = solvent_accessibility(
+            coordinates=data["polymer_heavy_atom_coordinates"],
+            residue_index=data["polymer_heavy_atom_residue_index"],
+            atom_name=data["polymer_heavy_atom_name"],
+            element=data["polymer_heavy_atom_element"],
+            resname=data["resname"],
+            chain_id=data["chain_id"],
+        )
+        ctx[cache_key] = cached
+    return cached
+
+
+def sasa_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+    sasa, _ = _accessibility_values(data, ctx)
+    return sasa.reshape(-1, 1)
+
+
+def rsa_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+    _, rsa = _accessibility_values(data, ctx)
+    return rsa.reshape(-1, 1)
+
+
+def sasa_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+    return ["sasa"]
+
+
+def rsa_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+    return ["rsa"]
+
+
+_ACCESSIBILITY_REQUIREMENTS = {
+    "polymer_heavy_atom_coordinates",
+    "polymer_heavy_atom_residue_index",
+    "polymer_heavy_atom_name",
+    "polymer_heavy_atom_element",
+    "resname",
+    "chain_id",
+}
+
+register_residue_node_feature(
+    FeatureSpec(
+        token="sasa",
+        order=110,
+        requires=_ACCESSIBILITY_REQUIREMENTS,
+        fn=sasa_fn,
+        keys_fn=sasa_keys,
+        params_fn=normalize_sasa_params,
+    )
+)
+
+register_residue_node_feature(
+    FeatureSpec(
+        token="rsa",
+        order=120,
+        requires=_ACCESSIBILITY_REQUIREMENTS,
+        fn=rsa_fn,
+        keys_fn=rsa_keys,
+        params_fn=normalize_rsa_params,
     )
 )
 

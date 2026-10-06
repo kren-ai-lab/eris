@@ -291,8 +291,8 @@ project's Python 3.11 compatibility floor. Biotite documents the P-SEA basis,
 CA-only inputs, state mapping, and deviations from the original program in its
 [`annotate_sse` reference](https://www.biotite-python.org/latest/apidoc/biotite.structure.annotate_sse.html).
 The pinned release declares Python 3.11 or newer and publishes CPython 3.11 and
-3.12 wheels on [PyPI](https://pypi.org/project/biotite/1.6.0/). Adding it to
-package metadata is a later implementation task.
+3.12 wheels on [PyPI](https://pypi.org/project/biotite/1.6.0/). The dependency is
+declared in package metadata and remains lazily imported by these feature paths.
 
 ## SASA and RSA
 

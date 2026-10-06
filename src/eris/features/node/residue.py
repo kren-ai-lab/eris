@@ -26,6 +26,11 @@ def build_node_attr(
     backbone_n_mask: Optional[np.ndarray] = None,
     backbone_ca_mask: Optional[np.ndarray] = None,
     backbone_c_mask: Optional[np.ndarray] = None,
+    resname: Optional[np.ndarray] = None,
+    polymer_heavy_atom_coordinates: Optional[np.ndarray] = None,
+    polymer_heavy_atom_residue_index: Optional[np.ndarray] = None,
+    polymer_heavy_atom_name: Optional[np.ndarray] = None,
+    polymer_heavy_atom_element: Optional[np.ndarray] = None,
     interface_flags: Optional[np.ndarray] = None,
     # contract
     mode: str = "onehot+physchem+bfactor_ca",
@@ -62,6 +67,8 @@ def build_node_attr(
             n,
             "structural_residue_index",
         ).astype(np.int64)
+    if resname is not None:
+        data["resname"] = ensure_1d(resname, n, "resname").astype(np.str_)
     for name, value in (
         ("backbone_n", backbone_n),
         ("backbone_ca", backbone_ca),
@@ -85,6 +92,21 @@ def build_node_attr(
             n,
             "interface_flags",
         ).astype(bool)
+    if polymer_heavy_atom_coordinates is not None:
+        coordinates = np.asarray(polymer_heavy_atom_coordinates, dtype=np.float32)
+        if coordinates.ndim != 2 or coordinates.shape[1] != 3:
+            raise ValueError(
+                f"polymer_heavy_atom_coordinates must have shape (M, 3), got {coordinates.shape}"
+            )
+        atom_count = coordinates.shape[0]
+        data["polymer_heavy_atom_coordinates"] = coordinates
+        for name, value, dtype in (
+            ("polymer_heavy_atom_residue_index", polymer_heavy_atom_residue_index, np.int64),
+            ("polymer_heavy_atom_name", polymer_heavy_atom_name, np.str_),
+            ("polymer_heavy_atom_element", polymer_heavy_atom_element, np.str_),
+        ):
+            if value is not None:
+                data[name] = ensure_1d(value, atom_count, name).astype(dtype)
 
     feat_ctx = {
         "missing": missing,

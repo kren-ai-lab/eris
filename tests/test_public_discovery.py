@@ -248,7 +248,7 @@ import eris
 
 assert eris.list_representations()
 assert eris.list_embedders() == ['gearnet_edge']
-blocked = {'torch', 'torchdrug', 'torch_scatter', 'torch_cluster', 'rdkit'}
+blocked = {'torch', 'torchdrug', 'torch_scatter', 'torch_cluster', 'rdkit', 'biotite'}
 loaded = sorted(blocked.intersection(sys.modules))
 if loaded:
     raise SystemExit(f'optional frameworks loaded: {loaded}')

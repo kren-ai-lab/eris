@@ -372,6 +372,68 @@ def test_backbone_geometry_parameters_canonicalize_and_fingerprint_scientific_ch
     )
 
 
+def test_secondary_structure_parameters_are_canonical_and_fingerprinted():
+    minimal = ResiduePointCloudConfig(node_attr_mode=["secondary_structure"])
+    explicit = ResiduePointCloudConfig(
+        node_attr_mode=[
+            {
+                "secondary_structure": {
+                    "provider": "biotite",
+                    "provider_version": "1.6.0",
+                    "algorithm": "P-SEA",
+                    "coordinate_basis": "CA geometry",
+                    "state_order": ["helix", "sheet", "coil", "unassigned"],
+                    "state_mapping": {
+                        "a": "helix",
+                        "b": "sheet",
+                        "c": "coil",
+                        "": "unassigned",
+                    },
+                    "segment_handling": "selected_chain_and_peptide_continuity",
+                    "max_peptide_bond_distance": 2.0,
+                    "missing_ca_policy": "unassigned",
+                }
+            }
+        ]
+    )
+    changed = ResiduePointCloudConfig(
+        node_attr_mode=[{"secondary_structure": {"max_peptide_bond_distance": 1.9}}]
+    )
+
+    assert minimal == explicit
+    baseline = compute_config_fingerprint(
+        minimal.representation_name,
+        minimal.to_fingerprint_dict(),
+        chain_ids=["A"],
+    )
+    assert baseline != compute_config_fingerprint(
+        changed.representation_name,
+        changed.to_fingerprint_dict(),
+        chain_ids=["A"],
+    )
+
+
+def test_sasa_rsa_parameters_are_frozen_and_canonical():
+    config = ResiduePointCloudConfig(node_attr_mode=["sasa", "rsa"])
+    sasa = config.node_attr_mode.to_list()[0]["sasa"]
+    rsa = config.node_attr_mode.to_list()[1]["rsa"]
+
+    assert sasa["provider"] == "biotite"
+    assert sasa["provider_version"] == "1.6.0"
+    assert sasa["probe_radius_angstrom"] == 1.4
+    assert sasa["sphere_point_count"] == 1000
+    assert sasa["sphere_point_distribution"] == "Fibonacci"
+    assert sasa["vdw_radii"] == "ProtOr"
+    assert rsa["maximum_asa_table"]["ALA"] == 129.0
+    assert rsa["maximum_asa_table"]["TRP"] == 285.0
+    assert rsa["clipping"] == "none"
+
+    with pytest.raises(ValueError, match="probe_radius_angstrom"):
+        ResiduePointCloudConfig(node_attr_mode=[{"sasa": {"probe_radius_angstrom": 1.5}}])
+    with pytest.raises(ValueError, match="clipping"):
+        ResiduePointCloudConfig(node_attr_mode=[{"rsa": {"clipping": "unit_interval"}}])
+
+
 def test_relative_direction_parameters_are_canonical_and_residue_graph_only():
     minimal = FeatureMode.from_value(["relative_direction"], kind="edge")
     explicit = FeatureMode.from_value(
