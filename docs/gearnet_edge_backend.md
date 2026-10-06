@@ -93,7 +93,9 @@ Preprocessing is implemented in
 - MSE and all other modified or nonstandard residues are excluded without conversion.
 - Water, ligands, metals, ions, and other HETATM residues are excluded.
 - Each retained residue must have one finite CA coordinate.
-- CA alternate-location selection is `first`.
+- As a backend/checkpoint-specific exception to the general explicit-encoder default, CA
+  alternate-location selection is `first`: the first encountered CA conformer is retained. This
+  frozen choice is recorded in GearNet preprocessing parameters and learned cache identity.
 - A missing or unusable CA fails the whole representation; no residue is silently omitted and no
   `valid_mask` is emitted.
 

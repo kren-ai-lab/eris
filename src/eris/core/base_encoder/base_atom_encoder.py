@@ -1,9 +1,5 @@
-import numpy as np
-
-from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, ClassVar
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import ClassVar
 
 from eris.core.base_encoder.base_encoder import BaseEncoder, EncodingContext
 from eris.core.contracts.granularity import GranularityContract
@@ -19,7 +15,7 @@ class BaseAtomEncoder(BaseEncoder):
     include_h: bool = False
     drop_water: bool = True
     keep_ions: bool = True
-    altloc: str = "first"
+    altloc: str = "max_occupancy"
     amino_acids_only: bool = False
 
     def _load_structure(self, ctx: EncodingContext):

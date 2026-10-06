@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class ResiduePointCloudCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_point_cloud"
-    version: ClassVar[str] = "0.1.2"
+    version: ClassVar[str] = "0.1.3"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_POINT_CLOUD_OUTPUTS
 

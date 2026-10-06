@@ -15,6 +15,7 @@ from eris.core.hashing import sha256_file
 from eris.core.types import StructureInput
 from eris.encoders.graphs.residue_contact_graph import ResidueContactGraph
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
+from eris.features.graph_stats import compute_graph_stats
 
 
 def _atom_line(
@@ -170,6 +171,22 @@ def _edge_rows(artifact) -> dict[tuple[int, int], tuple[float, np.ndarray]]:
         tuple(pair): (float(artifact.data["edge_dist"][row]), artifact.data["edge_attr"][row])
         for row, pair in enumerate(artifact.data["edge_index"].T.tolist())
     }
+
+
+def test_graph_stats_accept_finite_edge_distances() -> None:
+    edge_index = np.asarray([[0], [1]], dtype=np.int64)
+
+    stats = compute_graph_stats(edge_index, np.asarray([1.25]), n_nodes=2)
+
+    assert stats["edge_dist_mean"] == pytest.approx(1.25)
+
+
+@pytest.mark.parametrize("invalid_distance", [np.nan, np.inf, -np.inf])
+def test_graph_stats_reject_nonfinite_edge_distances(invalid_distance: float) -> None:
+    edge_index = np.asarray([[0], [1]], dtype=np.int64)
+
+    with pytest.raises(ValueError, match="finite"):
+        compute_graph_stats(edge_index, np.asarray([invalid_distance]), n_nodes=2)
 
 
 def test_graph_builders_enforce_knn_and_contact_neighborhoods(tmp_path: Path) -> None:
@@ -742,7 +759,7 @@ def test_corrected_graph_cache_version_cannot_reuse_previous_version(
     cache = DiskCache(tmp_path / "cache")
     current = _encode(encoder_type, structure_input)
     stale_meta = deepcopy(current.meta)
-    stale_meta["encoder"]["version"] = "0.1.2"
+    stale_meta["encoder"]["version"] = "0.1.3"
     stale = StructureArtifact(data=dict(current.data), meta=stale_meta)
     stale.validate(strict=True)
 
@@ -764,13 +781,13 @@ def test_corrected_graph_cache_version_cannot_reuse_previous_version(
         "model_index": structure_input.model_index,
         "chain_ids": structure_input.chain_id,
     }
-    old_key = compute_cache_key_v2(encoder_version="0.1.2", **common)
+    old_key = compute_cache_key_v2(encoder_version="0.1.3", **common)
     current_key = compute_cache_key_v2(encoder_version=encoder.version, **common)
     cache.set_v2(old_key, stale)
 
-    assert encoder.version == "0.1.3"
+    assert encoder.version == "0.1.4"
     assert old_key != current_key
     assert cache.get_v2(current_key) is None
     result = encoder.encode(structure_input)
-    assert result.meta["encoder"]["version"] == "0.1.3"
+    assert result.meta["encoder"]["version"] == "0.1.4"
     assert cache.get_v2(current_key) is not None

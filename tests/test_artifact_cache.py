@@ -23,7 +23,7 @@ from eris.core.cache import (
     parser_hint_from_source,
     parser_hint_matches_format,
 )
-from eris.core.hashing import sha256_file, sha256_text
+from eris.core.hashing import sha256_file
 from eris.core.io import StructureLoadError
 from eris.core.types import StructureInput
 from eris.encoders.clouds.atom_point_cloud import AtomPointCloud
@@ -132,7 +132,7 @@ def test_compute_cache_key_v2_is_deterministic_and_has_explicit_inputs():
     parameters = inspect.signature(compute_cache_key_v2).parameters
 
     assert first == second
-    # WU2 intentionally changes cache identity from scalar chain_id to canonical chain_ids.
+    # Canonical collection-valued chain identity must affect the cache key.
     assert first == "f8b4199d0e5e6b6c7ffb4055e5e9d08f1c9fdec2d90b3ace11b824c764fbbc9f"
     assert len(first) == 64
     assert "source" not in parameters

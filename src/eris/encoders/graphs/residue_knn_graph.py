@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 class ResidueKNNGraph(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_knn_graph"
-    version: ClassVar[str] = "0.1.3"
+    version: ClassVar[str] = "0.1.4"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_GRAPH_OUTPUTS
 

@@ -46,7 +46,7 @@ An explicit atom artifact uses `coordinate_source="atom"`. An explicit residue a
 ```json
 {
   "implementation": "eris.encoders.graphs.residue_knn_graph.ResidueKNNGraph",
-  "version": "0.1.2"
+  "version": "0.1.4"
 }
 ```
 
@@ -235,7 +235,7 @@ provenance.
 Cache entries live under `v2/<key>/`. Invalid, corrupt, or older entries are misses; Eris does not
 migrate or delete them automatically.
 
-## Pre-v0.1 Schema v2 finalization
+## Schema v2 multi-chain and pooling finalization
 
 Because v0.1 has not been released, the multi-chain changes finalized Schema v2 without a
 competing legacy format or schema-version increment.

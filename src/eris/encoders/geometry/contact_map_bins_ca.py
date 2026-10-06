@@ -32,7 +32,7 @@ def _validate_class_capacity(config: ResidueContactMapBinsConfig) -> None:
 class ContactMapBinsCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_contact_map_bins"
-    version: ClassVar[str] = "0.1.1"
+    version: ClassVar[str] = "0.1.2"
     representation: ClassVar[BaseRepresentation] = ContactMapBinsRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_CONTACT_MAP_BINS_OUTPUTS
 

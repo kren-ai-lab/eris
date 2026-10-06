@@ -21,12 +21,17 @@ construction; `scale=None` preserves ångström-based geometry.
 | atom | `include_h` | `False` | exclude hydrogen atoms |
 | atom | `drop_water` | `True` | remove water |
 | atom | `keep_ions` | `True` | retain ions when otherwise selected |
-| atom | `altloc` | `"first"` | select the first encountered location |
+| atom | `altloc` | `"max_occupancy"` | highest finite occupancy; ties blank, `A`, then lexicographic |
 | atom | `amino_acids_only` | `False` | do not restrict atom extraction to amino acids |
+
+Atom representations also support explicit nondefault alternate-location modes. `first` selects
+the first encountered conformer per atom name, `all` retains every alternate-conformer atom
+record, and an identifier such as `A` requests that conformer using the documented fallback.
 
 Residue coordinate sources in artifacts are `ca`, `residue_mean`, and `residue_com` for
 `residue_center="ca"`, `"mean"`, and `"com"`. Mean uses selected residue atoms; center of mass
-uses their atomic masses. With `missing_residue_center="skip"`, omitted identities are stored in
+uses their element atomic masses and fails when an element has no valid mass. With
+`missing_residue_center="skip"`, omitted identities are stored in
 `omitted_residue_ids` and counted as `n_omitted_residues`.
 
 `use_cache`, cache objects, output paths, encoder names, and implementation identities are

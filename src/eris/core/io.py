@@ -175,7 +175,7 @@ def _select_atom_altloc(atoms: Iterable[gemmi.Atom], altloc: str) -> Optional[ge
         Iterable of gemmi.Atom objects, usually res["CA"] or atoms grouped by name.
     altloc
         Selection policy:
-          - "first"          : pick the first atom as encountered (legacy-compatible)
+          - "first"          : pick the first atom as encountered
           - "max_occupancy"  : pick atom with max occupancy; tie-break blank > A > others
           - "<LETTER>"       : pick that altloc letter if present, else blank if present, else first
 
@@ -187,7 +187,7 @@ def _select_atom_altloc(atoms: Iterable[gemmi.Atom], altloc: str) -> Optional[ge
     if not atoms_list:
         return None
 
-    policy = (altloc or "first").strip()
+    policy = (altloc or "max_occupancy").strip()
 
     if policy.lower() == "first":
         return atoms_list[0]
@@ -224,7 +224,15 @@ _ATOMIC_MASS = {
 
 def _atomic_mass(atom: gemmi.Atom) -> float:
     sym = atom.element.name.upper() if atom.element is not None else ""
-    return float(_ATOMIC_MASS.get(sym, 12.0))  # fallback
+    if sym in _ATOMIC_MASS:
+        return float(_ATOMIC_MASS[sym])
+    mass = float(atom.element.weight) if atom.element is not None else float("nan")
+    atomic_number = int(atom.element.atomic_number) if atom.element is not None else 0
+    if atomic_number <= 0 or not np.isfinite(mass) or mass <= 0.0:
+        raise StructureLoadError(
+            f"Atomic mass is unavailable for residue-center element {sym or '<missing>'!r}."
+        )
+    return mass
 
 
 def _selected_atoms_from_residue(res: gemmi.Residue, altloc: str) -> List[gemmi.Atom]:
@@ -291,7 +299,7 @@ def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
         np.ndarray shape (3,) or None if center cannot be computed
         bfactor_ca: float
     """
-    # CA-based signals stay anchored to CA for backward compatibility
+    # CA-based signals stay anchored to CA independently of the center mode.
     ca_atom = _select_atom_altloc(res["CA"], altloc) if "CA" in res else None
 
     if ca_atom is not None:
@@ -671,7 +679,7 @@ def _elem_index(atom: gemmi.Atom) -> int:
 
 def _atom_role(atom_name: str) -> int:
     """
-    Very small role encoding (legacy-friendly).
+    Stable compact atom-role encoding.
       0 unknown
       1 backbone N
       2 CA
@@ -721,15 +729,15 @@ def extract_atom_bundle(
     include_h: bool = False,
     drop_water: bool = True,
     keep_ions: bool = True,
-    altloc: str = "first",  # "first" | "max_occupancy" | "A" etc.
+    altloc: str = "max_occupancy",  # "all" | "first" | "max_occupancy" | "A" etc.
     amino_acids_only: bool = False,  # if True, only residues in AA3_TO_AA1
 ) -> Dict[str, np.ndarray]:
     """
     Extract per-atom arrays from a chain.
 
     Altloc policy:
-      - "first": keep atoms as encountered (legacy behavior; may include multiple altlocs)
-      - "max_occupancy" or "<LETTER>": select one atom per atom-name within each residue
+      - "all": retain every atom record, including alternate locations
+      - "first", "max_occupancy", or "<LETTER>": select one atom per atom name
 
     Returns dict with:
       - pos: (N,3) float32
@@ -755,7 +763,7 @@ def extract_atom_bundle(
     seq_pos_res: List[int] = []
     aa_idx_res: List[int] = []
 
-    policy = (altloc or "first").strip()
+    policy = (altloc or "max_occupancy").strip()
 
     res_counter = -1
     for res in chain:
@@ -785,7 +793,7 @@ def extract_atom_bundle(
         aa_idx = AA1_TO_INDEX.get(aa1, UNKNOWN_INDEX)
 
         # Collect atoms based on altloc policy
-        if policy.lower() == "first":
+        if policy.lower() == "all":
             atoms_iter = list(res)
         else:
             # group by atom name; select one per name
@@ -843,7 +851,7 @@ def load_and_extract_atoms(
     include_h: bool = False,
     drop_water: bool = True,
     keep_ions: bool = True,
-    altloc: str = "first",
+    altloc: str = "max_occupancy",
     amino_acids_only: bool = False,
 ) -> LoadedStructureData:
     """

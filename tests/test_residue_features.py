@@ -313,6 +313,70 @@ def test_atom_graph_bfactor_is_raw_by_default(tmp_path: Path) -> None:
     np.testing.assert_array_equal(artifact.data["node_attr"][:, 0], artifact.data["bfactor"])
 
 
+def test_atom_altloc_first_selects_one_record_and_all_is_explicit(tmp_path: Path) -> None:
+    source = tmp_path / "atom-altloc.pdb"
+    source.write_text(
+        "\n".join(
+            [
+                _altloc_atom_line(1, "N", "A", (0.0, 0.0, 0.0), 0.4),
+                _altloc_atom_line(2, "N", "B", (10.0, 0.0, 0.0), 0.8),
+                _altloc_atom_line(3, "CA", " ", (1.0, 0.0, 0.0), 1.0),
+                "TER",
+                "END",
+                "",
+            ]
+        ),
+        encoding="ascii",
+    )
+    structure = StructureInput(source=str(source), chain_id="A")
+
+    default = AtomPointCloud(center=False, use_cache=False).encode(structure)
+    first = AtomPointCloud(center=False, altloc="first", use_cache=False).encode(structure)
+    all_locations = AtomPointCloud(center=False, altloc="all", use_cache=False).encode(structure)
+
+    assert default.data["atom_name"].tolist() == ["N", "CA"]
+    np.testing.assert_array_equal(default.data["pos"][0], [10.0, 0.0, 0.0])
+    assert first.data["atom_name"].tolist() == ["N", "CA"]
+    np.testing.assert_array_equal(first.data["pos"][0], [0.0, 0.0, 0.0])
+    assert all_locations.data["atom_name"].tolist() == ["N", "N", "CA"]
+    np.testing.assert_array_equal(all_locations.data["pos"][:2, 0], [0.0, 10.0])
+    assert default.meta["parameters"]["altloc"] == "max_occupancy"
+    assert first.meta["parameters"]["altloc"] == "first"
+    assert all_locations.meta["parameters"]["altloc"] == "all"
+    assert default.meta["encoder"]["version"] == "0.1.2"
+
+
+def test_residue_center_of_mass_uses_noncarbon_element_mass(tmp_path: Path) -> None:
+    structure = _write_heavy_atom_structure(
+        tmp_path / "mse-center-of-mass.pdb",
+        [
+            (
+                "A",
+                1,
+                "MSE",
+                {
+                    "N": (0.0, 0.0, 0.0),
+                    "CA": (0.0, 0.0, 0.0),
+                    "C": (0.0, 0.0, 0.0),
+                    "O": (0.0, 0.0, 0.0),
+                    "SE": (10.0, 0.0, 0.0),
+                },
+            )
+        ],
+    )
+
+    artifact = ResiduePointCloudCA(
+        residue_center="com",
+        center=False,
+        use_cache=False,
+    ).encode(structure)
+
+    expected_x = 10.0 * 78.96 / (14.007 + 12.011 + 12.011 + 15.999 + 78.96)
+    np.testing.assert_allclose(artifact.data["pos"][0], [expected_x, 0.0, 0.0], rtol=1e-6)
+    assert artifact.meta["coordinate_source"] == "residue_com"
+    assert artifact.meta["encoder"]["version"] == "0.1.3"
+
+
 def test_residue_bfactor_is_raw_by_default(tmp_path: Path) -> None:
     inp = _write_ca_structure(
         tmp_path / "residue-cloud.pdb",

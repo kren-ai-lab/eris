@@ -39,7 +39,7 @@ class AtomPointCloud(BaseAtomEncoder):
 
     # Identity
     name: ClassVar[str] = "atom_point_cloud"
-    version: ClassVar[str] = "0.1.1"
+    version: ClassVar[str] = "0.1.2"
     representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
     output_declarations_v2: ClassVar = ATOM_POINT_CLOUD_OUTPUTS
 

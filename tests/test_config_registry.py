@@ -37,7 +37,7 @@ ATOM_SELECTION = {
     "include_h": False,
     "drop_water": True,
     "keep_ions": True,
-    "altloc": "first",
+    "altloc": "max_occupancy",
     "amino_acids_only": False,
 }
 RESIDUE_SELECTION = {
@@ -225,7 +225,7 @@ def test_invalid_values_fail_during_construction(factory):
         lambda: ResiduePointCloudConfig(missing_residue_center="nan"),
     ],
 )
-def test_residue_loader_policies_remain_frozen_in_m2_2(factory):
+def test_residue_loader_policies_remain_frozen(factory):
     with pytest.raises((TypeError, ValueError)):
         factory()
 
@@ -235,6 +235,7 @@ def test_valid_non_default_edge_cases_remain_representable():
     assert atom.include_hetero is False
     assert atom.keep_ions is True
     assert atom.altloc == "A"
+    assert AtomPointCloudConfig(altloc=" all ").altloc == "all"
 
     local = ResidueKNNGraphConfig(knn_mode="local", cutoff=None)
     global_with_cutoff = ResidueKNNGraphConfig(knn_mode=" GLOBAL ", cutoff=99)

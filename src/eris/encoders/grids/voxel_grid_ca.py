@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class VoxelGridCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_voxel_grid"
-    version: ClassVar[str] = "0.1.1"
+    version: ClassVar[str] = "0.1.2"
     representation: ClassVar[BaseRepresentation] = VoxelGridRepresentation()
     output_declarations_v2: ClassVar = VOXEL_OUTPUTS
 

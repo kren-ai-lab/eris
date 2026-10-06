@@ -101,8 +101,8 @@ def compute_graph_stats(
         ed = np.asarray(edge_dist, dtype=np.float32).reshape(-1)
         if ed.shape[0] != E:
             raise ValueError(f"edge_dist must have length E={E}, got {ed.shape}")
-        # remove any weird values safely
-        ed = np.nan_to_num(ed, nan=0.0, posinf=0.0, neginf=0.0)
+        if not np.isfinite(ed).all():
+            raise ValueError("edge_dist must contain only finite values")
         non_loop_dist = ed[non_loop_mask]
 
         if non_loop_dist.size > 0:

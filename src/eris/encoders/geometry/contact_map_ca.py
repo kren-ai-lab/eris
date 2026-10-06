@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 class ContactMapCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_contact_map"
-    version: ClassVar[str] = "0.1.1"
+    version: ClassVar[str] = "0.1.2"
     representation: ClassVar[BaseRepresentation] = ContactMapRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_CONTACT_MAP_OUTPUTS
 

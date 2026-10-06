@@ -74,7 +74,7 @@ def _explicit_artifact() -> StructureArtifact:
         ],
         feature_keys=build_feature_keys(node_attr_keys=["mass", "charge"]),
         counts={"n_nodes": 2, "n_edges": 2, "n_self_loops": 0},
-        extensions={"tests.m3_5": {"reviewed": True}},
+        extensions={"tests.schema_v2": {"reviewed": True}},
     )
     return StructureArtifact(data=data, meta=meta)
 
@@ -365,20 +365,20 @@ def test_learned_v2_validate_finalize_and_save(tmp_path):
 
 def test_valid_v2_finalize_canonicalizes_only_after_validation():
     artifact = _explicit_artifact()
-    artifact.meta["extensions"]["tests.m3_5"]["labels"] = ("first", "second")
+    artifact.meta["extensions"]["tests.schema_v2"]["labels"] = ("first", "second")
     original_meta = artifact.meta
     data_before = {name: array.copy() for name, array in artifact.data.items()}
 
     artifact.validate()
     assert artifact.meta is original_meta
-    assert artifact.meta["extensions"]["tests.m3_5"]["labels"] == (
+    assert artifact.meta["extensions"]["tests.schema_v2"]["labels"] == (
         "first",
         "second",
     )
 
     artifact.finalize()
     assert artifact.meta is not original_meta
-    assert artifact.meta["extensions"]["tests.m3_5"]["labels"] == [
+    assert artifact.meta["extensions"]["tests.schema_v2"]["labels"] == [
         "first",
         "second",
     ]
@@ -414,7 +414,7 @@ def test_unsafe_v2_payload_fails_before_filesystem_mutation(tmp_path, unsafe):
 @pytest.mark.parametrize("bad_value", [float("nan")], ids=["nan"])
 def test_non_finite_v2_metadata_fails_without_mutation(tmp_path, bad_value):
     artifact = _explicit_artifact()
-    artifact.meta["extensions"]["tests.m3_5"]["non_finite"] = bad_value
+    artifact.meta["extensions"]["tests.schema_v2"]["non_finite"] = bad_value
     original_meta = artifact.meta
     data_before = {name: array.copy() for name, array in artifact.data.items()}
     target = tmp_path / "non-finite"
@@ -424,7 +424,7 @@ def test_non_finite_v2_metadata_fails_without_mutation(tmp_path, bad_value):
 
     assert isinstance(raised.value.__cause__, ArtifactSchemaV2ValidationError)
     assert artifact.meta is original_meta
-    assert artifact.meta["extensions"]["tests.m3_5"]["non_finite"] is bad_value
+    assert artifact.meta["extensions"]["tests.schema_v2"]["non_finite"] is bad_value
     _assert_data_unchanged(artifact, data_before)
     assert not target.exists()
 

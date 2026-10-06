@@ -34,7 +34,7 @@ class AtomKNNGraph(BaseAtomEncoder):
 
     # Identity
     name: ClassVar[str] = "atom_knn_graph"
-    version: ClassVar[str] = "0.1.1"
+    version: ClassVar[str] = "0.1.2"
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
     output_declarations_v2: ClassVar = ATOM_GRAPH_OUTPUTS
 

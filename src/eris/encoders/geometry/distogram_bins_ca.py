@@ -32,7 +32,7 @@ def _validate_class_capacity(config: ResidueDistogramBinsConfig) -> None:
 class DistogramBinsCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_distogram_bins"
-    version: ClassVar[str] = "0.1.1"
+    version: ClassVar[str] = "0.1.2"
     representation: ClassVar[BaseRepresentation] = DistogramBinsRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_DISTOGRAM_BINS_OUTPUTS
 

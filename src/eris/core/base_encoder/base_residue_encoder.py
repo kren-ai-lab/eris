@@ -1,9 +1,5 @@
-import numpy as np
-
-from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, ClassVar
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import Any, ClassVar
 
 from eris.core.base_encoder.base_encoder import BaseEncoder, EncodingContext
 from eris.core.contracts.granularity import GranularityContract

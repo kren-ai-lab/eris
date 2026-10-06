@@ -97,7 +97,7 @@ def _normalize_altloc(value: Any) -> str:
     if not normalized:
         raise ValueError("altloc must not be empty")
     lowered = normalized.lower()
-    if lowered in {"first", "max_occupancy"}:
+    if lowered in {"all", "first", "max_occupancy"}:
         return lowered
     return normalized.upper()
 
@@ -331,7 +331,7 @@ class _AtomSelectionConfig(_CommonGeometryConfig):
         metadata=_metadata("Keep ion residues when otherwise selected."),
     )
     altloc: str = field(
-        default="first",
+        default="max_occupancy",
         metadata=_metadata("Alternate-location selection policy."),
     )
     amino_acids_only: bool = field(
@@ -401,7 +401,7 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
         )
         amino_acids_only = _require_bool("amino_acids_only", self.amino_acids_only)
         if not amino_acids_only:
-            raise ValueError("amino_acids_only must remain True in M2.2")
+            raise ValueError("amino_acids_only must remain True for residue representations")
         object.__setattr__(self, "amino_acids_only", amino_acids_only)
         object.__setattr__(
             self,
