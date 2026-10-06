@@ -19,7 +19,7 @@ def pack(
     """
 
     try:
-        rows = eris.pack_artifacts(artifact_root, out)
+        rows = eris.pack(artifact_root, out)
     except (PackIndexError, OSError) as error:
         usage_error(str(error))
 

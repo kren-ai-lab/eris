@@ -112,7 +112,7 @@ def batch_export(
     matrix_as_channel: bool = True,
 ) -> dict[str, int]:
     """
-    Batch export previously encoded successful artifacts from a canonical M7 result manifest.
+    Export successful artifacts from a canonical batch-result manifest.
 
     ``manifest_path`` must use ``BatchResultRow`` fields. Failed rows are counted explicitly
     and never treated as artifacts. Successful rows must point to strict-valid Artifact Schema

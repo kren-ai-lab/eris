@@ -1,4 +1,4 @@
-from typing import Any, Dict, ClassVar
+from typing import Any, ClassVar
 
 from eris.core.artifact_schema_v2 import build_counts, build_feature_keys
 from eris.core.base_encoder import EncodingContext

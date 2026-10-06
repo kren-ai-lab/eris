@@ -13,28 +13,28 @@ from eris.exceptions import RepresentationNotFoundError
 
 __version__ = distribution_version("eris-lib")
 
-# M7 workflow entry points.  These imports expose the existing canonical boundaries;
-# implementation remains in the pipelines/export modules.
-from eris.export.pyg import save_artifact_to_pyg, to_pyg  # noqa: F401
-from eris.export.torch import save_artifact_to_torch, to_torch  # noqa: F401
-from eris.pipelines.batch_encode import batch_embed, batch_encode  # noqa: F401
-from eris.pipelines.batch_export import batch_export  # noqa: F401
-from eris.pipelines.pack import pack_artifacts  # noqa: F401
-
-export_torch = save_artifact_to_torch
-export_pyg = save_artifact_to_pyg
-pack = pack_artifacts
+from eris.export.pyg import to_pyg
+from eris.export.torch import to_torch
+from eris.pipelines.batch_encode import batch_embed, batch_encode
+from eris.pipelines.batch_export import batch_export
+from eris.pipelines.pack import pack_artifacts as pack
 
 __all__ = [
     "RepresentationNotFoundError",
     "__version__",
-    "encode",
+    "batch_embed",
+    "batch_encode",
+    "batch_export",
     "embed",
+    "encode",
     "get_embedder_info",
     "get_representation_info",
     "list_embedders",
     "list_representations",
+    "pack",
     "pool",
+    "to_pyg",
+    "to_torch",
 ]
 
 # register built-in encoders

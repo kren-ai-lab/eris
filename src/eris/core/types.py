@@ -4,8 +4,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 import os
 
-from eris.core.artifacts import StructureArtifact
-
 
 @dataclass(frozen=True)
 class StructureInput:

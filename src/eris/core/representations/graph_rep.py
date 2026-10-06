@@ -1,4 +1,4 @@
-from typing import Any, Dict, ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 

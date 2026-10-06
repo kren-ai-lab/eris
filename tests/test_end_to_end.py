@@ -101,7 +101,7 @@ def _synthetic_learned_artifact(source: Path) -> StructureArtifact:
     )
 
 
-def test_m7_explicit_public_workflow_preserves_identity_failures_and_resume(
+def test_explicit_public_workflow_preserves_identity_failures_and_resume(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -162,9 +162,7 @@ def test_m7_explicit_public_workflow_preserves_identity_failures_and_resume(
     ]
 
 
-def test_m7_explicit_tensor_and_pyg_workflow(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_explicit_tensor_and_pyg_workflow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pytest.importorskip("torch")
     from eris.datasets.collate import collate_graph
 
@@ -194,7 +192,7 @@ def test_m7_explicit_tensor_and_pyg_workflow(
     assert pyg_data.edge_index.shape[1] == artifact.data["edge_index"].shape[1]
 
 
-def test_m7_learned_public_workflow_uses_canonical_artifacts_and_torch(
+def test_learned_public_workflow_uses_canonical_artifacts_and_torch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -230,7 +228,7 @@ def test_m7_learned_public_workflow_uses_canonical_artifacts_and_torch(
     np.testing.assert_array_equal(sample["node_ids"], artifact.data["node_ids"])
 
 
-def test_m7_cli_workflow_uses_the_same_public_boundaries(
+def test_cli_workflow_uses_the_same_public_boundaries(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -252,8 +250,6 @@ def test_m7_cli_workflow_uses_the_same_public_boundaries(
         ],
     )
     assert result.exit_code == 0, result.output
-    artifact_dir = artifact_root / "cli" / "residue_contact_graph"
-
     index_path = tmp_path / "index.csv"
     result = runner.invoke(app, ["pack", str(artifact_root), "--out", str(index_path)])
     assert result.exit_code == 0, result.output
@@ -289,7 +285,7 @@ def test_m7_cli_workflow_uses_the_same_public_boundaries(
     assert runner.invoke(app, ["embed", "batch"]).exit_code == 2
 
 
-def test_m7_cli_export_workflow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_export_workflow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pytest.importorskip("torch")
     manifest = tmp_path / "structures.csv"
     _write_structure_manifest(manifest, [("cli", PDB)])

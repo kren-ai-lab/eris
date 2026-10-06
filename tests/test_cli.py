@@ -267,6 +267,7 @@ def test_batch_from_folder_delegates_sorted_rows(monkeypatch, tmp_path):
     assert [row.id for row in captured["rows"]] == ["a", "b"]
     assert captured["representation"] == "residue_knn_graph"
     assert captured["params"] == {"k": 8}
+    assert captured["use_cache"] is True
 
 
 def test_batch_from_folder_rejects_duplicate_stems(tmp_path):

@@ -2,7 +2,7 @@ import numpy as np
 
 from typing import Dict, Any, List
 
-from eris.features.utils import parse_mode, onehot, safe_float, ensure_1d
+from eris.features.utils import safe_float
 from eris.features.feature_registry import register_atom_node_feature, FeatureSpec
 
 # -----------------------------

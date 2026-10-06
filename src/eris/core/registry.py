@@ -273,7 +273,3 @@ def resolve_representation_config(
         return info.config_type(**requested)
     except (TypeError, ValueError) as error:
         raise ConfigError(f"Invalid parameters for {representation!r}: {error}") from error
-
-
-def list_encoder_info() -> list[RepresentationInfo]:
-    return [get_encoder_info(name) for name in list_encoders()]

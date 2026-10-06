@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Union, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from eris.features.feature_builders import build_from_registry_voxel

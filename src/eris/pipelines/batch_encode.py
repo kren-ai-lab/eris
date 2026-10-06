@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -72,19 +72,7 @@ def _coerce_rows(
     return materialized
 
 
-def _resolve_representation(
-    representation: str | None,
-    *,
-    encoders: Sequence[str] | None,
-) -> str:
-    if representation is not None and encoders is not None:
-        raise ConfigError("representation cannot be combined with encoders")
-    if representation is None:
-        if encoders is None:
-            raise ConfigError("representation is required")
-        if len(encoders) != 1:
-            raise ConfigError("M7.2 batch execution accepts exactly one representation")
-        representation = encoders[0]
+def _resolve_representation(representation: str) -> str:
     if not isinstance(representation, str) or not representation.strip():
         raise ConfigError("representation must be a non-empty string")
     return representation.strip()
@@ -100,16 +88,11 @@ def _resolve_artifact_root(
     return Path(artifact_root)
 
 
-def _normalize_explicit_params(
-    representation: str,
-    params: Mapping[str, Any] | None,
-) -> dict[str, Any]:
+def _normalize_explicit_params(params: Mapping[str, Any] | None) -> dict[str, Any]:
     if params is None:
         return {}
     if not isinstance(params, Mapping):
         raise TypeError("params must be a mapping or None")
-    if set(params) == {representation} and isinstance(params[representation], Mapping):
-        return dict(params[representation])
     return dict(params)
 
 
@@ -144,7 +127,7 @@ def _resolve_row_explicit_configs(
     params: Mapping[str, Any] | None,
     params_by_id: Mapping[str, Mapping[str, Any]] | None,
 ) -> dict[str, CanonicalRepresentationConfig]:
-    global_params = _normalize_explicit_params(representation, params)
+    global_params = _normalize_explicit_params(params)
     if params_by_id is None:
         row_overrides: dict[str, Mapping[str, Any]] = {}
     else:
@@ -519,8 +502,8 @@ def _run_batch(
 def batch_encode(
     rows: Iterable[StructureManifestRow] | str | Path | None = None,
     *,
-    representation: str | None = None,
-    artifact_root: str | Path | None = None,
+    representation: str,
+    artifact_root: str | Path,
     params: Mapping[str, Any] | None = None,
     params_by_id: Mapping[str, Mapping[str, Any]] | None = None,
     use_cache: bool = True,
@@ -529,12 +512,10 @@ def batch_encode(
     fail_fast: bool = False,
     results_path: str | Path | None = None,
     manifest_path: str | Path | None = None,
-    encoders: Sequence[str] | None = None,
-    no_cache: bool | None = None,
 ) -> list[BatchResultRow]:
     """Run one explicit representation with optional shallow per-row overrides."""
 
-    representation_name = _resolve_representation(representation, encoders=encoders)
+    representation_name = _resolve_representation(representation)
     artifact_root_path = _resolve_artifact_root(artifact_root)
     structure_rows = _coerce_rows(rows, manifest_path=manifest_path)
     explicit_configs_by_id = _resolve_row_explicit_configs(
@@ -543,8 +524,7 @@ def batch_encode(
         params=params,
         params_by_id=params_by_id,
     )
-    effective_use_cache = use_cache if no_cache is None else not no_cache
-    _coerce_bool(effective_use_cache, "use_cache")
+    _coerce_bool(use_cache, "use_cache")
 
     return _run_batch(
         structure_rows,
@@ -566,7 +546,7 @@ def batch_encode(
             chain_id=row.chain,
             model_index=row.model,
             config=explicit_configs_by_id[row.id],
-            use_cache=effective_use_cache,
+            use_cache=use_cache,
         ),
     )
 

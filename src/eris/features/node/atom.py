@@ -1,7 +1,5 @@
 import numpy as np
 
-from typing import List, Optional, Tuple, Union
-
 from eris.features.feature_builders import build_from_registry, validate_feature_mode
 from eris.features.feature_registry import ATOM_NODE_REGISTRY
 

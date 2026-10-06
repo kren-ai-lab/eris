@@ -126,18 +126,3 @@ def register_grid_voxel_feature(spec: VoxelFeatureSpec):
         raise ValueError(f"Duplicate feature token: {spec.token}")
     GRID_VOXEL_REGISTRY[spec.token] = spec
     return spec
-
-
-# Can be used for any feature.
-# Implement GRAPH_STATS/etc if necessary.
-#   Remember to change the corresponding encoder and core/represesentation
-#   to pass keys to ctx (in encoder) and then use ctx to
-#   build the feature keys (in corresponding representation)
-#
-# Example:
-# GRAPH_STATS: Dict[str, FeatureSpec] = {}
-# def register_edge_graph_feature(spec: FeatureSpec):
-#     if spec.token in GRAPH_STATS:
-#         raise ValueError(f"Duplicate feature token: {spec.token}")
-#     GRAPH_STATS[spec.token] = spec
-#     return spec

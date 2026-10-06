@@ -81,7 +81,7 @@ def encode(
             resume=resume,
             overwrite=overwrite,
             fail_fast=fail_fast,
-            no_cache=no_cache,
+            use_cache=not no_cache,
             params=parse_json_object(params),
         )
     except (
@@ -182,7 +182,7 @@ def from_folder(
             resume=resume,
             overwrite=overwrite,
             fail_fast=fail_fast,
-            no_cache=no_cache,
+            use_cache=not no_cache,
             params=parse_json_object(params),
         )
     except (

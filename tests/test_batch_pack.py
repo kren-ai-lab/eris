@@ -25,6 +25,7 @@ from eris.core.learned.execution import (
     build_execution_provenance,
 )
 from eris.core.learned.types import StructuralEmbeddingResult
+from eris.exceptions import ConfigError
 from eris.pipelines.batch_encode import batch_embed, batch_encode
 from eris.pipelines.manifest import (
     BatchResultRow,
@@ -235,6 +236,23 @@ def test_batch_encode_uses_artifact_root_only(tmp_path: Path) -> None:
             [StructureManifestRow(id="protein", path=str(PDB))],
             representation="residue_contact_map",
             out=tmp_path,
+        )
+
+    import inspect
+
+    parameters = inspect.signature(batch_encode).parameters
+    assert "encoders" not in parameters
+    assert "no_cache" not in parameters
+
+
+def test_batch_encode_rejects_pre_release_nested_parameter_translation(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="Unknown parameters"):
+        batch_encode(
+            [StructureManifestRow(id="protein", path=str(PDB))],
+            representation="residue_contact_map",
+            artifact_root=tmp_path,
+            params={"residue_contact_map": {"cutoff": 8.0}},
+            use_cache=False,
         )
 
 

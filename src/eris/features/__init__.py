@@ -1,5 +1,5 @@
-from eris.features.edge import features_edge
-from eris.features.grid import features_grid
-from eris.features.node import features_atom, features_residue
+from eris.features import edge as _edge  # noqa: F401 - import registers edge features
+from eris.features import grid as _grid  # noqa: F401 - import registers grid features
+from eris.features import node as _node  # noqa: F401 - import registers node features
 
 __all__ = []

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Set, Sequence, Any, Tuple, Dict
+from typing import Any, Dict, List, Sequence, Tuple
 
 import numpy as np
 

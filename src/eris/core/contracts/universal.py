@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import Any, Dict, ClassVar
+from typing import ClassVar
 
 from eris.core.contracts.base_contract import BaseContract
 

@@ -10,6 +10,7 @@ import eris
 import eris.discovery as discovery
 from eris.core.learned import BackendAvailability, EmbedderRegistry, learned_registry
 from eris.core.learned.backends.gearnet import GearNetEdgeConfig
+from eris.core.learned.backends.gearnet.dependencies import probe_gearnet_availability
 from eris.core.registry import get_encoder_info, list_encoders
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.exceptions import RepresentationNotFoundError
@@ -70,21 +71,32 @@ def _registry(*, availability_probe) -> EmbedderRegistry:
     return registry
 
 
-def test_root_exports_public_m6_surface_without_learned_execution():
+def test_root_exports_documented_public_surface_without_learned_execution():
     assert eris.__all__ == [
         "RepresentationNotFoundError",
         "__version__",
-        "encode",
+        "batch_embed",
+        "batch_encode",
+        "batch_export",
         "embed",
+        "encode",
         "get_embedder_info",
         "get_representation_info",
         "list_embedders",
         "list_representations",
+        "pack",
         "pool",
+        "to_pyg",
+        "to_torch",
     ]
     assert eris.RepresentationNotFoundError is RepresentationNotFoundError
     assert callable(eris.encode)
     assert hasattr(eris, "embed")
+    assert not hasattr(eris, "export_pyg")
+    assert not hasattr(eris, "export_torch")
+    assert not hasattr(eris, "pack_artifacts")
+    assert not hasattr(eris, "save_artifact_to_pyg")
+    assert not hasattr(eris, "save_artifact_to_torch")
 
 
 def test_public_listings_are_exact_deterministic_and_registry_backed():
@@ -226,9 +238,14 @@ def test_get_embedder_info_probes_once_without_constructing_backend(monkeypatch)
     reason="GearNet modern-runtime discovery check targets Python 3.11-3.13",
 )
 def test_real_embedder_discovery_supports_modern_core_python():
+    availability = probe_gearnet_availability()
     info = eris.get_embedder_info("gearnet_edge")
 
-    assert info["availability"] == {"available": True, "reason": None}
+    assert "gearnet_edge" in eris.list_embedders()
+    assert info["availability"] == {
+        "available": availability.available,
+        "reason": availability.reason,
+    }
 
 
 def test_representation_info_does_not_instantiate_encoder(monkeypatch):

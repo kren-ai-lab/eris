@@ -9,3 +9,13 @@ from eris.core.representations.distogram_rep import (
     DistogramRepresentation,
     DistogramBinsRepresentation,
 )
+
+__all__ = [
+    "ContactMapBinsRepresentation",
+    "ContactMapRepresentation",
+    "DistogramBinsRepresentation",
+    "DistogramRepresentation",
+    "GraphRepresentation",
+    "PointCloudRepresentation",
+    "VoxelGridRepresentation",
+]

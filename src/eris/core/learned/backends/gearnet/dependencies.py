@@ -50,13 +50,6 @@ def _numeric_release(version: str) -> tuple[int, ...] | None:
     return tuple(int(part) for part in parts)
 
 
-def _compare_releases(left: tuple[int, ...], right: tuple[int, ...]) -> int:
-    width = max(len(left), len(right))
-    normalized_left = left + (0,) * (width - len(left))
-    normalized_right = right + (0,) * (width - len(right))
-    return (normalized_left > normalized_right) - (normalized_left < normalized_right)
-
-
 def _matches_requirement(installed: str, requirement: str) -> bool:
     public = _public_version(installed)
     if requirement.startswith("=="):

@@ -15,19 +15,19 @@ import numpy as np
 from pathlib import Path
 
 from eris import exceptions as exc
+from eris.core.artifacts import StructureArtifact
 from eris.core.cache import (
     DiskCache,
     compute_cache_key_v2,
     parser_hint_from_source,
     parser_hint_matches_format,
 )
-from eris.core.types import StructureArtifact, StructureInput
+from eris.core.types import StructureInput
 from eris.core.contracts import UniversalContract
 
 
 if TYPE_CHECKING:
     from eris.core.cache import DiskCache
-    from eris.core.contracts.base_contract import BaseContract
     from eris.core.contracts.granularity import GranularityContract
     from eris.core.representations.base_rep import BaseRepresentation
 
@@ -75,7 +75,7 @@ class BaseEncoder(ABC):
     """
 
     # Identity
-    version: ClassVar[str] = "0.1.0"  # Extraer desde versión instalada / pyproject
+    version: ClassVar[str] = "0.1.0"
     name: ClassVar[str]
     representation_family: ClassVar[str] = "explicit"
     granularity_contract: ClassVar[GranularityContract]
