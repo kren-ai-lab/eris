@@ -1,11 +1,9 @@
 # Structural feature contracts
 
-This document freezes the scientific and persistence contracts for the final
-Eris v0.1 structural-feature work. The contracts in this document are
-**approved targets**. Multi-chain selection, physical polymer continuity,
-backbone torsions, residue local-frame edge geometry, inter-chain interface
-features, and structure-level pooling are implemented; the remaining groups
-become runtime claims only after their focused work units land with tests.
+This document is the authoritative scientific and persistence contract for the
+final Eris v0.1 structural-feature implementation. The contracts are frozen
+and implemented; scientific feature development for v0.1 is complete. They are
+not a roadmap of planned behavior.
 
 The existing architecture remains authoritative: public APIs build canonical
 configuration, resolve registered implementations, run feature-local optional
@@ -16,8 +14,9 @@ as public API.
 
 ## Contract status
 
-All nine contract groups needed for the final v0.1 roadmap are frozen. None is
-blocked on a scientific or provider decision.
+All contract groups needed for the final v0.1 scientific implementation are
+frozen and implemented. Release-environment certification is tracked separately
+in [`HANDOFF_V0.1.md`](HANDOFF_V0.1.md).
 
 | Contract group | Status | Frozen decision |
 | --- | --- | --- |
@@ -42,7 +41,7 @@ provenance, the configuration fingerprint, and scientific cache identity.
 
 ### Chain selection
 
-The existing public `chain_id` argument evolves to accept:
+The public `chain_id` argument accepts:
 
 - `None`: all relevant protein/polymer chains in the selected model;
 - one string such as `"A"`: exactly one chain; or
@@ -91,17 +90,13 @@ apply their explicitly configured atom filters.
 
 ### External residue features
 
-For external residue-feature input, `residue_ids` remain authoritative. The
-future multi-chain format replaces the scalar `chain_id` field with required
-`chain_ids`, a one-dimensional Unicode array containing the selected chains in
-canonical model order. Its values must be unique and must exactly match the
-resolved selected-chain tuple. A single-chain file therefore contains, for
-example, `chain_ids = ["A"]`.
-
-The migration is clean and pre-release: after the implementation work unit
-lands, the old scalar field is rejected rather than supported as a competing
-permanent contract. Array row order continues to be validated against
-`residue_ids`; rows are never reordered silently.
+For external residue-feature input, `residue_ids` remain authoritative.
+Required `chain_ids` is a one-dimensional Unicode array containing the
+selected chains in canonical model order. Its values must be unique and must
+exactly match the resolved selected-chain tuple. A single-chain file therefore
+contains, for example, `chain_ids = ["A"]`. The obsolete scalar `chain_id`
+field is rejected. Array rows are aligned by exact residue ID as specified in
+[`external_residue_features.md`](external_residue_features.md).
 
 ## Polymer continuity and chain breaks
 
@@ -469,24 +464,40 @@ features use `NaN`; optional categorical features use their documented
 unassigned state. No silent padding, truncation, coordinate reconstruction,
 residue rebuilding, topology inference, or replacement with zero is allowed.
 
+The edge-case policy is summarized here; feature-specific details above remain
+authoritative.
+
+| Case | Frozen behavior |
+| --- | --- |
+| Missing CA | Residue centers follow the configured `skip` or `error` policy. Features requiring CA use their documented missing value; secondary structure is unassigned. |
+| Missing N or C | Backbone torsions or N-CA-C local frames that require the atom are undefined (`NaN` values/invalid frame); nodes are not removed for optional geometry. |
+| Incomplete side chain | Each chemically defined chi angle with a missing required atom is `NaN`; no side-chain reconstruction is performed. |
+| Alternate locations | Residue atoms use the deterministic maximum-finite-occupancy policy and tie-break defined above. Atom representations retain alternatives only by explicit configuration. |
+| Insertion codes | Included in exact residue identity and preserved in structural order; numbering alone does not establish peptide continuity. |
+| Noncanonical residues | Parser-classified polymer amino acids remain with exact names/IDs. Canonical-only chi definitions and normalization are `NaN`; no residue remapping occurs. |
+| Heteroatoms, water, ions, ligands, cofactors | Not residue-graph nodes or interface/SASA occluders. Atom representations follow their explicit atom filters; polymer-classified noncanonical amino acids are retained as residues. |
+| Multiple models | Exactly one explicit zero-based `model_index` is selected; models are not averaged. |
+| Physical chain breaks | Continuity requires consecutive polymer residues and a present C-N distance within the configured inclusive cutoff; sequential torsions/relations do not cross a break. Spatial graph edges may still cross it. |
+| Multiple selected chains | Chains are unique, resolved in model order, and have chain-qualified residue IDs. Chain-local continuity never crosses chains; spatial edges and interface analysis may span selected chains. |
+
 ## Artifact and schema assessment
 
-The following is the frozen Schema v2 assessment. Because v0.1 is unreleased,
-the required additive metadata/type declarations finalize Schema v2 without a
-version bump; the implementation must update validators, serializers, fixtures,
-and contract tests atomically.
+The following records the final Schema v2 implementation. Because v0.1 is
+unreleased, the additive declarations finalized Schema v2 without a version
+bump; validators, serializers, fixtures, and contract tests use this one
+canonical contract.
 
-| Capability | Existing v2 sufficient? | Metadata/config extension | New data array/key? | Version bump? |
-| --- | --- | --- | --- | --- |
-| Multi-chain identity | No | Replace `input.chain_id` with collection-valued `input.chain_ids`; record canonical selection | Aligned residue `chain_id` | No; pre-release v2 finalization |
-| External multi-chain features | No | Replace external scalar `chain_id` with canonical `chain_ids` | External `chain_ids` array | No; pre-release v2 finalization |
-| Continuity and torsions | Yes | Full parameters and provenance | Ordered node-attribute keys | No |
-| Local frames/directions | Yes, with declared auxiliary roles | Frame convention and epsilon | Optional frame/mask arrays; edge-attribute keys | No |
-| Secondary structure | Yes | Provider, version, convention, and mapping | Ordered node-attribute keys | No |
-| SASA/RSA | Yes | Calculation context, algorithm, references, and units | Ordered node-attribute keys | No |
-| Interface features | Yes | Contact definition and context | Node/edge keys and ordered residue-ID subset | No |
-| Structure pooling | No | Mode, NaN policy, source identity, and fingerprint | `pooled_attr` plus ordered keys | No; additive pre-release v2 extension |
-| Altloc/noncanonical/model policy | Yes | Canonical selection parameters and provenance | No new required array | No |
+| Capability | Implemented Schema v2 contract | Data/key contract | Version bump? |
+| --- | --- | --- | --- |
+| Multi-chain identity | Canonical `input.chain_ids`, selection parameters, and provenance | Aligned residue `chain_id` | No |
+| External multi-chain features | Canonical chain/model identity and content fingerprint | External `chain_ids` and aligned feature keys | No |
+| Backbone and side-chain torsions | Modes, atom convention, units, continuity/missing policy, definitions, and provenance | Fixed ordered node-feature keys, including chi1–chi4 | No |
+| Local frames/directions | Frame convention, epsilon, and missing policy | Optional declared frame/mask arrays; ordered edge keys | No |
+| Secondary structure | Provider, version, algorithm, segment handling, and state mapping | Ordered node-feature keys | No |
+| SASA/RSA | Calculation context, algorithm, reference table, and units | Ordered node-feature keys | No |
+| Interface features | Contact definition, cutoff, selection, and context | Node/edge keys and ordered residue-ID subset | No |
+| Structure pooling | Mode, NaN policy, source identity, and fingerprint | `pooled_attr` plus ordered keys | No |
+| Altloc/noncanonical/model policy | Canonical selection parameters and provenance | No new required array | No |
 
 Arrays use explicit dtypes and exact shapes. String arrays are Unicode, not
 object arrays. Feature key order remains scientifically significant. The
@@ -500,13 +511,12 @@ GearNet-internal topology. Learned embeddings remain unable to reveal or
 reconstruct internal graph edges. PyG export may use only topology already
 public in a source artifact.
 
-Each implementation work unit must reuse canonical configuration, validators,
+Every implementation must reuse canonical configuration, validators,
 serializers, hashes, and registries. Provider imports stay lazy and
 feature-local. No runtime network access, automatic checkpoint download,
 parallel permanent schema, silent legacy fallback, or cache-identity shortcut
 is permitted.
 
-The recommended first implementation work unit after this freeze is the small
-P0 closure for atomic B-factor semantics and the required external-feature
-contract tests. Multi-chain selection and the Schema v2 finalization should
-follow as one atomic work unit before any derived multi-chain feature lands.
+All listed behaviors are implemented. Future changes to scientific behavior
+must be treated as explicit contract changes, not handoff or release-hardening
+cleanup.

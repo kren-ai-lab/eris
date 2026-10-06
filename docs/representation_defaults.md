@@ -67,6 +67,7 @@ Registered residue feature tokens are:
 | `bfactor_ca` | raw CA B-factor |
 | `flags` | glycine, proline, unknown, and CA-presence flags |
 | `backbone_geometry` | physical-continuity-aware phi, psi, and omega torsions |
+| `sidechain_geometry` | standard residue-specific chi1–chi4 torsions |
 | `external` | aligned external numerical values |
 | `interface` | opt-in inter-chain polymer-heavy-atom interface flag for residue graphs |
 | `secondary_structure` | Biotite P-SEA helix/sheet/coil/unassigned one-hot block |
@@ -88,6 +89,9 @@ The `external` token follows [the external residue feature contract](external_re
 `backbone_geometry` defaults to `mode="sincos"`; `raw` emits signed radians and `both` emits
 the six periodic columns followed by the three raw columns. Undefined values remain `NaN`, and
 physical continuity uses an inclusive `max_peptide_bond_distance=2.0` A cutoff.
+`sidechain_geometry` uses the same `sincos` (default), `raw`, and `both` modes with a fixed
+chi1–chi4 schema. Chemically undefined angles, missing atoms, unsupported residues, and
+degenerate geometry remain `NaN`; side chains are not reconstructed.
 
 `secondary_structure` runs Biotite 1.6 P-SEA independently for each selected chain and physical
 continuity segment. Its four columns are ordered helix, sheet, coil, and unassigned. `sasa` and
@@ -231,11 +235,10 @@ as a non-default output dtype.
 
 ## Final-v0.1 structural defaults
 
-The multi-chain, selected-model, alternate-location, physical-continuity, backbone-torsion,
-local-frame, secondary-structure, solvent-accessibility, interface, and pooling behavior below is
-implemented. Side-chain torsions remain frozen for later final-v0.1 work and do not claim current
-runtime support.
-Their complete scientific definitions, feature orders, missing-value behavior, and provenance requirements live in
+The multi-chain, selected-model, alternate-location, physical-continuity, backbone/side-chain
+torsion, local-frame, secondary-structure, solvent-accessibility, interface, and pooling behavior
+below is implemented. Complete scientific definitions, feature orders, missing-value behavior,
+and provenance requirements live in
 [`structural_features.md`](structural_features.md).
 
 | Setting | Frozen default |

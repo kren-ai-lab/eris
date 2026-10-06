@@ -5,9 +5,9 @@
 - Work on `dev`; `jr_revision` is a frozen historical baseline.
 - Do not create or switch branches unless explicitly requested.
 - `pyproject.toml` controls package metadata, Python compatibility, and dependency groups.
-- Permanent contracts live in `docs/architecture.md`, `docs/artifact_schema.md`,
-  `docs/representation_defaults.md`, `docs/external_residue_features.md`, and
-  `docs/gearnet_edge_backend.md`.
+- Permanent contracts live in `docs/architecture.md`, `docs/structural_features.md`,
+  `docs/artifact_schema.md`, `docs/representation_defaults.md`,
+  `docs/external_residue_features.md`, and `docs/gearnet_edge_backend.md`.
 - Keep changes focused; do not add adjacent features or cleanup.
 
 ## Git safety

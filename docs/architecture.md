@@ -64,6 +64,9 @@ registry. `FeatureMode` validates requested tokens and parameters; physical bloc
 `node_attr_keys`. The shared residue bundle also retains aligned selected `N`, `CA`, and `C`
 coordinates and validity masks. `backbone_geometry` uses those arrays with same-chain structural
 adjacency and the physical C--N cutoff to emit phi, psi, and omega without crossing breaks.
+`sidechain_geometry` uses the centralized standard residue-specific atom definitions and the
+shared signed-dihedral implementation to emit a fixed chi1-through-chi4 schema; undefined values
+remain `NaN`.
 The opt-in `secondary_structure` token lazily runs Biotite P-SEA independently on those physical
 segments. The opt-in `sasa` and `rsa` tokens share a lazily loaded Biotite Shrake-Rupley
 calculation over the selected chains' polymer heavy atoms; RSA applies the frozen Tien maximum-ASA
@@ -159,12 +162,11 @@ External producers must also satisfy [the external NPZ contract](external_residu
 
 ## Contracts that extensions must preserve
 
-The final-v0.1 contracts for polymer continuity, torsions, local frames, secondary structure,
-solvent accessibility, interfaces, and structure-level pooling are frozen in
+The final-v0.1 contracts for polymer continuity, backbone and side-chain torsions, local frames,
+secondary structure, solvent accessibility, interfaces, and structure-level pooling are frozen in
 [`structural_features.md`](structural_features.md). Polymer continuity and backbone torsions are
 implemented, as are local frames, relative edge direction, secondary structure, SASA/RSA,
-inter-chain interface features, and structure-level pooling. Side-chain torsions remain
-future-facing until their focused work unit lands.
+inter-chain interface features, structure-level pooling, and side-chain torsions.
 
 Those features must follow the same architecture described above. Public APIs
 construct canonical configuration, registries resolve implementations, runners

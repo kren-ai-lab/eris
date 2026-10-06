@@ -76,8 +76,10 @@ Run `eris --help`, `eris representations list`, or `eris embedders list` for dis
 
 Residue coordinates can use the alpha carbon, residue-atom mean, or center of mass. Residue
 features can combine amino-acid identity, fixed physicochemical descriptors, AAIndex1 records,
-raw B-factor, explicitly interpreted pLDDT, and aligned external values. See
-[representation defaults](docs/representation_defaults.md) and
+raw B-factor, explicitly interpreted pLDDT, backbone and side-chain torsions, local structural
+features, and aligned external values. Residue graphs can also include chain relations, relative
+direction, and interface annotations. See [structural feature contracts](docs/structural_features.md),
+[representation defaults](docs/representation_defaults.md), and
 [external residue features](docs/external_residue_features.md).
 
 ## GearNet-Edge
@@ -91,6 +93,7 @@ runtime requirements.
 ## Documentation
 
 - [Documentation map](docs/index.md)
+- [v0.1 developer handoff](docs/HANDOFF_V0.1.md)
 - [Architecture](docs/architecture.md)
 - [Representation defaults](docs/representation_defaults.md)
 - [Artifact Schema v2](docs/artifact_schema.md)

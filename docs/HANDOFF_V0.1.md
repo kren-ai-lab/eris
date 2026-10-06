@@ -2,180 +2,152 @@
 
 ## Start here
 
-Read these files in order:
+Scientific feature development for v0.1 is frozen. This document is the concise
+handoff summary; the following permanent contracts are authoritative for
+implementation details:
 
-1. [`README.md`](../README.md) for installation and public usage.
-2. [`architecture.md`](architecture.md) for package layout, data flow, and extension points.
-3. [`representation_defaults.md`](representation_defaults.md) for explicit scientific defaults.
-4. [`artifact_schema.md`](artifact_schema.md) for persistence and identity contracts.
-5. [`external_residue_features.md`](external_residue_features.md) for the generic residue-feature
-   producer contract.
-6. [`gearnet_edge_backend.md`](gearnet_edge_backend.md) for frozen learned behavior and
-   release-environment certification.
-7. [`DEVELOPMENT.md`](../DEVELOPMENT.md) for setup and validation commands.
+1. [`structural_features.md`](structural_features.md): scientific behavior,
+   selection, missing values, and edge cases.
+2. [`representation_defaults.md`](representation_defaults.md): canonical
+   representation and feature defaults.
+3. [`architecture.md`](architecture.md): code map and public data flow.
+4. [`artifact_schema.md`](artifact_schema.md): Schema v2 persistence,
+   provenance, and identity.
+5. [`external_residue_features.md`](external_residue_features.md): external
+   feature producer and alignment contract.
+6. [`gearnet_edge_backend.md`](gearnet_edge_backend.md): frozen learned
+   behavior and checkpoint requirements.
+7. [`../DEVELOPMENT.md`](../DEVELOPMENT.md): development environments and
+   validation commands.
 
-The main implementation paths are:
+The executable authorities remain `pyproject.toml`, canonical configuration,
+registries, validators, and implementation. This handoff records a development
+state, not production or public-release readiness.
 
-- `src/eris/api.py` and `src/eris/discovery.py`: public Python API;
-- `src/eris/core/config.py` and `src/eris/core/registry.py`: explicit configs and registration;
-- `src/eris/core/io.py`: structure selection and extraction;
-- `src/eris/features/` and `src/eris/encoders/`: explicit features and representations;
-- `src/eris/core/artifacts.py`, `artifact_schema_v2.py`, and `cache.py`: persistence and identity;
-- `src/eris/core/learned/`: learned runner, checkpoints, artifacts, and GearNet backend;
-- `src/eris/pipelines/`, `datasets/`, and `export/`: batch, pack, dataset, Torch, and PyG workflows;
-- `src/eris/cli/`: CLI adapters.
+## Final implementation state
 
-## State received
+The repository is on `dev`; the package version is `0.1.0`, distribution
+metadata name is `eris-lib`, the import/CLI name is `eris`, and the declared
+Python range is `>=3.11,<3.13`. Ten explicit representations, one learned
+`gearnet_edge` backend, and `StructureArtifact` Schema v2 are implemented.
 
-- Branch: `dev`.
-- Version: `0.1.0`.
-- Distribution metadata name: `eris-lib`.
-- Import package and CLI command: `eris`.
-- Python range in `pyproject.toml`: `>=3.11,<3.13`.
-- Artifact persistence: `StructureArtifact` Schema v2.
-- Explicit representations: ten registered encoders.
-- Learned representations: one registered `gearnet_edge` backend.
-- Checkpoints and external feature files are caller-supplied and never downloaded.
+| Area | Implemented v0.1 behavior |
+| --- | --- |
+| Explicit representations | `atom_point_cloud`, `residue_point_cloud`, `atom_knn_graph`, `residue_knn_graph`, `residue_contact_graph`, `residue_distogram`, `residue_distogram_bins`, `residue_contact_map`, `residue_contact_map_bins`, `residue_voxel_grid` |
+| Selection and coordinates | Explicit model selection; one or multiple selected polymer chains in canonical model order; CA, residue-atom mean, or center-of-mass residue centers |
+| Residue features | Onehot, index, physchem, AAIndex1, raw B-factor, explicitly interpreted pLDDT, flags, aligned external features and hybrid composition |
+| Structural geometry | Physical-continuity-aware `phi/psi/omega` and standard residue-specific `chi1–chi4`; internal N-CA-C local frames and directed relative edge direction |
+| Other structural features | Same/inter-chain edge identity; inter-chain interface flags/edge annotations; Biotite P-SEA secondary structure; Shrake–Rupley SASA and Tien RSA |
+| Pooling and workflows | `mean`, `sum`, `max`, and `mean_std` residue-feature pooling; batch encoding, artifact packing/datasets, Torch export, graph-only PyG export |
+| Learned output | GearNet-Edge `node`, `global`, or `both` outputs; frozen to one selected chain in v0.1 |
+| Identity and persistence | Schema v2 `meta.json` plus `data.npz`; ordered feature keys; canonical configuration fingerprints, content identity, and provenance |
 
-The scientific implementation is feature-complete for the v0.1 candidate. Publication and
-supported-environment certification are not complete.
+The detailed residue/atom selection and missing-value policy is centralized in
+[`structural_features.md`](structural_features.md). Scientific behavior must
+not be expanded or redesigned as part of handoff hardening.
 
-## Implemented surface
+## Definition of Ready
 
-### Explicit representations
+This table audits the final roadmap's P0 checklist against the implemented
+repository and WU8A evidence. The roadmap remains an external, untracked
+checklist; this table is the permanent handoff summary.
 
-| Name | Type | Granularity |
+| Checklist area | Status | Evidence or remaining boundary |
 | --- | --- | --- |
-| `atom_point_cloud` | cloud | atom |
-| `residue_point_cloud` | cloud | residue |
-| `atom_knn_graph` | graph | atom |
-| `residue_knn_graph` | graph | residue |
-| `residue_contact_graph` | graph | residue |
-| `residue_distogram` | matrix | residue |
-| `residue_distogram_bins` | matrix | residue |
-| `residue_contact_map` | matrix | residue |
-| `residue_contact_map_bins` | matrix | residue |
-| `residue_voxel_grid` | grid | residue |
+| Existing explicit clouds, graphs, matrices, and grids | PASS | Registered implementations remain covered by the full suite |
+| Onehot, physchem, AAIndex, external and hybrid features | PASS | Feature and integration tests; external alignment and fingerprint coverage |
+| B-factor and explicit pLDDT semantics | PASS | Raw B-factor and opt-in pLDDT paths are covered |
+| Backbone geometry and residue orientation | PASS | `phi/psi/omega`, `chi1–chi4`, local frames and relative direction implemented |
+| Secondary structure and SASA/RSA | PASS | Frozen Biotite P-SEA and Shrake–Rupley/Tien contracts implemented and tested |
+| Side-chain torsions (roadmap P1 target) | PASS | Standard residue-specific chi definitions are implemented; no rotamer classification or side-chain reconstruction |
+| Distance, RBF, sequence separation, relative direction, chain relations | PASS | Edge features and rigid-transform behavior covered |
+| Multichain identity, inter-chain edges, interfaces | PASS | Canonical chain order, chain-qualified IDs, edge relations, and interface features implemented |
+| `mean`, `sum`, `max`, `mean_std` pooling | PASS | Public `eris.pool()` and persisted-vector artifact contract implemented |
+| Missing atoms, altloc, insertion codes, noncanonical residues, breaks, models | PASS | Frozen policies and regression coverage; see structural edge-case table in the contract |
+| Translation/rotation expectations and validation panel | PASS | WU8A focused regression tests and existing structural fixtures; SASA/RSA uses numerical tolerance |
+| Feature, architecture, provenance, limitations, handoff documentation | PASS | Updated permanent contracts and this handoff |
+| GearNet node/global execution against official checkpoint | known limitation | Checkpoint-dependent tests skipped because `ERIS_GEARNET_CHECKPOINT` was not configured |
+| Native PyG export in this environment | known limitation | `torch_geometric` was unavailable; existing fake-module conversion tests are not native certification |
+| CI, clean-install, supported-environment and release certification | post-handoff item | Required before release; not a scientific implementation blocker |
 
-Residue coordinates support CA, residue-atom mean, and center of mass with explicit missing-center
-handling. The feature registry includes amino-acid identity, fixed physicochemical values,
-AAIndex1, raw B-factor, explicitly sourced pLDDT, flags, and generic external matrices. Exact
-defaults and dtypes are in [`representation_defaults.md`](representation_defaults.md).
+## WU8A validation
 
-### Persistence and workflows
+Final WU8A result: **463 passed, 4 skipped, 0 failed**. The four skips are
+checkpoint-dependent GearNet tests and require `ERIS_GEARNET_CHECKPOINT`.
+There was no production defect found during WU8A; changes for that work were
+validation tests.
 
-- Every encoder returns a strict-valid Schema v2 artifact.
-- Cache identity separates scientific content from invocation locators.
-- External residue NPZs align by exact canonical residue identity and use a content hash.
-- `batch_encode()` supports shallow `params_by_id` overrides; the CLI supports global parameters.
-- Batch resume checks config, input, representation, and producer identity.
-- Packing writes a metadata index consumed without rescanning the artifact root.
-- Family-specific collates reject incompatible samples rather than repairing them.
-- Torch export supports all explicit families and learned embeddings.
-- PyG export accepts only explicit graph artifacts with public topology.
+The WU8A regression additions/updates are in:
 
-### GearNet-Edge
+- [`../tests/test_explicit_geometry.py`](../tests/test_explicit_geometry.py):
+  rigid transforms for geometric matrices and experimental monomer/multimer
+  fixture coverage.
+- [`../tests/test_explicit_graphs.py`](../tests/test_explicit_graphs.py):
+  graph/RBF transform behavior and multichain edge/interface integration.
+- [`../tests/test_residue_features.py`](../tests/test_residue_features.py):
+  rich feature composition, pooling, artifact round-trip, external identity,
+  interface/SASA behavior, and structural cases.
+- [`../tests/test_packaging_boundaries.py`](../tests/test_packaging_boundaries.py):
+  lazy optional-import boundary coverage.
 
-The backend implements frozen canonical-20 CA selection, native graph construction, strict
-official-checkpoint loading, CPU/fp32 inference, biological node IDs, node/global/both outputs,
-Schema v2 provenance, persistence, and cache reuse.
+The validation panel uses existing experimental structure fixtures for a
+monomer and multimer, supplemented by focused generated structures for
+controlled geometry and missing-atom, alternate-location, insertion-code,
+noncanonical, chain, and interface/context behavior. It is a small regression
+panel, not broad independent biological certification.
 
-Frozen scientific behavior is specified in
-[`gearnet_edge_backend.md`](gearnet_edge_backend.md). Do not change selection, topology,
-checkpoint identity, model architecture, inference, mapping, or cache identity during release
-hardening.
+Rigid-transform checks cover expected invariance/equivariance for distance and
+contact matrices, distograms, residue graph topology, distance/RBF edge
+features, backbone and side-chain torsions, relative direction, interface
+detection, secondary structure, AAIndex, physicochemical features, and pooling
+of non-coordinate features. Cartesian coordinate arrays are not expected to
+remain invariant.
 
-## Validation at handoff
+WU8A checks passed Ruff lint, `pip check`, and `git diff --check`. Ruff format
+passed for changed test files. The project-wide format check still reports five
+existing notebooks as unformatted; they were intentionally not changed. The
+test run emitted a non-fatal pytest cache permission warning in the local
+environment.
 
-Validation was run on 2026-09-29 in the local `eris` Conda environment:
+## Dependency boundaries and known limitations
 
-- Python `3.12.14`;
-- tracked suite: `377 passed, 4 skipped`, exit 0;
-- collected tracked tests: `381`;
-- Ruff check: passed;
-- Ruff format check: `150 files already formatted`;
-- `pip check`: no broken requirements;
-- lazy-import boundary: `3 passed`;
-- `git diff --check`: passed, with expected LF-to-CRLF working-copy warnings only.
+- `import eris` does not eagerly import Torch, TorchDrug, PyG, RDKit, or GearNet
+  numerical code. Feature-local providers are loaded on use. No checkpoint is
+  bundled, downloaded, or fetched at runtime.
+- GearNet remains single-chain in v0.1. Official-checkpoint certification
+  remains post-handoff; the checkpoint-dependent tests were skipped in WU8A.
+- Native PyG export was not exercised in the WU8A environment because
+  `torch_geometric` was unavailable.
+- SASA/RSA uses a deterministic 1,000-point finite Fibonacci sphere. Its
+  finite sampling has a small expected orientation-dependent approximation;
+  WU8A observed about 0.107% total-SASA change on 1AQ2 after rotation and used
+  scientifically justified numerical tolerances rather than requiring exact
+  per-residue invariance. This is not a P0 scientific blocker.
+- External features require exact canonical residue-ID alignment; sequence
+  alignment is not implemented.
+- GearNet, PyG, local checkpoint inference, clean installations, and release
+  artifacts have not been certified across the supported environment matrix.
 
-The four skips require `ERIS_GEARNET_CHECKPOINT`, which was not configured. PyTorch was installed;
-`torch_geometric` was not installed. These results do not certify official-checkpoint inference or
-native PyG in a release environment.
+## Post-handoff validation, hardening, and release work
 
-Reproduce the tracked suite in Bash:
+These are separate from the frozen scientific implementation. Do not implement
+them as feature work under this handoff:
 
-```bash
-pt="${HOME}/eris-pytest-temp"
-rm -rf "$pt"
-mkdir -p "$pt"
+1. Obtain independent scientific/user validation on representative PDB and
+   mmCIF inputs and independently verify edge-case semantics.
+2. Validate Python 3.11 and 3.12 in clean supported environments.
+3. Repair and harden CI, then run the supported Python/dependency matrix.
+4. Build and inspect wheel and sdist; test clean installation and the full suite
+   against installed distributions.
+5. Freeze dependency policy and public API/distribution metadata.
+6. Install native PyG and certify export in supported environments.
+7. Supply the official GearNet checkpoint, verify its SHA-256, and certify
+   node/global/both outputs, frozen references, and repeatability across the
+   supported matrix.
+8. Finalize release metadata, `CHANGELOG`/release notes, and `CITATION.cff`.
+9. Only after those gates, plan PyPI publication, GitHub Release, and Zenodo
+   archival.
 
-python -m pytest -q \
-  --basetemp "$pt/base" \
-  -p no:cacheprovider
-python -m ruff check .
-python -m ruff format --check .
-python -m pip check
-git diff --check
-```
-
-Run `tests/test_packaging_boundaries.py` separately when checking optional-import isolation.
-
-## Known environment and repository caveats
-
-- `.github/workflows/ci.yml` references test modules absent from this commit:
-  `tests/test_m8_release_boundaries.py`, `tests/test_gearnet_dependencies.py`,
-  `tests/test_gearnet_native_graph.py`, `tests/test_gearnet_native_model.py`, and
-  `tests/test_gearnet_inference.py`. The workflow must be repaired before it can serve as a release
-  gate.
-- The local validation environment lacks `torch_geometric`.
-- The official GearNet checkpoint was not configured for the handoff validation.
-- Row-specific batch overrides are Python-only.
-- External features require exact residue identity; no sequence alignment is implemented.
-- A generic pooled residue representation is not implemented.
-- No generic GNN, Graph2Vec, GIN, GAT, or GraphSAGE family is included.
-- Distribution name, final public metadata, citation file, and release notes remain release work.
-
-## Release-hardening scope
-
-1. Repair the CI workflow so every job invokes tests that exist, then run its Python 3.11/3.12
-   matrix.
-2. Decide and verify the public distribution name; update package URLs and release metadata as
-   needed without changing import or CLI names.
-3. Build wheel and sdist artifacts, inspect their contents, and test clean installations.
-4. Run the full suite against installed distributions, not only an editable checkout.
-5. Install native PyG and certify graph export in each supported release environment.
-6. Supply the official GearNet checkpoint, verify its SHA-256, and certify frozen graph/embedding
-   references and repeated CPU/fp32 inference across the supported matrix.
-7. Freeze dependency policy and confirm the final public API and Python support statement.
-8. Add `CITATION.cff` and real release notes/changelog only when release metadata is known.
-9. Configure publishing, publish the chosen distribution, and create the GitHub release and
-   associated archival record.
-
-Scientific defects found during hardening should be reported against the candidate. Do not hide a
-selection, identity, topology, or numerical mismatch by changing release policy or coercing data.
-
-## Independent scientific check
-
-Independent scientific and user validation should use a clean environment and exercise public
-boundaries:
-
-1. Encode representative PDB and mmCIF files with explicit chain/model selection.
-2. Compare CA, mean, and center-of-mass residue positions, including missing-center failure/skip.
-3. Inspect representative cloud, graph, matrix, grid, AAIndex, B-factor, and pLDDT outputs.
-4. Test external row reordering plus missing, extra, duplicate, wrong-chain, wrong-model, and
-   mutated-source failures.
-5. Save/load, pack, dataset-load, and Torch/PyG-export artifacts after relocating source files.
-6. Run GearNet `node`, `global`, and `both` modes and compare frozen references.
-
-Escalate unexpected biological selection, alternate-location, structural-feature, or topology
-semantics instead of normalizing them.
-
-## Handoff criterion
-
-The repository is ready for developer handoff. Publication still requires the release-hardening
-work listed above.
-
-The next maintainer should first read the permanent contracts, repair the stale CI test paths, and
-reproduce the tracked validation in clean Python 3.11 and 3.12 environments. That establishes a
-trustworthy release baseline before package naming, distribution builds, GearNet/PyG
-certification, or publishing changes begin.
+**Handoff classification:** the scientific feature implementation is ready for
+developer handoff, with the stated validation limitations. This is not a
+production or public-release readiness claim.
