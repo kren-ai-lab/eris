@@ -3,7 +3,7 @@ from typing import Any, ClassVar
 from eris.core.artifact_schema_v2 import build_counts, build_feature_keys
 from eris.core.base_encoder import EncodingContext
 from eris.core.representations.base_rep import BaseRepresentation
-from eris.core.contracts.conctact_map_contract import ContactMapContract
+from eris.core.contracts.contact_map_contract import ContactMapContract
 
 
 class ContactMapRepresentation(BaseRepresentation):

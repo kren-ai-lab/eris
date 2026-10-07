@@ -10,7 +10,7 @@ from eris.core.io import load_and_extract_residue
 @dataclass
 class BaseResidueEncoder(BaseEncoder):
     granularity_contract: ClassVar[GranularityContract] = ResidueContract()
-    residue_center: str = "ca"  # ca: aplha carbon - mean: mean between residue atoms - com: center of mass from residue atoms
+    residue_center: str = "ca"  # ca: alpha carbon - mean: mean of residue atoms - com: center of mass of residue atoms
 
     @staticmethod
     def _external_parameter_blocks(
