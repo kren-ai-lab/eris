@@ -319,8 +319,10 @@ def _line_graph(
     edge_source = torch.from_numpy(source)
     edge_destination = torch.from_numpy(destination)
     edge_index = torch.arange(source.shape[0], dtype=torch.long)
-    incoming = edge_index[edge_destination.argsort()]
-    outgoing = edge_index[edge_source.argsort()]
+    # Stable endpoint ties are part of Eris reproducibility; do not depend on
+    # platform-specific torch.argsort tie ordering.
+    incoming = edge_index[torch.argsort(edge_destination, stable=True)]
+    outgoing = edge_index[torch.argsort(edge_source, stable=True)]
     in_degree = torch.bincount(edge_source, minlength=positions.shape[0])
     out_degree = torch.bincount(edge_destination, minlength=positions.shape[0])
     size = out_degree * in_degree

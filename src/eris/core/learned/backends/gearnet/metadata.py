@@ -9,7 +9,7 @@ from eris.core.learned.checkpoints import CheckpointDescriptor, StructuralModelD
 GEARNET_EDGE_REPRESENTATION_NAME = "gearnet_edge"
 GEARNET_EDGE_BACKEND_ID = "gearnet-edge"
 GEARNET_EDGE_IMPLEMENTATION = "eris.core.learned.backends.gearnet.backend.GearNetEdgeBackend"
-GEARNET_EDGE_ENCODER_VERSION = "2"
+GEARNET_EDGE_ENCODER_VERSION = "3"
 
 GEARNET_EDGE_ARCHITECTURE = "GearNet-Edge"
 GEARNET_EDGE_CHECKPOINT_IDENTIFIER = "mc_gearnet_edge.pth"

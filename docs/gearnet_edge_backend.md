@@ -198,7 +198,7 @@ availability, and an isolated import smoke; it does not resolve a checkpoint or 
 | `representation_name` | `gearnet_edge` |
 | backend ID | `gearnet-edge` |
 | implementation | `eris.core.learned.backends.gearnet.backend.GearNetEdgeBackend` |
-| encoder/adapter version | `2` |
+| encoder/adapter version | `3` |
 | model architecture | `GearNet-Edge` |
 
 Artifact `parameters` records output mode and the frozen biological-selection and graph settings.

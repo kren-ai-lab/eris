@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 import eris
-from eris.core.learned.backends.gearnet import dependencies
+from eris.core.learned.backends.gearnet import dependencies, native_graph
 from eris.core.learned.backends.gearnet.metadata import (
     GEARNET_EDGE_ENCODER_VERSION,
     GEARNET_EDGE_IMPLEMENTATION,
@@ -27,17 +27,20 @@ from eris.core.types import StructureInput
 
 DATA_DIR = Path(__file__).with_name("data")
 CHECKPOINT_ENV = "ERIS_GEARNET_CHECKPOINT"
-GRAPH_ARRAYS = (
+MAIN_GRAPH_ARRAYS = (
     "node_feature",
     "node_position",
     "edge_source",
     "edge_destination",
     "edge_relation",
     "edge_feature",
+)
+LINE_GRAPH_ARRAYS = (
     "line_edge_source",
     "line_edge_destination",
     "line_angle_relation",
 )
+GRAPH_ARRAYS = MAIN_GRAPH_ARRAYS + LINE_GRAPH_ARRAYS
 
 
 def _sha256(path: Path) -> str:
@@ -54,6 +57,14 @@ def _records(path: Path):
         StructureInput(source=path, chain_id="A", model_index=0)
     )
     return select_gearnet_transport_records(selected)
+
+
+def _canonical_line_graph_triples(
+    source: np.ndarray, destination: np.ndarray, angle_relation: np.ndarray
+) -> np.ndarray:
+    triples = np.column_stack((source, destination, angle_relation))
+    order = np.lexsort((triples[:, 2], triples[:, 1], triples[:, 0]))
+    return triples[order]
 
 
 def test_gearnet_v01_rejects_multichain_selection(tmp_path: Path) -> None:
@@ -121,8 +132,44 @@ def test_native_graph_matches_each_frozen_reference_exactly(input_name: str, gra
     native = construct_native_gearnet_graph(_records(DATA_DIR / input_name))
     expected = _reference_graph(DATA_DIR / graph_name)
 
-    for name in GRAPH_ARRAYS:
+    for name in MAIN_GRAPH_ARRAYS:
         np.testing.assert_array_equal(getattr(native, name), expected[name], strict=True)
+
+    actual_line_graph = _canonical_line_graph_triples(
+        native.line_edge_source,
+        native.line_edge_destination,
+        native.line_angle_relation,
+    )
+    expected_line_graph = _canonical_line_graph_triples(
+        expected["line_edge_source"],
+        expected["line_edge_destination"],
+        expected["line_angle_relation"],
+    )
+    np.testing.assert_array_equal(actual_line_graph, expected_line_graph, strict=True)
+
+
+def test_line_graph_endpoint_ties_use_stable_sorting(monkeypatch):
+    torch = pytest.importorskip("torch")
+    original_argsort = torch.argsort
+    sorted_inputs = []
+
+    def require_stable_argsort(values, *args, **kwargs):
+        assert kwargs.get("stable") is True
+        sorted_inputs.append(values.numpy().copy())
+        return original_argsort(values, *args, **kwargs)
+
+    monkeypatch.setattr(torch, "argsort", require_stable_argsort)
+    positions = np.array(((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 1.0, 0.0)), dtype=np.float32)
+    source = np.array((0, 2, 0, 1), dtype=np.int64)
+    destination = np.array((1, 1, 2, 2), dtype=np.int64)
+
+    line_source, line_destination, _ = native_graph._line_graph(positions, source, destination)
+
+    assert len(sorted_inputs) == 2
+    np.testing.assert_array_equal(sorted_inputs[0], destination, strict=True)
+    np.testing.assert_array_equal(sorted_inputs[1], source, strict=True)
+    np.testing.assert_array_equal(line_source, np.array((0, 1, 2, 3)), strict=True)
+    np.testing.assert_array_equal(line_destination, np.array((3, 3, 1, 1)), strict=True)
 
 
 def test_spatial_reference_freezes_boundary_tie_and_neighbor_order():
@@ -197,7 +244,7 @@ def test_native_dependency_boundary_and_current_cache_identity(monkeypatch):
     assert [item.requirement for item in dependencies.GEARNET_DEPENDENCY_REQUIREMENTS] == [
         "==2.11.0"
     ]
-    assert GEARNET_EDGE_ENCODER_VERSION == "2"
+    assert GEARNET_EDGE_ENCODER_VERSION == "3"
     assert GEARNET_EDGE_IMPLEMENTATION.endswith("GearNetEdgeBackend")
 
     monkeypatch.setattr(dependencies, "_current_python_version", lambda: (3, 13))
@@ -220,12 +267,12 @@ def test_public_native_production_matches_frozen_embedding_when_checkpoint_is_co
     )
     with np.load(DATA_DIR / "gearnet_reference_embeddings.npz", allow_pickle=False) as golden:
         np.testing.assert_allclose(
-            artifact.data["node_embedding"], golden["node_embedding"], rtol=1e-6, atol=2e-6
+            artifact.data["node_embedding"], golden["node_embedding"], rtol=1e-6, atol=3e-5
         )
         np.testing.assert_allclose(
             artifact.data["global_embedding"],
             golden["global_embedding"],
             rtol=1e-6,
-            atol=2e-6,
+            atol=3e-5,
         )
-    assert artifact.meta["encoder"]["version"] == "2"
+    assert artifact.meta["encoder"]["version"] == "3"

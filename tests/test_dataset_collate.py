@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytest.importorskip("torch")
+
 from eris.core.artifact_schema_v2 import (
     build_artifact_metadata,
     build_feature_keys,
