@@ -97,7 +97,7 @@ def _require_gearnet_stack() -> None:
 
 
 def test_embed_help_exposes_public_direct_command_only():
-    help_result = runner.invoke(app, ["embed", "--help"])
+    help_result = runner.invoke(app, ["embed", "--help"], color=False, terminal_width=200)
 
     assert help_result.exit_code == 0
     for expected in (
@@ -224,8 +224,18 @@ def test_absent_chain_model_and_checkpoint_are_not_forwarded(monkeypatch, tmp_pa
 
 
 def test_required_representation_and_out_are_enforced(tmp_path):
-    missing_representation = runner.invoke(app, ["embed", str(PDB), "--out", str(tmp_path)])
-    missing_out = runner.invoke(app, ["embed", str(PDB), "--representation", "gearnet_edge"])
+    missing_representation = runner.invoke(
+        app,
+        ["embed", str(PDB), "--out", str(tmp_path)],
+        color=False,
+        terminal_width=200,
+    )
+    missing_out = runner.invoke(
+        app,
+        ["embed", str(PDB), "--representation", "gearnet_edge"],
+        color=False,
+        terminal_width=200,
+    )
 
     assert missing_representation.exit_code == 2
     assert "--representation" in missing_representation.output

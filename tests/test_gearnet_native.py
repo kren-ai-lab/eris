@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -27,6 +28,11 @@ from eris.core.types import StructureInput
 
 DATA_DIR = Path(__file__).with_name("data")
 CHECKPOINT_ENV = "ERIS_GEARNET_CHECKPOINT"
+TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
+requires_torch = pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="requires optional torch dependency",
+)
 MAIN_GRAPH_ARRAYS = (
     "node_feature",
     "node_position",
@@ -121,6 +127,7 @@ def test_frozen_reference_payloads_and_metadata_are_path_safe():
     assert graph["line_angle_relation"].ndim == 1
 
 
+@requires_torch
 @pytest.mark.parametrize(
     ("input_name", "graph_name"),
     (
@@ -148,6 +155,7 @@ def test_native_graph_matches_each_frozen_reference_exactly(input_name: str, gra
     np.testing.assert_array_equal(actual_line_graph, expected_line_graph, strict=True)
 
 
+@requires_torch
 def test_line_graph_endpoint_ties_use_stable_sorting(monkeypatch):
     torch = pytest.importorskip("torch")
     original_argsort = torch.argsort
@@ -253,6 +261,7 @@ def test_native_dependency_boundary_and_current_cache_identity(monkeypatch):
     assert ">=3.11,<3.13" in unavailable.reason
 
 
+@requires_torch
 def test_public_native_production_matches_frozen_embedding_when_checkpoint_is_configured(tmp_path):
     checkpoint = os.environ.get(CHECKPOINT_ENV)
     if not checkpoint:
