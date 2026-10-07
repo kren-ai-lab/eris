@@ -25,8 +25,9 @@ python -m pip install -e ".[gearnet]"
 python -m pip install -e ".[pyg]"
 ```
 
-- `gearnet` installs the pinned PyTorch runtime. Supply the verified checkpoint separately; Eris
-  never downloads it.
+- `gearnet` installs the pinned PyTorch runtime. On a checkpoint-cache miss, Eris can acquire the
+  registered official checkpoint over HTTPS and verifies its registered SHA-256 before use. Pass
+  `checkpoint_path` / `--checkpoint` to seed the same cache from a local file or to work offline.
 - `pyg` installs PyTorch and PyTorch Geometric for graph export.
 - `import eris` must work without either optional group and must not import their runtimes.
 

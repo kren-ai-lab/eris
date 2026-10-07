@@ -14,6 +14,7 @@ from eris.core.cache import (
 )
 from eris.core.hashing import sha256_file
 from eris.core.learned.artifacts import build_learned_artifact
+from eris.core.learned.checkpoint_acquisition import acquire_registered_checkpoint
 from eris.core.learned.checkpoint_cache import CheckpointCache
 from eris.core.learned.checkpoints import StructuralModelDescriptor, VerifiedCheckpoint
 from eris.core.learned.config import StructuralEmbedderConfig
@@ -222,12 +223,9 @@ class StructuralEmbedderRunner:
         checkpoint = cache.get(model.checkpoint)
         if checkpoint is not None:
             return checkpoint
-        if checkpoint_path is None:
-            raise ExecutionError(
-                f"No cached checkpoint found for '{model.checkpoint.identifier}'; "
-                "a local checkpoint_path is required"
-            )
-        return cache.put(checkpoint_path, model.checkpoint)
+        if checkpoint_path is not None:
+            return cache.put(checkpoint_path, model.checkpoint)
+        return acquire_registered_checkpoint(model.checkpoint, cache)
 
     def run(
         self,

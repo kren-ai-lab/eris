@@ -113,7 +113,9 @@ environment.
 
 - `import eris` does not eagerly import Torch, TorchDrug, PyG, RDKit, or GearNet
   numerical code. Feature-local providers are loaded on use. No checkpoint is
-  bundled, downloaded, or fetched at runtime.
+  bundled. GearNet can acquire only its registered official HTTPS checkpoint,
+  verifies the registered SHA-256, and otherwise supports an explicit local
+  checkpoint for offline use.
 - GearNet remains single-chain in v0.1. Official-checkpoint certification
   remains post-handoff; the checkpoint-dependent tests were skipped in WU8A.
 - Native PyG export was not exercised in the WU8A environment because
@@ -125,7 +127,7 @@ environment.
   per-residue invariance. This is not a P0 scientific blocker.
 - External features require exact canonical residue-ID alignment; sequence
   alignment is not implemented.
-- GearNet, PyG, local checkpoint inference, clean installations, and release
+- GearNet, PyG, clean installations, and release
   artifacts have not been certified across the supported environment matrix.
 
 ## Post-handoff validation, hardening, and release work
@@ -141,7 +143,7 @@ them as feature work under this handoff:
    against installed distributions.
 5. Freeze dependency policy and public API/distribution metadata.
 6. Install native PyG and certify export in supported environments.
-7. Supply the official GearNet checkpoint, verify its SHA-256, and certify
+7. Certify registered GearNet checkpoint acquisition, cache reuse,
    node/global/both outputs, frozen references, and repeatability across the
    supported matrix.
 8. Finalize release metadata, `CHANGELOG`/release notes, and `CITATION.cff`.

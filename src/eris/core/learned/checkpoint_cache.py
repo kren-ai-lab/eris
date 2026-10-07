@@ -20,7 +20,7 @@ _STAGE_PREFIX = ".eris-checkpoint-"
 
 
 class CheckpointCache:
-    """Offline content-addressed cache for verified checkpoint bytes."""
+    """Content-addressed cache for verified checkpoint bytes."""
 
     def __init__(self, cache_dir: str | Path | None = None) -> None:
         self.cache_dir = Path(cache_dir) if cache_dir is not None else Path(user_cache_dir("eris"))

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from eris.core.hashing import sha256_file
 from eris.exceptions import ConfigError, ExecutionError
@@ -29,6 +30,25 @@ def _require_sha256(value: object) -> str:
     return value
 
 
+def _require_https_url(value: object, field_name: str) -> str:
+    url = _require_canonical_string(value, field_name)
+    parsed = urlsplit(url)
+    try:
+        hostname = parsed.hostname
+        parsed.port
+    except ValueError as error:
+        raise ConfigError(f"{field_name} must be a valid HTTPS URL") from error
+    if (
+        parsed.scheme != "https"
+        or hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+    ):
+        raise ConfigError(f"{field_name} must be an HTTPS URL without credentials or a fragment")
+    return url
+
+
 @dataclass(frozen=True, kw_only=True)
 class CheckpointDescriptor:
     """Path-independent identity and acquisition metadata for one checkpoint."""
@@ -37,6 +57,7 @@ class CheckpointDescriptor:
     sha256: str
     revision: str | None = None
     source: str | None = None
+    download_url: str | None = None
 
     def __post_init__(self) -> None:
         _require_canonical_string(self.identifier, "identifier")
@@ -45,6 +66,8 @@ class CheckpointDescriptor:
             _require_canonical_string(self.revision, "revision")
         if self.source is not None:
             _require_canonical_string(self.source, "source")
+        if self.download_url is not None:
+            _require_https_url(self.download_url, "download_url")
 
     def to_dict(self) -> dict[str, str]:
         """Return deterministic Artifact Schema v2 checkpoint metadata."""

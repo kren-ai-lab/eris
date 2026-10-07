@@ -31,7 +31,10 @@ python -m pip install ".[pyg]"      # PyTorch Geometric export
 python -m pip install ".[dev]"      # tests, Ruff, and build tools
 ```
 
-The GearNet checkpoint is not bundled or downloaded automatically.
+The GearNet checkpoint is not bundled. On the first cache miss, Eris streams the registered
+official checkpoint over HTTPS, verifies its registered SHA-256, and installs it in the shared
+checkpoint cache. For offline use, pre-populate that cache or pass a local checkpoint with
+`checkpoint_path` / `--checkpoint`.
 
 ## Python example
 

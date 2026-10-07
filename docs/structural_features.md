@@ -513,7 +513,9 @@ public in a source artifact.
 
 Every implementation must reuse canonical configuration, validators,
 serializers, hashes, and registries. Provider imports stay lazy and
-feature-local. No runtime network access, automatic checkpoint download,
+feature-local. Runtime network access is forbidden except for automatic
+acquisition of official model checkpoints whose HTTPS URL and SHA-256 are
+registered by Eris; arbitrary user-supplied download URLs are forbidden. No
 parallel permanent schema, silent legacy fallback, or cache-identity shortcut
 is permitted.
 

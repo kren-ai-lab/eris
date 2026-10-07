@@ -122,6 +122,8 @@ def test_embed_help_exposes_public_direct_command_only():
         "--id",
     ):
         assert historical not in help_result.output
+    assert "verified checkpoint cache" in help_result.output
+    assert "registered official checkpoint" in help_result.output
 
 
 def test_direct_embed_command_delegates_to_public_api(monkeypatch, tmp_path):
@@ -344,8 +346,8 @@ def test_missing_checkpoint_error_is_clean(monkeypatch, tmp_path):
     def fail_embed(*args, **kwargs):
         del args, kwargs
         raise ExecutionError(
-            "No cached checkpoint found for 'mc_gearnet_edge.pth'; "
-            "a local checkpoint_path is required"
+            "Automatic download of official checkpoint 'mc_gearnet_edge.pth' failed: offline. "
+            "Retry with network access or provide a local checkpoint_path (CLI: --checkpoint)."
         )
 
     monkeypatch.setattr(embed_cli.eris, "embed", fail_embed)
@@ -364,7 +366,8 @@ def test_missing_checkpoint_error_is_clean(monkeypatch, tmp_path):
 
     assert result.exit_code == 2
     assert "mc_gearnet_edge.pth" in result.output
-    assert "checkpoint_path is required" in result.output
+    assert "Automatic download" in result.output
+    assert "--checkpoint" in result.output
     assert "Traceback" not in result.output
     assert not (tmp_path / "meta.json").exists()
     assert not (tmp_path / "data.npz").exists()

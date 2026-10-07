@@ -35,7 +35,13 @@ def embed(
     ] = "both",
     checkpoint: Annotated[
         Path | None,
-        typer.Option("--checkpoint", help="Local official checkpoint path."),
+        typer.Option(
+            "--checkpoint",
+            help=(
+                "Optional local official checkpoint path. If omitted, Eris reuses the verified "
+                "checkpoint cache or downloads the registered official checkpoint."
+            ),
+        ),
     ] = None,
     device: Annotated[str, typer.Option("--device", help="Requested execution device.")] = "auto",
     precision: Annotated[str, typer.Option("--precision", help="Requested precision.")] = "fp32",

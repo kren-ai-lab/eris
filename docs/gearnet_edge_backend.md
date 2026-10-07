@@ -12,7 +12,6 @@ artifact = eris.embed(
     representation="gearnet_edge",
     chain_id="A",
     output_mode="both",
-    checkpoint_path="mc_gearnet_edge.pth",
     device="cpu",
     precision="fp32",
 )
@@ -23,17 +22,22 @@ artifact = eris.embed(
 | `output_mode` | `node`, `global`, `both` | `both` |
 | `device` | `auto` or `cpu` | `auto` |
 | `precision` | `fp32` | `fp32` |
-| `checkpoint_path` | local verified checkpoint path | none |
+| `checkpoint_path` | optional local official checkpoint path | none |
 
 CUDA, FP16, and BF16 are rejected. Eris does not silently fall back or cast. The checkpoint is
-not bundled and is never downloaded automatically.
+not bundled. Resolution uses this fixed order: an already verified cache entry, an explicitly
+supplied local path, then the registered official HTTPS download. A local path is therefore the
+offline override, not a separate storage system.
 
 The equivalent CLI is:
 
 ```console
 eris embed protein.pdb --representation gearnet_edge --chain A --output-mode both \
-  --checkpoint mc_gearnet_edge.pth --device cpu --precision fp32 --out artifact_gearnet
+  --device cpu --precision fp32 --out artifact_gearnet
 ```
+
+The first command on a clean cache requires network access. For an offline run, add
+`--checkpoint mc_gearnet_edge.pth`; Eris verifies and installs that file into the same cache.
 
 ## Checkpoint identity
 
@@ -48,6 +52,12 @@ eris embed protein.pdb --representation gearnet_edge --chain A --output-mode bot
 SHA-256 is the authoritative byte identity. The checkpoint is a `torch.save` ZIP archive
 containing an `OrderedDict` state dictionary with 138 tensors; it does not contain a serialized
 model class.
+
+The acquisition URL is trusted registration metadata and accepts no user override. Eris streams
+the response to a temporary file, rejects a non-HTTPS redirect, verifies the complete SHA-256,
+and then uses the normal atomic checkpoint-cache installation path. A failed transfer or digest
+check installs nothing and removes the temporary file. The acquisition URL and other transport
+paths are excluded from artifact metadata and scientific cache identity.
 
 The loader accepts only a `VerifiedCheckpoint`, deserializes with:
 
@@ -174,8 +184,8 @@ python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl
 python -m pip install ".[gearnet]"
 ```
 
-The `gearnet` extra declares PyTorch but no checkpoint or compiled GearNet dependency. TorchDrug is
-not a production dependency.
+The `gearnet` extra declares PyTorch but does not bundle a checkpoint or compiled GearNet
+dependency. TorchDrug is not a production dependency.
 
 Dependency probing is explicit and lazy. `import eris` and learned Registry discovery do not
 import Torch. The probe checks the Python range, distribution and public versions, import
@@ -231,7 +241,7 @@ Release hardening must still certify:
 - the official checkpoint hash and strict load in each supported release environment;
 - frozen graph and embedding references on the final supported Python/PyTorch matrix;
 - repeated CPU/fp32 determinism in that matrix;
-- clean wheel installation and offline inference.
+- clean wheel installation, first-run acquisition, cache reuse, and offline inference.
 
 Passing core tests or skipping checkpoint-dependent tests is not release-environment
 certification.

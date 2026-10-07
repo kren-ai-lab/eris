@@ -26,8 +26,9 @@
 - CLI operations must delegate to the equivalent public Python API.
 - Do not expose registries, runners, backends, descriptors, or cache internals as public API
   without an explicit contract change.
-- Keep optional dependencies lazy and feature-local. Do not add runtime network access or
-  automatic checkpoint downloads.
+- Keep optional dependencies lazy and feature-local. Runtime network access is forbidden except
+  for automatic acquisition of official model checkpoints whose HTTPS acquisition URL and
+  SHA-256 are registered by Eris. Arbitrary user-supplied download URLs are not allowed.
 
 ## Scientific safety
 
