@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from rich.text import Text
 from typer.testing import CliRunner
 
 import eris
@@ -98,6 +99,7 @@ def _require_gearnet_stack() -> None:
 
 def test_embed_help_exposes_public_direct_command_only():
     help_result = runner.invoke(app, ["embed", "--help"], color=False, terminal_width=200)
+    output = Text.from_ansi(help_result.output).plain
 
     assert help_result.exit_code == 0
     for expected in (
@@ -112,7 +114,7 @@ def test_embed_help_exposes_public_direct_command_only():
         "--precision",
         "--no-cache",
     ):
-        assert expected in help_result.output
+        assert expected in output
     for historical in (
         "single",
         "batch",
@@ -121,9 +123,9 @@ def test_embed_help_exposes_public_direct_command_only():
         "--allow-unknown-params",
         "--id",
     ):
-        assert historical not in help_result.output
-    assert "verified checkpoint cache" in help_result.output
-    assert "registered official checkpoint" in help_result.output
+        assert historical not in output
+    assert "verified checkpoint cache" in output
+    assert "registered official checkpoint" in output
 
 
 def test_direct_embed_command_delegates_to_public_api(monkeypatch, tmp_path):
@@ -236,11 +238,13 @@ def test_required_representation_and_out_are_enforced(tmp_path):
         color=False,
         terminal_width=200,
     )
+    missing_representation_output = Text.from_ansi(missing_representation.output).plain
+    missing_out_output = Text.from_ansi(missing_out.output).plain
 
     assert missing_representation.exit_code == 2
-    assert "--representation" in missing_representation.output
+    assert "--representation" in missing_representation_output
     assert missing_out.exit_code == 2
-    assert "--out" in missing_out.output
+    assert "--out" in missing_out_output
 
 
 def test_batch_from_folder_delegates_sorted_rows(monkeypatch, tmp_path):
