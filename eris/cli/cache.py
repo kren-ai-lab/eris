@@ -77,17 +77,15 @@ def _target_namespaces(cache_root: Path, target: CacheClearTarget) -> list[tuple
 def _remove_empty_cache_root(cache_root: Path) -> bool:
     if not cache_root.is_dir():
         return False
+    if any(cache_root.iterdir()):
+        return False
     try:
-        next(cache_root.iterdir())
-    except StopIteration:
-        try:
-            cache_root.rmdir()
-        except OSError as error:
-            raise CacheError(
-                f"Unable to remove empty Eris cache root at {cache_root}: {error}"
-            ) from error
-        return True
-    return False
+        cache_root.rmdir()
+    except OSError as error:
+        raise CacheError(
+            f"Unable to remove empty Eris cache root at {cache_root}: {error}"
+        ) from error
+    return True
 
 
 @app.command("clear")

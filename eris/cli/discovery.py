@@ -10,6 +10,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 import eris
+from eris.cli._utils import usage_error
 
 app = typer.Typer(add_completion=False)
 representations_app = typer.Typer(
@@ -52,13 +53,11 @@ def _info_command(
     name: str,
     *,
     lookup: Callable[[str], dict[str, Any]],
-    kind: str,
 ) -> None:
     try:
         info = lookup(name)
     except eris.RepresentationNotFoundError as error:
-        typer.echo(str(error), err=True)
-        raise typer.Exit(code=2) from error
+        usage_error(str(error))
     _print_info(info)
 
 
@@ -73,11 +72,7 @@ def list_representations() -> None:
 def representation_info(name: str) -> None:
     """Show metadata for one explicit representation."""
 
-    _info_command(
-        name,
-        lookup=eris.get_representation_info,
-        kind="representation",
-    )
+    _info_command(name, lookup=eris.get_representation_info)
 
 
 @embedders_app.command("list")
@@ -91,7 +86,7 @@ def list_embedders() -> None:
 def embedder_info(name: str) -> None:
     """Show metadata and availability for one learned embedder."""
 
-    _info_command(name, lookup=eris.get_embedder_info, kind="embedder")
+    _info_command(name, lookup=eris.get_embedder_info)
 
 
 app.add_typer(representations_app, name="representations")
