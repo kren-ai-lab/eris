@@ -60,8 +60,9 @@ jobs:
         run: uv build
       - name: Smoke-test the core wheel
         run: >-
-          uv run --isolated --no-project --with dist/*.whl python -c
+          uv run --isolated --no-project --with dist/*.whl python -I -c
           "import eris; from importlib.metadata import version;
+          assert 'site-packages' in eris.__file__, eris.__file__;
           assert eris.__version__ == version('erislib');
           assert eris.list_representations();
           assert eris.list_embedders() == ['gearnet_edge']"
