@@ -34,7 +34,7 @@ from eris.features.structure_annotations import (
     secondary_structure_onehot,
     solvent_accessibility,
 )
-from eris.features.utils import onehot, safe_float
+from eris.features.utils import normalize_scalar_params, onehot, safe_float
 
 # --- canonical ordering (NO CAMBIAR en releases)
 _AA_ONEHOT_KEYS = [f"aa_onehot.{aa}" for aa in AA_VOCAB]
@@ -504,16 +504,7 @@ register_residue_node_feature(
 
 
 def normalize_plddt_params(params: Dict[str, Any]) -> Dict[str, Any]:
-    unknown_params = sorted(set(params) - {"normalization"})
-    if unknown_params:
-        raise ValueError(f"Unknown plddt_ca parameters: {unknown_params}")
-    normalization = params.get("normalization", "none")
-    if not isinstance(normalization, str):
-        raise TypeError("plddt_ca parameter 'normalization' must be a string")
-    normalization = normalization.strip().lower()
-    if normalization not in {"none", "unit_interval"}:
-        raise ValueError("plddt_ca parameter 'normalization' must be one of: none, unit_interval")
-    return {"normalization": normalization}
+    return normalize_scalar_params("plddt_ca", params)
 
 
 def plddt_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:

@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 import numpy as np
 
 from eris.features.feature_registry import FeatureSpec, register_atom_node_feature
-from eris.features.utils import safe_float
+from eris.features.utils import onehot, safe_float
 
 # -----------------------------
 # Fixed dims (must be stable!)
@@ -12,20 +12,12 @@ ELEM_DIM = 17  # must match io.py _ELEM_VOCAB length
 ROLE_DIM = 6  # roles 0..5 in io.py _atom_role
 
 
-def _onehot_fixed(idx: np.ndarray, dim: int) -> np.ndarray:
-    idx = np.asarray(idx, dtype=np.int64).reshape(-1)
-    out = np.zeros((idx.shape[0], dim), dtype=np.float32)
-    m = (idx >= 0) & (idx < dim)
-    out[np.arange(idx.shape[0])[m], idx[m]] = 1.0
-    return out
-
-
 # -------------------------
 # elem_index
 # -------------------------
 def elem_index_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     elem_index = np.asarray(data["elem_index"], dtype=np.int64).reshape(-1)
-    e = _onehot_fixed(elem_index, ELEM_DIM)
+    e = onehot(elem_index, ELEM_DIM)
 
     return e.astype(np.float32)
 
@@ -50,7 +42,7 @@ register_atom_node_feature(
 # -------------------------
 def role_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
     atom_role = np.asarray(data["atom_role"], dtype=np.int64).reshape(-1)
-    r = _onehot_fixed(atom_role, ROLE_DIM)
+    r = onehot(atom_role, ROLE_DIM)
 
     return r.astype(np.float32)
 

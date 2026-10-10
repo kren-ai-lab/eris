@@ -54,6 +54,19 @@ def safe_float(x: np.ndarray, *, missing: str = "zero") -> np.ndarray:
     raise ValueError("missing must be 'zero' or 'nan'")
 
 
+def normalize_scalar_params(label: str, params: dict[str, Any]) -> dict[str, Any]:
+    unknown = sorted(set(params) - {"normalization"})
+    if unknown:
+        raise ValueError(f"Unknown {label} parameters: {unknown}")
+    normalization = params.get("normalization", "none")
+    if not isinstance(normalization, str):
+        raise TypeError(f"{label} parameter 'normalization' must be a string")
+    normalization = normalization.strip().lower()
+    if normalization not in {"none", "unit_interval"}:
+        raise ValueError(f"{label} parameter 'normalization' must be one of: none, unit_interval")
+    return {"normalization": normalization}
+
+
 def onehot(index: np.ndarray, num_classes: int) -> np.ndarray:
     idx = np.asarray(index, dtype=np.int64).reshape(-1)
     n = idx.shape[0]

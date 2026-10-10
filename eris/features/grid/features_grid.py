@@ -4,33 +4,19 @@ import numpy as np
 
 from eris.features.feature_registry import VoxelFeatureSpec, register_grid_voxel_feature
 from eris.features.node.constants import AA_VOCAB
+from eris.features.utils import normalize_scalar_params
 
 # --- canonical ordering (NO CAMBIAR en releases)
 _AA_ONEHOT_KEYS = [f"aa_onehot.{aa}" for aa in AA_VOCAB]
 _AA_INDEX_KEY = ["aa_index"]
 
 
-def _normalize_scalar_params(token: str, params: Dict[str, Any]) -> Dict[str, Any]:
-    unknown = sorted(set(params) - {"normalization"})
-    if unknown:
-        raise ValueError(f"Unknown {token} voxel parameters: {unknown}")
-    normalization = params.get("normalization", "none")
-    if not isinstance(normalization, str):
-        raise TypeError(f"{token} voxel parameter 'normalization' must be a string")
-    normalization = normalization.strip().lower()
-    if normalization not in {"none", "unit_interval"}:
-        raise ValueError(
-            f"{token} voxel parameter 'normalization' must be one of: none, unit_interval"
-        )
-    return {"normalization": normalization}
-
-
 def normalize_plddt_params(params: Dict[str, Any]) -> Dict[str, Any]:
-    return _normalize_scalar_params("plddt", params)
+    return normalize_scalar_params("plddt voxel", params)
 
 
 def normalize_bfactor_params(params: Dict[str, Any]) -> Dict[str, Any]:
-    return _normalize_scalar_params("bfactor", params)
+    return normalize_scalar_params("bfactor voxel", params)
 
 
 # -------------------------

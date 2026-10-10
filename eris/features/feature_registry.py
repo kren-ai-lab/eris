@@ -89,40 +89,29 @@ class VoxelFeatureSpec:
 
 
 RESIDUE_NODE_REGISTRY: Dict[str, FeatureSpec] = {}
-
-
-def register_residue_node_feature(spec: FeatureSpec):
-    if spec.token in RESIDUE_NODE_REGISTRY:
-        raise ValueError(f"Duplicate feature token: {spec.token}")
-    RESIDUE_NODE_REGISTRY[spec.token] = spec
-    return spec
-
-
 ATOM_NODE_REGISTRY: Dict[str, FeatureSpec] = {}
-
-
-def register_atom_node_feature(spec: FeatureSpec):
-    if spec.token in ATOM_NODE_REGISTRY:
-        raise ValueError(f"Duplicate feature token: {spec.token}")
-    ATOM_NODE_REGISTRY[spec.token] = spec
-    return spec
-
-
 GRAPH_EDGE_REGISTRY: Dict[str, FeatureSpec] = {}
-
-
-def register_graph_edge_feature(spec: FeatureSpec):
-    if spec.token in GRAPH_EDGE_REGISTRY:
-        raise ValueError(f"Duplicate feature token: {spec.token}")
-    GRAPH_EDGE_REGISTRY[spec.token] = spec
-    return spec
-
-
 GRID_VOXEL_REGISTRY: Dict[str, VoxelFeatureSpec] = {}
 
 
-def register_grid_voxel_feature(spec: VoxelFeatureSpec):
-    if spec.token in GRID_VOXEL_REGISTRY:
+def _register(registry: Dict[str, Any], spec: Any):
+    if spec.token in registry:
         raise ValueError(f"Duplicate feature token: {spec.token}")
-    GRID_VOXEL_REGISTRY[spec.token] = spec
+    registry[spec.token] = spec
     return spec
+
+
+def register_residue_node_feature(spec: FeatureSpec):
+    return _register(RESIDUE_NODE_REGISTRY, spec)
+
+
+def register_atom_node_feature(spec: FeatureSpec):
+    return _register(ATOM_NODE_REGISTRY, spec)
+
+
+def register_graph_edge_feature(spec: FeatureSpec):
+    return _register(GRAPH_EDGE_REGISTRY, spec)
+
+
+def register_grid_voxel_feature(spec: VoxelFeatureSpec):
+    return _register(GRID_VOXEL_REGISTRY, spec)
