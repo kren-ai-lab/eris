@@ -26,7 +26,7 @@ from eris.core.learned.execution import (
     execution_request_cache_identity,
     resolve_execution,
 )
-from eris.core.learned.registry import EmbedderInfo, EmbedderRegistry, learned_registry
+from eris.core.learned.registry import EmbedderInfo, learned_registry
 from eris.core.learned.types import (
     StructuralPreprocessingResult,
     validate_embedding_result,
@@ -196,11 +196,9 @@ class StructuralEmbedderRunner:
     def __init__(
         self,
         *,
-        registry: EmbedderRegistry = learned_registry,
         artifact_cache: DiskCache | None = None,
         checkpoint_cache: CheckpointCache | None = None,
     ) -> None:
-        self.registry = registry
         self.artifact_cache = artifact_cache
         self.checkpoint_cache = checkpoint_cache
 
@@ -250,7 +248,7 @@ class StructuralEmbedderRunner:
         if type(use_artifact_cache) is not bool:
             raise TypeError("use_artifact_cache must be a bool")
 
-        info = self.registry.get_info(config.representation_name)
+        info = learned_registry.get_info(config.representation_name)
         if not isinstance(config, info.config_type):
             raise ConfigError(
                 f"Config for '{config.representation_name}' must be an {info.config_type.__name__}"
@@ -308,7 +306,17 @@ class StructuralEmbedderRunner:
                     source_sha256=source_sha256,
                 )
 
-        backend = self.registry.create(config.representation_name)
+        from eris.core.learned.backends.gearnet.dependencies import probe_gearnet_availability
+
+        availability = probe_gearnet_availability()
+        if not availability.available:
+            raise ExecutionError(
+                f"Embedder '{info.representation_name}' backend '{info.backend_id}' "
+                f"is unavailable: {availability.reason}"
+            )
+        from eris.core.learned.backends.gearnet.backend import GearNetEdgeBackend
+
+        backend = GearNetEdgeBackend()
         resolved_execution = resolve_execution(
             execution_request,
             backend.execution_capabilities(),

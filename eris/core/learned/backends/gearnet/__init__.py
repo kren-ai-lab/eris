@@ -1,4 +1,4 @@
-"""Lightweight contracts and explicit registration for GearNet-Edge."""
+"""Lightweight contracts for GearNet-Edge."""
 
 from eris.core.learned.backends.gearnet.config import GearNetEdgeConfig
 from eris.core.learned.backends.gearnet.dependencies import (
@@ -13,7 +13,6 @@ from eris.core.learned.backends.gearnet.metadata import (
     GEARNET_EDGE_MODEL_DESCRIPTOR,
     GEARNET_EDGE_REPRESENTATION_NAME,
 )
-from eris.core.learned.backends.gearnet.registration import register_gearnet_edge
 
 __all__ = [
     "GEARNET_DEPENDENCY_REQUIREMENTS",
@@ -25,5 +24,4 @@ __all__ = [
     "GearNetDependencyRequirement",
     "GearNetEdgeConfig",
     "probe_gearnet_availability",
-    "register_gearnet_edge",
 ]

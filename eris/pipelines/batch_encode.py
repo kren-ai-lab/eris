@@ -176,10 +176,9 @@ def _learned_resume_identity(
 
     info = eris.get_embedder_info(representation)
     registry_info = learned_registry.get_info(representation)
-    if registry_info.model_descriptor is None:
-        raise ExecutionError(f"Embedder '{representation}' has no model descriptor")
-
-    config = learned_registry.create_config(representation, output_mode=output_mode)
+    config = registry_info.config_type(
+        representation_name=registry_info.representation_name, output_mode=output_mode
+    )
     execution = StructuralExecutionConfig(device=device, precision=precision)
     parameters = config.to_dict()
     return _ResumeIdentity(

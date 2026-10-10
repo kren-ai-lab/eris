@@ -6,7 +6,24 @@ import importlib.util
 from dataclasses import dataclass
 from importlib import metadata
 
-from eris.core.learned.registry import BackendAvailability
+
+@dataclass(frozen=True)
+class BackendAvailability:
+    """Dependency-level availability reported without instantiating a backend."""
+
+    available: bool
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.available) is not bool:
+            raise TypeError("available must be a bool")
+        if self.reason is not None:
+            if not isinstance(self.reason, str):
+                raise TypeError("reason must be a string or None")
+            if not self.reason.strip():
+                raise ValueError("reason must not be empty when provided")
+        if not self.available and self.reason is None:
+            raise ValueError("reason is required when the backend is unavailable")
 
 
 @dataclass(frozen=True)
@@ -82,6 +99,7 @@ def import_native_gearnet_torch():
 
 
 __all__ = [
+    "BackendAvailability",
     "GEARNET_DEPENDENCY_REQUIREMENTS",
     "GearNetDependencyRequirement",
     "import_native_gearnet_torch",

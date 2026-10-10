@@ -7,10 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from eris.core.learned.backends.gearnet.dependencies import (
-    import_native_gearnet_torch,
-    probe_gearnet_availability,
-)
+from eris.core.learned.backends.gearnet.dependencies import import_native_gearnet_torch
 from eris.core.learned.backends.gearnet.loading import (
     _validate_cpu_fp32,
     _validate_execution,
@@ -170,13 +167,6 @@ def _forward_error(error: Exception) -> ExecutionError:
 
 class GearNetEdgeBackend:
     """Production GearNet-Edge adapter for the frozen v0.1 stack."""
-
-    @property
-    def backend_id(self) -> str:
-        return GEARNET_EDGE_BACKEND_ID
-
-    def is_available(self) -> bool:
-        return probe_gearnet_availability().available
 
     def execution_capabilities(self) -> ExecutionCapabilities:
         return ExecutionCapabilities(

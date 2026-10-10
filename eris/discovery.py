@@ -15,12 +15,6 @@ _GRANULARITY_BY_OUTPUT_MODE = {
 }
 
 
-def _get_learned_registry():
-    from eris.core.learned import learned_registry
-
-    return learned_registry
-
-
 def _json_safe_copy(value: Any) -> Any:
     return json.loads(json.dumps(value, allow_nan=False))
 
@@ -120,19 +114,23 @@ def get_representation_info(name: str) -> dict[str, Any]:
 def list_embedders() -> list[str]:
     """Return registered learned representation names without probing availability."""
 
-    return _get_learned_registry().names()
+    from eris.core.learned.registry import learned_registry
+
+    return learned_registry.names()
 
 
 def get_embedder_info(name: str) -> dict[str, Any]:
     """Return JSON-safe public metadata and lazy availability for one embedder."""
 
-    registry = _get_learned_registry()
+    from eris.core.learned.backends.gearnet import dependencies
+    from eris.core.learned.registry import learned_registry
+
     try:
-        info = registry.get_info(name)
+        info = learned_registry.get_info(name)
     except KeyError as error:
         raise RepresentationNotFoundError(f"Unknown embedder {name!r}") from error
 
-    availability = registry.availability(name)
+    availability = dependencies.probe_gearnet_availability()
     output_modes = list(_GRANULARITY_BY_OUTPUT_MODE)
     return _json_safe_copy(
         {
