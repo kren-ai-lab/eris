@@ -12,6 +12,20 @@ from eris.encoders.geometry.distogram_ca import pairwise_distances, residue_fiel
 from eris.features.utils import validate_bin_edges
 
 
+def validate_class_capacity(
+    config: ResidueDistogramBinsConfig | ResidueContactMapBinsConfig,
+) -> None:
+    """Fail if the largest class ID cannot be stored in the configured dtype."""
+    num_bins = config.num_bins if config.edges is None else len(config.edges) - 1
+    max_class_id = num_bins if config.add_no_contact_class else num_bins - 1
+    capacity = np.iinfo(np.dtype(config.dtype)).max
+    if max_class_id > capacity:
+        raise ValueError(
+            f"dtype {config.dtype} cannot represent {num_bins} bins with maximum "
+            f"class ID {max_class_id}; maximum capacity is {capacity}"
+        )
+
+
 def binned_distance_data(
     ctx: EncodingContext,
     config: ResidueDistogramBinsConfig | ResidueContactMapBinsConfig,
@@ -56,6 +70,10 @@ class DistogramBinsCA(BaseResidueEncoder):
 
     config_type: ClassVar = ResidueDistogramBinsConfig
     config: ResidueDistogramBinsConfig
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        validate_class_capacity(self.config)
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
         return binned_distance_data(ctx, self.config, "dist_bins")

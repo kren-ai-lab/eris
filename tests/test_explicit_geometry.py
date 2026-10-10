@@ -471,3 +471,33 @@ def test_all_explicit_encoders_return_complete_schema_v2(encoder_type):
         "grid_key",
         "grid_layout",
     }.isdisjoint(metadata)
+
+
+@pytest.mark.parametrize("representation", ["residue_distogram_bins", "residue_contact_map_bins"])
+@pytest.mark.parametrize(
+    ("num_bins", "add_no_contact_class", "fits"),
+    [(256, False, True), (255, True, True), (257, False, False), (256, True, False)],
+)
+def test_binned_class_ids_must_fit_the_output_dtype(
+    representation, num_bins, add_no_contact_class, fits
+):
+    import eris
+
+    params = {
+        "num_bins": num_bins,
+        "dmin": 0.0,
+        "dmax": 20.0,
+        "dtype": "uint8",
+        "add_no_contact_class": add_no_contact_class,
+    }
+    if fits:
+        artifact = eris.encode(
+            "tests/data/1AQ2.pdb", representation=representation, use_cache=False, **params
+        )
+        key = {"residue_distogram_bins": "dist_bins", "residue_contact_map_bins": "contact_bins"}
+        assert artifact.data[key[representation]].dtype == np.uint8
+    else:
+        with pytest.raises(ValueError, match="cannot represent"):
+            eris.encode(
+                "tests/data/1AQ2.pdb", representation=representation, use_cache=False, **params
+            )
