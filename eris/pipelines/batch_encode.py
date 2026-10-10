@@ -22,6 +22,7 @@ from eris.pipelines.manifest import (
     BatchResultRow,
     StructureManifestRow,
     read_manifest,
+    write_atomically,
     write_manifest,
 )
 
@@ -251,19 +252,7 @@ def _save_artifact_safely(artifact: StructureArtifact, target: Path) -> None:
 
 
 def _write_results_safely(path: Path, rows: list[BatchResultRow]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, staging_name = tempfile.mkstemp(
-        prefix=f".{path.stem}.tmp-",
-        suffix=path.suffix,
-        dir=path.parent,
-    )
-    os.close(descriptor)
-    staging = Path(staging_name)
-    try:
-        write_manifest(staging, rows)
-        os.replace(staging, path)
-    finally:
-        staging.unlink(missing_ok=True)
+    write_atomically(path, lambda staging: write_manifest(staging, rows))
 
 
 def _input_matches(

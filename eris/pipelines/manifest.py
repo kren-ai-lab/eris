@@ -3,8 +3,9 @@ from __future__ import annotations
 import csv
 import json
 import os
+import tempfile
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, TypeVar
@@ -14,20 +15,37 @@ class ManifestValidationError(ValueError):
     """Raised when a manifest row or manifest file violates the canonical contract."""
 
 
-def _row_location(row_index: int | None) -> str:
+def row_location(row_index: int | None, none_label: str = "manifest row") -> str:
     if row_index is None:
-        return "manifest row"
+        return none_label
     return f"row {row_index}"
+
+
+def write_atomically(path: Path, write: Callable[[Path], None]) -> None:
+    """Write via a sibling temp file and ``os.replace`` so readers never see partial output."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, staging_name = tempfile.mkstemp(
+        prefix=f".{path.stem}.tmp-",
+        suffix=path.suffix,
+        dir=path.parent,
+    )
+    os.close(descriptor)
+    staging = Path(staging_name)
+    try:
+        write(staging)
+        os.replace(staging, path)
+    finally:
+        staging.unlink(missing_ok=True)
 
 
 def _required_string(value: Any, *, field: str, row_index: int | None = None) -> str:
     if not isinstance(value, str):
-        location = _row_location(row_index)
+        location = row_location(row_index)
         raise ManifestValidationError(f"{location}: field '{field}' must be a string")
 
     text = value.strip()
     if not text:
-        location = _row_location(row_index)
+        location = row_location(row_index)
         raise ManifestValidationError(f"{location}: field '{field}' must be non-empty")
 
     return text
@@ -43,7 +61,7 @@ def _optional_string(value: Any, *, field: str, row_index: int | None = None) ->
     if value is None:
         return None
     if not isinstance(value, str):
-        location = _row_location(row_index)
+        location = row_location(row_index)
         raise ManifestValidationError(f"{location}: field '{field}' must be a string")
     return value.strip() or None
 
@@ -59,19 +77,19 @@ def _chain_selection(
             try:
                 value = json.loads(text)
             except json.JSONDecodeError as error:
-                location = _row_location(row_index)
+                location = row_location(row_index)
                 raise ManifestValidationError(
                     f"{location}: field '{field}' contains invalid JSON chain list"
                 ) from error
         else:
             value = (text,)
     if not isinstance(value, Sequence) or isinstance(value, (bytes, bytearray)):
-        location = _row_location(row_index)
+        location = row_location(row_index)
         raise ManifestValidationError(
             f"{location}: field '{field}' must be a string or non-empty list of strings"
         )
     chains = tuple(value)
-    location = _row_location(row_index)
+    location = row_location(row_index)
     if not chains or any(not isinstance(chain, str) for chain in chains):
         raise ManifestValidationError(
             f"{location}: field '{field}' must be a string or non-empty list of strings"
@@ -95,18 +113,18 @@ def _model(value: Any, *, field: str, row_index: int | None = None) -> int:
     if isinstance(value, str) and not value.strip():
         return 0
     if isinstance(value, bool):
-        location = _row_location(row_index)
+        location = row_location(row_index)
         raise ManifestValidationError(f"{location}: field '{field}' must be an integer >= 0")
     if isinstance(value, int):
         model = value
     elif isinstance(value, str) and value.strip().isdecimal():
         model = int(value.strip())
     else:
-        location = _row_location(row_index)
+        location = row_location(row_index)
         raise ManifestValidationError(f"{location}: field '{field}' must be an integer >= 0")
 
     if model < 0:
-        location = _row_location(row_index)
+        location = row_location(row_index)
         raise ManifestValidationError(f"{location}: field '{field}' must be an integer >= 0")
     return model
 
@@ -120,7 +138,7 @@ def _literal(
 ) -> str:
     text = _required_string(value, field=field, row_index=row_index)
     if text not in choices:
-        location = _row_location(row_index)
+        location = row_location(row_index)
         expected = ", ".join(sorted(choices))
         raise ManifestValidationError(f"{location}: field '{field}' must be one of: {expected}")
     return text
@@ -162,7 +180,7 @@ class StructureManifestRow(BaseManifestRow):
     ) -> StructureManifestRow:
         unexpected = sorted(set(d) - set(cls.field_order))
         if unexpected:
-            location = _row_location(row_index)
+            location = row_location(row_index)
             fields = ", ".join(cls.field_order)
             raise ManifestValidationError(
                 f"{location}: unexpected field(s) {', '.join(unexpected)!r}; "
@@ -272,7 +290,7 @@ class BatchResultRow(BaseManifestRow):
         except ManifestValidationError as error:
             message = str(error)
             if message.startswith("manifest row:") and row_index is not None:
-                message = message.replace("manifest row:", _row_location(row_index) + ":", 1)
+                message = message.replace("manifest row:", row_location(row_index) + ":", 1)
                 raise ManifestValidationError(message) from error
             raise
 
