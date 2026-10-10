@@ -304,7 +304,6 @@ def _apply_device(out: dict[str, Any], device: str | None) -> dict[str, Any]:
 def to_torch(
     artifact: StructureArtifact,
     *,
-    prefer: str = "grid_or_graph",
     device: str | None = None,
     matrix_as_channel: bool = True,
 ) -> dict[str, Any]:
@@ -320,9 +319,6 @@ def to_torch(
 
     artifact.validate(strict=True)
     family, representation_type = _representation_identity(artifact)
-    prefer = (prefer or "grid_or_graph").strip().lower()
-    if prefer not in {"grid_or_graph", "grid", "graph", "matrix", "cloud", "vector"}:
-        raise ValueError("prefer must be one of: grid_or_graph, grid, graph, matrix, cloud, vector")
 
     if family == "learned":
         if representation_type != "embedding":
@@ -335,24 +331,14 @@ def to_torch(
         raise TorchExportError(f"Unsupported representation_family={family!r}.")
 
     if representation_type == "graph":
-        if prefer not in {"grid_or_graph", "graph"}:
-            raise TorchExportError(f"Cannot export graph artifact with prefer={prefer!r}.")
         out = _graph_to_torch(artifact)
     elif representation_type == "cloud":
-        if prefer not in {"grid_or_graph", "cloud"}:
-            raise TorchExportError(f"Cannot export cloud artifact with prefer={prefer!r}.")
         out = _cloud_to_torch(artifact)
     elif representation_type == "matrix":
-        if prefer not in {"grid_or_graph", "matrix"}:
-            raise TorchExportError(f"Cannot export matrix artifact with prefer={prefer!r}.")
         out = _matrix_to_torch(artifact, matrix_as_channel=matrix_as_channel)
     elif representation_type == "grid":
-        if prefer not in {"grid_or_graph", "grid"}:
-            raise TorchExportError(f"Cannot export grid artifact with prefer={prefer!r}.")
         out = _grid_to_torch(artifact)
     elif representation_type == "vector":
-        if prefer not in {"grid_or_graph", "vector"}:
-            raise TorchExportError(f"Cannot export vector artifact with prefer={prefer!r}.")
         out = _vector_to_torch(artifact)
     else:
         raise TorchExportError(f"Unsupported explicit representation_type={representation_type!r}.")
@@ -364,7 +350,6 @@ def save_artifact_to_torch(
     artifact_dir: str | Path,
     *,
     out_path: Path,
-    prefer: str = "grid_or_graph",
     device: str | None = None,
     matrix_as_channel: bool = True,
 ) -> None:
@@ -372,7 +357,6 @@ def save_artifact_to_torch(
     artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
     data = to_torch(
         artifact,
-        prefer=prefer,
         device=device,
         matrix_as_channel=matrix_as_channel,
     )

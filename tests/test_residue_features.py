@@ -1268,12 +1268,12 @@ def test_high_dimensional_external_hybrid_round_trip_and_identity(tmp_path: Path
     assert loaded.data["node_attr"].shape == (2, len(AA_VOCAB) + 1 + feature_dim)
     assert loaded.meta["feature_keys"]["node_attr_keys"] == expected_keys
     np.testing.assert_array_equal(loaded.data["node_attr"][:, -feature_dim:], values)
-    torch_output = eris.to_torch(loaded, prefer="graph")
+    torch_output = eris.to_torch(loaded)
     assert isinstance(torch_output["x"], torch.Tensor)
     np.testing.assert_array_equal(torch_output["x"].cpu().numpy(), loaded.data["node_attr"])
 
     if find_spec("torch_geometric") is not None:
-        pyg = eris.to_pyg(loaded, prefer="graph")
+        pyg = eris.to_pyg(loaded)
         np.testing.assert_array_equal(pyg.x.cpu().numpy(), loaded.data["node_attr"])
 
     changed_values = values + np.float32(1000.0)
@@ -2082,7 +2082,7 @@ def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
         np.testing.assert_equal(loaded.data[name], values)
 
     torch = pytest.importorskip("torch")
-    torch_graph = eris.to_torch(loaded, prefer="graph")
+    torch_graph = eris.to_torch(loaded)
     for exported_name, artifact_name in (
         ("x", "node_attr"),
         ("edge_attr", "edge_attr"),
@@ -2094,7 +2094,7 @@ def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
         )
     assert torch_graph["x"].dtype == torch.float32
     if find_spec("torch_geometric") is not None:
-        pyg_graph = eris.to_pyg(loaded, prefer="graph")
+        pyg_graph = eris.to_pyg(loaded)
         np.testing.assert_equal(pyg_graph.x.cpu().numpy(), loaded.data["node_attr"])
         np.testing.assert_equal(pyg_graph.edge_attr.cpu().numpy(), loaded.data["edge_attr"])
 

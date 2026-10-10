@@ -266,7 +266,7 @@ def test_dataset_accepts_canonical_pack_index_and_preserves_len_order(tmp_path: 
     index = tmp_path / "index.csv"
     _pack(root, index)
 
-    dataset = ErisFolderDataset(index, prefer="cloud")
+    dataset = ErisFolderDataset(index)
 
     assert len(dataset) == 2
     assert [row.id for row in dataset.rows] == ["a", "b"]
@@ -368,7 +368,7 @@ def test_dataset_resolves_posix_locators_from_index_parent(
     index = index_factory(tmp_path, root)
     rows = _pack(root, index)
 
-    dataset = ErisFolderDataset(index, prefer="cloud")
+    dataset = ErisFolderDataset(index)
     item = dataset[0]
 
     assert rows[0]["artifact_dir"] == expected
@@ -382,7 +382,7 @@ def test_dataset_does_not_rescan_after_index_creation(tmp_path: Path) -> None:
     _pack(root, index)
     _save_learned_artifact(root / "not-indexed" / "synthetic_learned_embedding")
 
-    dataset = ErisFolderDataset(index, prefer="cloud")
+    dataset = ErisFolderDataset(index)
 
     assert len(dataset) == 1
     assert dataset[0]["id"] == "indexed"
@@ -466,7 +466,7 @@ def test_dataset_rejects_stale_index_metadata(
     row = _pack(root, index)[0]
     row[field] = value
     _write_index(index, [row])
-    dataset = ErisFolderDataset(index, prefer="cloud")
+    dataset = ErisFolderDataset(index)
 
     with pytest.raises(DatasetIndexError, match=match):
         dataset[0]
@@ -479,25 +479,24 @@ def test_dataset_rejects_stale_n_edges_when_index_declares_it(tmp_path: Path) ->
     row = _pack(root, index)[0]
     row["n_edges"] = "999"
     _write_index(index, [row])
-    dataset = ErisFolderDataset(index, prefer="graph")
+    dataset = ErisFolderDataset(index)
 
     with pytest.raises(DatasetIndexError, match="n_edges"):
         dataset[0]
 
 
 @pytest.mark.parametrize(
-    ("representation", "prefer", "collate", "expected_shape"),
+    ("representation", "collate", "expected_shape"),
     [
-        ("graph", "graph", collate_graph, (4, 1)),
-        ("cloud", "cloud", collate_cloud, (2, 3)),
-        ("matrix", "matrix", collate_matrix, (2, 1, 1, 1)),
-        ("grid", "grid", collate_grid, (2, 1, 2, 2, 2)),
+        ("graph", collate_graph, (4, 1)),
+        ("cloud", collate_cloud, (2, 3)),
+        ("matrix", collate_matrix, (2, 1, 1, 1)),
+        ("grid", collate_grid, (2, 1, 2, 2, 2)),
     ],
 )
 def test_dataset_samples_feed_each_canonical_explicit_collate(
     tmp_path: Path,
     representation: str,
-    prefer: str,
     collate,
     expected_shape: tuple[int, ...],
 ) -> None:
@@ -515,7 +514,7 @@ def test_dataset_samples_feed_each_canonical_explicit_collate(
     index = tmp_path / "index.csv"
     _pack(root, index)
 
-    samples = list(ErisFolderDataset(index, prefer=prefer))
+    samples = list(ErisFolderDataset(index))
     out = collate(samples)
 
     assert out["id"] == ["first", "second"]
@@ -566,7 +565,7 @@ def test_dataset_batch_pack_dataset_gate(tmp_path: Path) -> None:
     index = tmp_path / "index.csv"
     pack_artifacts(root, index)
 
-    dataset = ErisFolderDataset(index, prefer="matrix")
+    dataset = ErisFolderDataset(index)
 
     assert len(dataset) == 1
     assert dataset.rows[0].id == "protein"

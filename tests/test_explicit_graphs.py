@@ -713,11 +713,11 @@ def test_relative_direction_missing_frame_nan_round_trip_and_exports(tmp_path: P
     ]
 
     torch = pytest.importorskip("torch")
-    torch_graph = eris.to_torch(loaded, prefer="graph")
+    torch_graph = eris.to_torch(loaded)
     assert isinstance(torch_graph["edge_attr"], torch.Tensor)
     np.testing.assert_equal(torch_graph["edge_attr"].cpu().numpy(), artifact.data["edge_attr"])
     if find_spec("torch_geometric") is not None:
-        pyg = eris.to_pyg(loaded, prefer="graph")
+        pyg = eris.to_pyg(loaded)
         np.testing.assert_equal(pyg.edge_attr.cpu().numpy(), artifact.data["edge_attr"])
 
 

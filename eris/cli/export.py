@@ -15,7 +15,6 @@ app = typer.Typer(add_completion=False, help="Exports artifacts to torch or PyG.
 def to_torch(
     artifact_dir: Path = typer.Option(..., "--artifact-dir", exists=True, readable=True),
     out_path: Optional[Path] = typer.Option(None, "--out", help="Output .pt file"),
-    prefer: str = typer.Option("grid_or_graph", "--prefer"),
     device: Optional[str] = typer.Option(None, "--device"),
     matrix_as_channel: bool = typer.Option(True, "--matrix-as-channel"),
     overwrite: bool = typer.Option(False, "--overwrite"),
@@ -33,7 +32,6 @@ def to_torch(
     save_artifact_to_torch(
         artifact_dir,
         out_path=out_path,
-        prefer=prefer,
         device=device,
         matrix_as_channel=matrix_as_channel,
     )
@@ -45,9 +43,7 @@ def to_torch(
 def to_pyg(
     artifact_dir: Path = typer.Option(..., "--artifact-dir", exists=True, readable=True),
     out_path: Optional[Path] = typer.Option(None, "--out", help="Output .pt file"),
-    prefer: str = typer.Option("grid_or_graph", "--prefer"),
     device: Optional[str] = typer.Option(None, "--device"),
-    matrix_as_channel: bool = typer.Option(True, "--matrix-as-channel"),
     overwrite: bool = typer.Option(False, "--overwrite"),
 ):
     """
@@ -62,9 +58,7 @@ def to_pyg(
     save_artifact_to_pyg(
         artifact_dir,
         out_path=out_path,
-        prefer=prefer,
         device=device,
-        matrix_as_channel=matrix_as_channel,
     )
 
     typer.echo(f"Saved PyG artifact to {out_path}")
