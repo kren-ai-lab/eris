@@ -288,7 +288,6 @@ class BaseEncoder(ABC):
                 parameters=parameters,
                 config_fingerprint=config_fingerprint,
             ):
-                self._validate_runtime_config_dependencies(invocation_parameters)
                 return self._refresh_cache_hit_source_v2(
                     artifact,
                     inp=inp,

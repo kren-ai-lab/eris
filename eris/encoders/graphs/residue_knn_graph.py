@@ -38,17 +38,6 @@ class ResidueKNNGraph(BaseResidueEncoder):
         pos_out = ctx.pos
         n = int(pos_out.shape[0])
 
-        # # Candidates
-        # if self.knn_mode.lower() == "local":
-        #     candidates = _collect_local_neighbor_candidates(pos_out, cutoff=float(self.cutoff))
-        # elif self.knn_mode.lower() == "global":
-        #     candidates = _collect_global_neighbor_candidates(pos_out)
-        # else:
-        #     raise ValueError(
-        #         f"Invalid knn_mode='{self.knn_mode}'. "
-        #         "Expected 'local' or 'global'."
-        #     )
-
         # Graph building
         edge_index, edge_dist = knn_edges(
             pos=pos_out,

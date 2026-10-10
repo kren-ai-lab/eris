@@ -31,18 +31,10 @@ class ResolvedExecution:
     device: str
     precision: Precision
 
-    def __post_init__(self) -> None:
-        if self.device != "cpu":
-            raise ConfigError(f"resolved device must be cpu; got {self.device!r}")
-        if self.precision != "fp32":
-            raise ConfigError(f"resolved precision must be fp32; got {self.precision!r}")
-
 
 def resolve_execution(request: StructuralExecutionConfig) -> ResolvedExecution:
     """Resolve a validated request; ``auto`` means CPU."""
 
-    if not isinstance(request, StructuralExecutionConfig):
-        raise TypeError("request must be a StructuralExecutionConfig")
     return ResolvedExecution(device="cpu", precision=request.precision)
 
 
@@ -52,10 +44,6 @@ def build_execution_provenance(
 ) -> dict[str, object]:
     """Build deterministic JSON-safe requested/resolved execution provenance."""
 
-    if not isinstance(request, StructuralExecutionConfig):
-        raise TypeError("request must be a StructuralExecutionConfig")
-    if not isinstance(resolved, ResolvedExecution):
-        raise TypeError("resolved must be a ResolvedExecution")
     return {
         "requested": {
             "device": request.device,
@@ -73,8 +61,6 @@ def execution_request_cache_identity(
 ) -> dict[str, str]:
     """Project a request onto precision-sensitive artifact cache identity."""
 
-    if not isinstance(request, StructuralExecutionConfig):
-        raise TypeError("request must be a StructuralExecutionConfig")
     return {"precision": request.precision}
 
 

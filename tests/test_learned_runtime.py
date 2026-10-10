@@ -46,19 +46,6 @@ def test_execution_config_rejects_non_fp32_precisions(precision):
         StructuralExecutionConfig(precision=precision)
 
 
-def test_resolved_execution_is_frozen_and_requires_cpu_fp32():
-    resolved = ResolvedExecution(device="cpu", precision="fp32")
-
-    with pytest.raises(FrozenInstanceError):
-        resolved.device = "cpu"
-    with pytest.raises(ConfigError, match="device"):
-        ResolvedExecution(device="auto", precision="fp32")
-    with pytest.raises(ConfigError, match="device"):
-        ResolvedExecution(device="cuda:0", precision="fp32")
-    with pytest.raises(ConfigError, match="precision"):
-        ResolvedExecution(device="cpu", precision="fp16")
-
-
 @pytest.mark.parametrize("device", ["auto", "cpu"])
 def test_requests_resolve_to_cpu_fp32(device):
     request = StructuralExecutionConfig(device=device)
