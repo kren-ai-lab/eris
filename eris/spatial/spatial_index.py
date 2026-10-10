@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import Iterator, List, Tuple
 
 import numpy as np
 
@@ -17,3 +17,33 @@ def build_cell_dict(cells: np.ndarray) -> dict[Tuple[int, int, int], List[int]]:
         key = (int(c[0]), int(c[1]), int(c[2]))
         d.setdefault(key, []).append(i)
     return d
+
+
+def iter_pairs_within(pos: np.ndarray, cutoff: float) -> Iterator[Tuple[int, int, float]]:
+    """Yield each unordered pair ``(i, j, dist)`` with ``dist <= cutoff`` once, in cell-list order."""
+    r = float(cutoff)
+    r2 = r * r
+    cell_dict = build_cell_dict(cell_index(pos, r))
+
+    for cell_key, idxs in cell_dict.items():
+        cx, cy, cz = cell_key
+        for dx, dy, dz in _NEIGHBOR_OFFSETS:
+            nkey = (cx + dx, cy + dy, cz + dz)
+            # ordering to avoid double counting across cells
+            if nkey not in cell_dict or nkey < cell_key:
+                continue
+
+            if nkey == cell_key:
+                # within same cell: compare i<j
+                pairs = (
+                    (idxs[a], idxs[b]) for a in range(len(idxs)) for b in range(a + 1, len(idxs))
+                )
+            else:
+                # across two different cells: full cross
+                pairs = ((i, j) for i in idxs for j in cell_dict[nkey])
+
+            for i, j in pairs:
+                diff = pos[i] - pos[j]
+                dsq = float(diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2])
+                if dsq <= r2:
+                    yield i, j, float(np.sqrt(dsq))

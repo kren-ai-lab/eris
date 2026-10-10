@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from eris.spatial.spatial_index import _NEIGHBOR_OFFSETS, build_cell_dict, cell_index
+from eris.spatial.spatial_index import iter_pairs_within
 
 
 def _collect_local_neighbor_candidates(
@@ -18,53 +18,10 @@ def _collect_local_neighbor_candidates(
     neigh : list of length N
         neigh[i] is a list of (j, dist_ij) with dist_ij <= cutoff and j != i.
     """
-    n = pos.shape[0]
-    r = float(cutoff)
-    r2 = r * r
-
-    cells = cell_index(pos, r)
-    cell_dict = build_cell_dict(cells)
-
-    neigh: List[List[Tuple[int, float]]] = [[] for _ in range(n)]
-
-    for cell_key, idxs in cell_dict.items():
-        cx, cy, cz = cell_key
-
-        for dx, dy, dz in _NEIGHBOR_OFFSETS:
-            nkey = (cx + dx, cy + dy, cz + dz)
-            if nkey not in cell_dict:
-                continue
-
-            # ordering to avoid double counting across cells
-            if nkey < cell_key:
-                continue
-
-            jdxs = cell_dict[nkey]
-
-            if nkey == cell_key:
-                # within same cell: compare i<j
-                for a in range(len(idxs)):
-                    i = idxs[a]
-                    pi = pos[i]
-                    for b in range(a + 1, len(idxs)):
-                        j = idxs[b]
-                        diff = pi - pos[j]
-                        dsq = float(diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2])
-                        if dsq <= r2:
-                            dist = float(np.sqrt(dsq))
-                            neigh[i].append((j, dist))
-                            neigh[j].append((i, dist))
-            else:
-                # across two different cells: full cross
-                for i in idxs:
-                    pi = pos[i]
-                    for j in jdxs:
-                        diff = pi - pos[j]
-                        dsq = float(diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2])
-                        if dsq <= r2:
-                            dist = float(np.sqrt(dsq))
-                            neigh[i].append((j, dist))
-                            neigh[j].append((i, dist))
+    neigh: List[List[Tuple[int, float]]] = [[] for _ in range(pos.shape[0])]
+    for i, j, dist in iter_pairs_within(pos, cutoff):
+        neigh[i].append((j, dist))
+        neigh[j].append((i, dist))
 
     return neigh
 
