@@ -68,14 +68,14 @@ def validate_centroid(data: Dict[str, Any]):
 def validate_residue_data(data: Dict[str, Any]):
     required = ["residue_ids", "resname"]
 
-    n = len(data["residue_ids"])
-    if len(data["resname"]) != n:
-        raise ValueError("Residue data validation: residue_ids and resname must have same length")
-
     for r in required:
         if r not in data:
             raise ValueError(f"Residue data validation: missing {r}")
 
+    if len(data["resname"]) != len(data["residue_ids"]):
+        raise ValueError("Residue data validation: residue_ids and resname must have same length")
+
+    for r in required:
         if data[r].ndim != 1:
             raise ValueError(f"Residue data validation: {r} must be 1D array")
 

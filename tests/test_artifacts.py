@@ -726,3 +726,14 @@ def test_learned_embeddings_must_be_floating_finite_and_non_empty():
     data["global_embedding"] = np.array([], dtype=np.float32)
     meta["shapes"]["global_embedding"] = [0]
     _assert_invalid(meta, data, "D > 0")
+
+
+@pytest.mark.parametrize("missing", ["residue_ids", "resname"])
+def test_residue_validation_reports_missing_key(missing):
+    from eris.core.contracts.validations import validate_residue_data
+
+    data = {"residue_ids": np.array(["A:1::GLY"]), "resname": np.array(["GLY"])}
+    del data[missing]
+
+    with pytest.raises(ValueError, match=f"missing {missing}"):
+        validate_residue_data(data)
