@@ -34,7 +34,7 @@ from eris.features.structure_annotations import (
     secondary_structure_onehot,
     solvent_accessibility,
 )
-from eris.features.utils import normalize_scalar_params, onehot, safe_float
+from eris.features.utils import normalize_choice, normalize_scalar_params, onehot, safe_float
 
 # --- canonical ordering (NO CAMBIAR en releases)
 _AA_ONEHOT_KEYS = [f"aa_onehot.{aa}" for aa in AA_VOCAB]
@@ -358,12 +358,7 @@ _AAINDEX_SOURCE = "AAIndex1"
 
 
 def _choice(name: str, value: Any, choices: tuple[str, ...]) -> str:
-    if not isinstance(value, str):
-        raise TypeError(f"aaindex parameter '{name}' must be a string")
-    normalized = value.strip().lower()
-    if normalized not in choices:
-        raise ValueError(f"aaindex parameter '{name}' must be one of: {', '.join(choices)}")
-    return normalized
+    return normalize_choice(f"aaindex parameter '{name}'", value, choices)
 
 
 def normalize_aaindex_params(params: Dict[str, Any]) -> Dict[str, Any]:

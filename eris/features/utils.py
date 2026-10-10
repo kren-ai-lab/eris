@@ -5,6 +5,23 @@ from typing import Any, Dict, List, Sequence, Tuple
 import numpy as np
 
 
+def normalize_choice(
+    name: str,
+    value: Any,
+    choices: Sequence[str],
+    *,
+    error: type[Exception] = ValueError,
+) -> str:
+    """Return the stripped, lower-cased choice or raise ``error`` naming the allowed values."""
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string")
+    normalized = value.strip().lower()
+    if normalized not in choices:
+        allowed = ", ".join(choices)
+        raise error(f"{name} must be one of: {allowed}")
+    return normalized
+
+
 def parse_mode(mode: Any) -> List[Tuple[str, Dict[str, Any]]]:
     if isinstance(mode, str):
         return [(t.strip(), {}) for t in mode.split("+") if t.strip()]
