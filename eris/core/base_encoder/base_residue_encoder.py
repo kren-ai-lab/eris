@@ -54,4 +54,5 @@ class BaseResidueEncoder(BaseEncoder):
             altloc=self.config.altloc,
             missing_ca=self.config.missing_residue_center,
             plddt_source=self.config.plddt_source,
+            structure=ctx.structure,
         )

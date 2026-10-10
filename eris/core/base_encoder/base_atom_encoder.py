@@ -18,5 +18,6 @@ class BaseAtomEncoder(BaseEncoder):
             keep_ions=self.config.keep_ions,
             altloc=self.config.altloc,
             amino_acids_only=self.config.amino_acids_only,
+            structure=ctx.structure,
         )
         return strc

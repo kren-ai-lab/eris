@@ -54,6 +54,7 @@ class EncodingContext:
     centroid: np.ndarray | None = None
     pos: np.ndarray | None = None
     runtime: dict[str, Any] = field(default_factory=dict)
+    structure: Any = None  # parsed gemmi.Structure, reused by _load_structure
 
 
 class BaseEncoder(ABC):
@@ -247,9 +248,10 @@ class BaseEncoder(ABC):
     def encode(self, inp: StructureInput) -> StructureArtifact:
         from eris.core.artifact_schema_v2 import compute_config_fingerprint
         from eris.core.hashing import sha256_file
-        from eris.core.io import resolve_structure_input
+        from eris.core.io import load_structure, resolve_structure_input
 
-        inp = resolve_structure_input(inp)
+        structure = load_structure(Path(inp.source))
+        inp = resolve_structure_input(inp, structure)
 
         source_sha256 = sha256_file(Path(inp.source))
         invocation_parameters = self.config.to_dict()
@@ -294,7 +296,7 @@ class BaseEncoder(ABC):
                     extensions=extensions,
                 )
 
-        ctx = EncodingContext(inp=inp, source_sha256=source_sha256)
+        ctx = EncodingContext(inp=inp, source_sha256=source_sha256, structure=structure)
         self._prepare_data(ctx=ctx)
         _structure_validation(ctx=ctx)
 

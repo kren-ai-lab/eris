@@ -196,3 +196,22 @@ def test_old_residue_cache_key_cannot_satisfy_new_output_contract(tmp_path: Path
     result = encoder.encode(structure_input)
     assert result.data["omitted_residue_ids"].tolist() == ["A:16::GLY"]
     assert cache.get_v2(current_key) is not None
+
+
+@pytest.mark.parametrize("representation", ["residue_point_cloud", "atom_point_cloud"])
+def test_encode_parses_the_structure_once_on_cache_miss(monkeypatch, representation):
+    import gemmi
+
+    import eris
+
+    calls = []
+    real_read = gemmi.read_structure
+
+    def counting_read(*args, **kwargs):
+        calls.append(args[0])
+        return real_read(*args, **kwargs)
+
+    monkeypatch.setattr(gemmi, "read_structure", counting_read)
+    eris.encode("tests/data/1AQ2.pdb", representation=representation, use_cache=False)
+
+    assert len(calls) == 1
