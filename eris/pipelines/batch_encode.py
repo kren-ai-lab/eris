@@ -274,31 +274,6 @@ def _input_matches(
     )
 
 
-def _execution_matches(
-    artifact: StructureArtifact,
-    expected: dict[str, str] | None,
-) -> bool:
-    if expected is None:
-        return True
-    provenance = artifact.meta.get("provenance")
-    if not isinstance(provenance, dict):
-        return False
-    environment = provenance.get("environment")
-    if not isinstance(environment, dict):
-        return False
-    execution = environment.get("execution")
-    if not isinstance(execution, dict):
-        return False
-    requested = execution.get("requested")
-    resolved = execution.get("resolved")
-    if not isinstance(requested, dict) or not isinstance(resolved, dict):
-        return False
-    return (
-        requested.get("precision") == expected["precision"]
-        and resolved.get("precision") == expected["precision"]
-    )
-
-
 def _artifact_matches_request(
     artifact: StructureArtifact,
     row: StructureManifestRow,
@@ -349,7 +324,13 @@ def _artifact_matches_request(
     if identity.encoder_version is not None:
         if encoder.get("version") != identity.encoder_version:
             return False
-    return _execution_matches(artifact, identity.execution)
+    if identity.execution is None:
+        return True
+    from eris.core.learned.runner import _cached_execution_matches
+
+    return _cached_execution_matches(
+        meta.get("provenance"), requested_precision=identity.execution["precision"]
+    )
 
 
 def _load_equivalent_artifact(
