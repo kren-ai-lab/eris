@@ -5,7 +5,7 @@ from importlib import metadata
 
 import pytest
 
-from eris.core.artifact_schema_v2 import compute_config_fingerprint
+from eris.core.artifact_schema_v2 import canonical_json, compute_config_fingerprint
 from eris.core.config import (
     _CONFIG_TYPES_BY_REPRESENTATION,
     AtomKNNGraphConfig,
@@ -283,7 +283,7 @@ def test_nested_feature_parameter_order_is_canonical():
 
     assert first == second
     assert first.to_dict() == second.to_dict()
-    assert first.to_json() == second.to_json()
+    assert canonical_json(first.to_dict()) == canonical_json(second.to_dict())
 
 
 def test_parameterized_residue_features_are_canonical_and_provider_pinned():
@@ -590,7 +590,7 @@ def test_explicit_edges_override_generation_fields_canonically():
 
     assert with_ignored_generation == canonical
     assert with_ignored_generation.to_dict() == canonical.to_dict()
-    assert with_ignored_generation.to_json() == canonical.to_json()
+    assert canonical_json(with_ignored_generation.to_dict()) == canonical_json(canonical.to_dict())
     assert canonical.to_dict()["edges"] == [2.0, 4.0, 8.0]
     assert canonical.dmin is canonical.dmax is canonical.num_bins is None
 
@@ -633,7 +633,7 @@ def test_serialization_preserves_none_and_excludes_non_parameter_state():
 
     assert payload["scale"] is None
     assert payload["voxel_size"] is None
-    assert config.to_json() == config.to_json()
+    canonical_json(payload)
     for excluded in (
         "use_cache",
         "cache",

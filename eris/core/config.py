@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
@@ -290,15 +289,6 @@ class CanonicalRepresentationConfig:
     def to_fingerprint_dict(self) -> dict[str, Any]:
         """Return canonical scientific parameters used for config/cache identity."""
         return self.to_dict()
-
-    def to_json(self) -> str:
-        return json.dumps(
-            self.to_dict(),
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-            allow_nan=False,
-        )
 
 
 @dataclass(frozen=True, kw_only=True)

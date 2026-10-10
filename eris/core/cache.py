@@ -1,36 +1,31 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from platformdirs import user_cache_dir
 
+from eris.core.artifact_schema_v2 import (
+    _IMPLEMENTATION_PATH,
+    ArtifactSchemaV2ValidationError,
+    _require_non_empty_string,
+    _require_sha256,
+    _validated_chain_ids,
+    canonical_json,
+    normalize_metadata,
+)
 from eris.core.hashing import sha256_text
 
 if TYPE_CHECKING:
     from eris.core.artifacts import StructureArtifact
 
 
-_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-_IMPLEMENTATION_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
-
-
-def _require_non_empty_string(value: Any, name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{name} must be a non-empty string")
-    return value
-
-
-def _require_sha256(value: Any, name: str) -> str:
-    if not isinstance(value, str) or _SHA256_PATTERN.fullmatch(value) is None:
-        raise ValueError(f"{name} must be a lowercase 64-character SHA-256 hex string")
-    return value
-
-
 def _validate_cache_key_v2(key: str) -> str:
-    return _require_sha256(key, "v2 cache key")
+    try:
+        return _require_sha256(key, "v2 cache key")
+    except ArtifactSchemaV2ValidationError as error:
+        raise ValueError(str(error)) from error
 
 
 def parser_hint_from_source(source: str | Path) -> str:
@@ -73,30 +68,23 @@ def compute_cache_key_v2(
     model: Mapping[str, Any] | None = None,
     execution: Mapping[str, Any] | None = None,
 ) -> str:
-    from eris.core.artifact_schema_v2 import canonical_json, normalize_metadata
-
-    _require_non_empty_string(representation_name, "representation_name")
-    implementation = _require_non_empty_string(
-        encoder_implementation,
-        "encoder_implementation",
-    )
-    if _IMPLEMENTATION_PATTERN.fullmatch(implementation) is None:
-        raise ValueError("encoder_implementation must be a valid dotted implementation path")
-    _require_non_empty_string(encoder_version, "encoder_version")
-    _require_sha256(config_fingerprint, "config_fingerprint")
-    _require_sha256(source_sha256, "source_sha256")
-    hint = _require_non_empty_string(parser_hint, "parser_hint")
-    if type(model_index) is not int or model_index < 0:
-        raise ValueError("model_index must be a plain integer >= 0")
-    if isinstance(chain_ids, (str, bytes)) or not isinstance(chain_ids, Sequence):
-        raise ValueError("chain_ids must be a non-empty sequence of strings")
-    normalized_chain_ids = list(chain_ids)
-    if not normalized_chain_ids or any(
-        not isinstance(chain, str) for chain in normalized_chain_ids
-    ):
-        raise ValueError("chain_ids must be a non-empty sequence of strings")
-    if len(normalized_chain_ids) != len(set(normalized_chain_ids)):
-        raise ValueError("chain_ids must not contain duplicates")
+    try:
+        _require_non_empty_string(representation_name, "representation_name")
+        implementation = _require_non_empty_string(
+            encoder_implementation,
+            "encoder_implementation",
+        )
+        if _IMPLEMENTATION_PATH.fullmatch(implementation) is None:
+            raise ValueError("encoder_implementation must be a valid dotted implementation path")
+        _require_non_empty_string(encoder_version, "encoder_version")
+        _require_sha256(config_fingerprint, "config_fingerprint")
+        _require_sha256(source_sha256, "source_sha256")
+        hint = _require_non_empty_string(parser_hint, "parser_hint")
+        if type(model_index) is not int or model_index < 0:
+            raise ValueError("model_index must be a plain integer >= 0")
+        normalized_chain_ids = _validated_chain_ids(chain_ids, "chain_ids")
+    except ArtifactSchemaV2ValidationError as error:
+        raise ValueError(str(error)) from error
     if model is not None and not isinstance(model, Mapping):
         raise ValueError("model must be a mapping or None")
     if execution is not None and not isinstance(execution, Mapping):
@@ -145,21 +133,9 @@ class DiskCache:
         if not entry_dir.is_dir():
             return None
         try:
-            artifact = StructureArtifact.load(entry_dir)
+            return StructureArtifact.load(entry_dir)
         except (ArtifactValidationError, OSError):
             return None
-        if type(artifact.meta.get("schema_version")) is not int:
-            return None
-        if artifact.meta["schema_version"] != 2:
-            return None
-        return artifact
 
     def set_v2(self, key: str, artifact: StructureArtifact) -> None:
-        from eris.core.artifacts import ArtifactValidationError
-
-        entry_dir = self._v2_entry_dir(key)
-        version = artifact.meta.get("schema_version")
-        if type(version) is not int or version != 2:
-            raise ArtifactValidationError("V2 cache entries require schema_version=2.")
-        artifact.validate(strict=True)
-        artifact.save(entry_dir)
+        artifact.save(self._v2_entry_dir(key))

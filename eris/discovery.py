@@ -100,7 +100,7 @@ def get_representation_info(name: str) -> dict[str, Any]:
     return _json_safe_copy(
         {
             "name": info.name,
-            "family": info.family,
+            "family": "explicit",
             "type": info.representation_type,
             "granularity": info.granularity,
             "coordinate_source": info.default_coordinate_source,

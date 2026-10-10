@@ -32,13 +32,6 @@ def _structure_validation(ctx: EncodingContext):
     strc = ctx.raw_structure
     n = int(strc["pos"].shape[0])
 
-    if n < 1:
-        logger.error(
-            f"Structure: {ctx.inp.source} does not contain residues/atoms.",
-            extra={"n_nodes": n, "input": ctx.inp.source},
-        )
-        raise exc.ExecutionError(f"Structure: {ctx.inp.source} does not contain residues/atoms.")
-
     if n < 20:
         logger.warning(
             "Low node count. Structure loaded.",
@@ -108,25 +101,16 @@ class BaseEncoder(ABC):
 
         pos_out = pos.astype(np.float32)
 
-        if self.config.center and n > 0:
+        if self.config.center:
             centroid = pos_out.mean(axis=0, keepdims=True).astype(np.float32)
             pos_out = pos_out - centroid
         else:
             centroid = np.zeros((1, 3), dtype=np.float32)
 
         if self.config.scale is not None:
-            s = float(self.config.scale)
-            if s <= 0:
-                raise ValueError("scale must be > 0")
-            pos_out = (pos_out / s).astype(np.float32)
+            pos_out = (pos_out / float(self.config.scale)).astype(np.float32)
 
         return centroid, pos_out
-
-    def _feature_keys_v2(self, data: dict[str, Any], ctx: EncodingContext):
-        return self.representation.feature_keys_v2(data, ctx)
-
-    def _counts_v2(self, data: dict[str, Any]):
-        return self.representation.counts_v2(data)
 
     def _output_declarations_v2(self, data: dict[str, np.ndarray]):
         return self.output_declarations_v2
@@ -152,17 +136,7 @@ class BaseEncoder(ABC):
             raise ValueError("prospective Schema v2 metadata requires ctx.input_format")
 
         representation_name = self.config.representation_name
-        if representation_name != self.name:
-            raise ValueError(
-                "config representation_name does not match encoder name: "
-                f"{representation_name!r} != {self.name!r}"
-            )
         granularity = self.config.granularity
-        if granularity != self.granularity_contract.level:
-            raise ValueError(
-                "config granularity does not match encoder contract: "
-                f"{granularity!r} != {self.granularity_contract.level!r}"
-            )
 
         return build_artifact_metadata(
             data=data,
@@ -189,8 +163,8 @@ class BaseEncoder(ABC):
                 chain_ids=ctx.inp.chain_id,
             ),
             output_declarations=self._output_declarations_v2(data),
-            feature_keys=self._feature_keys_v2(data, ctx),
-            counts=self._counts_v2(data),
+            feature_keys=self.representation.feature_keys_v2(data, ctx),
+            counts=self.representation.counts_v2(data),
             extensions=extensions,
         )
 

@@ -429,14 +429,14 @@ def test_non_finite_v2_metadata_fails_without_mutation(tmp_path, bad_value):
     assert not target.exists()
 
 
-def test_v2_save_validate_false_cannot_bypass_strict_validation(tmp_path):
+def test_v2_save_enforces_strict_validation(tmp_path):
     artifact = _explicit_artifact()
     artifact.meta["counts"]["n_nodes"] = 99
     meta_before = deepcopy(artifact.meta)
     target = tmp_path / "invalid-counts"
 
     with pytest.raises(ArtifactValidationError, match="n_nodes"):
-        artifact.save(target, validate=False)
+        artifact.save(target)
 
     assert artifact.meta == meta_before
     assert not target.exists()
@@ -499,7 +499,7 @@ def test_versionless_metadata_is_rejected_by_the_schema_v2_boundary():
         artifact.finalize()
 
 
-def test_v1_save_validate_false_cannot_bypass_hard_cut(tmp_path):
+def test_v1_save_enforces_hard_cut(tmp_path):
     artifact = StructureArtifact(
         data={"value": np.array([1], dtype=np.float32)},
         meta={"schema_version": 1},
@@ -507,7 +507,7 @@ def test_v1_save_validate_false_cannot_bypass_hard_cut(tmp_path):
 
     target = tmp_path / "v1-unvalidated"
     with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
-        artifact.save(target, validate=False)
+        artifact.save(target)
 
     assert artifact.meta["schema_version"] == 1
     assert not target.exists()

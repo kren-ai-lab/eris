@@ -7,7 +7,7 @@ import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, TypedDict, Union
+from typing import Any, TypedDict, Union
 
 import numpy as np
 
@@ -15,10 +15,6 @@ from eris.exceptions import ErisError
 
 ARTIFACT_SCHEMA_V2_VERSION = 2
 
-RepresentationFamily = Literal["explicit", "learned"]
-RepresentationType = Literal["cloud", "graph", "matrix", "grid", "vector", "embedding"]
-Granularity = Literal["atom", "residue", "structure", "mixed"]
-CoordinateSource = Literal["atom", "ca", "residue_mean", "residue_com", "model_specific"]
 JSONValue = Union[  # noqa: UP007 - explicit Union keeps the recursive alias runtime-safe
     None, bool, int, float, str, list["JSONValue"], dict[str, "JSONValue"]
 ]
@@ -41,66 +37,6 @@ class InputMetadata(InputMetadataRequired, total=False):
     original_filename: str
     structure_id: str
     source_database: str
-
-
-class CheckpointMetadataRequired(TypedDict):
-    identifier: str
-
-
-class CheckpointMetadata(CheckpointMetadataRequired, total=False):
-    revision: str
-    source: str
-    sha256: str
-
-
-class ModelMetadata(TypedDict):
-    architecture: str
-    checkpoint: CheckpointMetadata
-
-
-class ProvenanceMetadataRequired(TypedDict):
-    eris_version: str
-    config_fingerprint: str
-
-
-class ProvenanceMetadata(ProvenanceMetadataRequired, total=False):
-    environment: dict[str, JSONValue]
-    created_at: str
-    invocation: JSONValue
-
-
-class OutputMetadataRequired(TypedDict):
-    name: str
-    role: str
-
-
-class OutputMetadata(OutputMetadataRequired, total=False):
-    granularity: Granularity
-    layout: str
-    description: str
-
-
-class ArtifactSchemaV2MetadataRequired(TypedDict):
-    schema_version: int
-    representation_name: str
-    representation_family: RepresentationFamily
-    representation_type: RepresentationType
-    granularity: Granularity
-    coordinate_source: CoordinateSource
-    encoder: EncoderMetadata
-    input: InputMetadata
-    parameters: dict[str, JSONValue]
-    provenance: ProvenanceMetadata
-    outputs: list[OutputMetadata]
-    feature_keys: dict[str, list[str]]
-    shapes: dict[str, list[int]]
-    dtypes: dict[str, str]
-    counts: dict[str, int]
-
-
-class ArtifactSchemaV2Metadata(ArtifactSchemaV2MetadataRequired, total=False):
-    model: ModelMetadata
-    extensions: dict[str, dict[str, JSONValue]]
 
 
 class ArtifactSchemaV2ValidationError(ErisError):
@@ -345,11 +281,11 @@ def build_provenance(
     representation_name: str,
     parameters: Mapping[str, Any],
     chain_ids: Sequence[str],
-) -> ProvenanceMetadata:
+) -> dict[str, Any]:
     """Build deterministic required provenance without optional environment state."""
     from eris import __version__
 
-    provenance: ProvenanceMetadata = {
+    provenance: dict[str, Any] = {
         "eris_version": __version__,
         "config_fingerprint": compute_config_fingerprint(
             representation_name,
@@ -481,7 +417,7 @@ def build_outputs(
     *,
     data: Mapping[str, np.ndarray],
     declarations: Sequence[Mapping[str, Any]],
-) -> list[OutputMetadata]:
+) -> list[dict[str, Any]]:
     """Copy explicit ordered output declarations and verify complete payload coverage."""
     arrays = _validate_data(data)
     if not isinstance(declarations, Sequence) or isinstance(declarations, (str, bytes)):
@@ -578,7 +514,7 @@ def build_artifact_metadata(
     counts: Mapping[str, int],
     model: Mapping[str, Any] | None = None,
     extensions: Mapping[str, Mapping[str, Any]] | None = None,
-) -> ArtifactSchemaV2Metadata:
+) -> dict[str, Any]:
     """Build and strictly validate complete Schema v2 metadata for any producer family."""
     metadata: dict[str, Any] = {
         "schema_version": ARTIFACT_SCHEMA_V2_VERSION,
@@ -850,7 +786,7 @@ def validate_schema_v2(
     data: Mapping[str, np.ndarray],
     *,
     strict: bool = False,
-) -> ArtifactSchemaV2Metadata:
+) -> dict[str, Any]:
     """Validate a synthetic/runtime Schema v2 mapping and return normalized metadata."""
     if not isinstance(meta, Mapping):
         _fail("meta must be a mapping")
@@ -941,7 +877,6 @@ def validate_schema_v2(
 
 __all__ = [
     "ARTIFACT_SCHEMA_V2_VERSION",
-    "ArtifactSchemaV2Metadata",
     "ArtifactSchemaV2ValidationError",
     "build_artifact_metadata",
     "build_counts",

@@ -23,12 +23,11 @@ _SCHEMA_V1_UNSUPPORTED = (
 )
 
 
-def _detect_artifact_schema(meta: dict[str, Any]) -> str:
+def _require_v2(meta: dict[str, Any]) -> None:
     if not isinstance(meta, dict):
         raise ArtifactValidationError("Artifact metadata must be a dict.")
-    if type(meta.get("schema_version")) is int and meta["schema_version"] == 2:
-        return "v2"
-    return "obsolete"
+    if type(meta.get("schema_version")) is not int or meta["schema_version"] != 2:
+        raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
 
 
 def _validate_artifact_v2(
@@ -40,6 +39,7 @@ def _validate_artifact_v2(
         validate_schema_v2,
     )
 
+    _require_v2(meta)
     try:
         return validate_schema_v2(meta, data, strict=True)
     except ArtifactSchemaV2ValidationError as error:
@@ -119,30 +119,20 @@ def _v2_output_names(meta: dict[str, Any]) -> list[str]:
     return names
 
 
-def _load_npz_data(
-    data_path: Path,
-    *,
-    output_names: list[str] | None = None,
-) -> dict[str, np.ndarray]:
+def _load_npz_data(data_path: Path, output_names: list[str]) -> dict[str, np.ndarray]:
     try:
         loaded = np.load(data_path, allow_pickle=False)
         if not isinstance(loaded, np.lib.npyio.NpzFile):
             raise ArtifactValidationError(f"Artifact payload is not an NPZ archive: {data_path}")
         with loaded as npz:
             member_names = list(npz.files)
-            if output_names is not None:
-                if len(member_names) != len(set(member_names)):
-                    raise ArtifactValidationError(
-                        "Schema v2 data.npz contains duplicate member names."
-                    )
-                if set(member_names) != set(output_names):
-                    raise ArtifactValidationError(
-                        "Schema v2 data.npz members must exactly match meta.outputs names."
-                    )
-                names = output_names
-            else:
-                names = member_names
-            return {name: np.array(npz[name], copy=True) for name in names}
+            if len(member_names) != len(set(member_names)):
+                raise ArtifactValidationError("Schema v2 data.npz contains duplicate member names.")
+            if set(member_names) != set(output_names):
+                raise ArtifactValidationError(
+                    "Schema v2 data.npz members must exactly match meta.outputs names."
+                )
+            return {name: np.array(npz[name], copy=True) for name in output_names}
     except ArtifactValidationError:
         raise
     except (EOFError, KeyError, ValueError, zipfile.BadZipFile) as error:
@@ -163,20 +153,15 @@ class StructureArtifact:
     meta: Dict[str, Any]
 
     def finalize(self) -> None:
-        schema = _detect_artifact_schema(self.meta)
-        if schema != "v2":
-            raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
         canonical_meta = _validate_artifact_v2(self.meta, self.data)
         if canonical_meta != self.meta:
             self.meta = canonical_meta
 
     def validate(self, strict=False):
-        schema = _detect_artifact_schema(self.meta)
-        if schema != "v2":
-            raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
+        # Validation is always strict; `strict` is kept for existing callers.
         _validate_artifact_v2(self.meta, self.data)
 
-    def save(self, outdir: Path, *, validate: bool = True) -> None:
+    def save(self, outdir: Path) -> None:
         self.finalize()
         output_names = [output["name"] for output in self.meta["outputs"]]
         serialized_data = {name: self.data[name] for name in output_names}
@@ -196,7 +181,8 @@ class StructureArtifact:
         )
 
     @staticmethod
-    def load(indir: Path, *, validate: bool = True, strict: bool = False) -> "StructureArtifact":
+    def load(indir: Path, *, strict: bool = False) -> "StructureArtifact":
+        # Loading always validates strictly; `strict` is kept for existing callers.
         if not indir.exists():
             raise ArtifactValidationError(f"Artifact directory does not exist: {indir}")
         if not indir.is_dir():
@@ -211,11 +197,7 @@ class StructureArtifact:
             )
 
         meta = _read_artifact_metadata(meta_path)
-        schema = _detect_artifact_schema(meta)
-        if schema != "v2":
-            raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
-
-        output_names = _v2_output_names(meta)
-        data = _load_npz_data(data_path, output_names=output_names)
+        _require_v2(meta)
+        data = _load_npz_data(data_path, _v2_output_names(meta))
         canonical_meta = _validate_artifact_v2(meta, data)
         return StructureArtifact(data=data, meta=canonical_meta)
