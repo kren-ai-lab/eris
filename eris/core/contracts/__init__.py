@@ -1,5 +1,4 @@
 from eris.core.contracts.granularity import AtomContract, ResidueContract
-from eris.core.contracts.graph_contract import GraphContract
-from eris.core.contracts.universal import UniversalContract
+from eris.core.contracts.validations import validate_encoder_output
 
-__all__ = ["AtomContract", "GraphContract", "ResidueContract", "UniversalContract"]
+__all__ = ["AtomContract", "ResidueContract", "validate_encoder_output"]

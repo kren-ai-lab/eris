@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -10,15 +10,12 @@ from eris.core.representations import PointCloudRepresentation
 from eris.core.representations.output_declarations import RESIDUE_POINT_CLOUD_OUTPUTS
 from eris.features.node.residue import build_node_attr
 
-if TYPE_CHECKING:
-    from eris.core.representations.base_rep import BaseRepresentation
-
 
 class ResiduePointCloudCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_point_cloud"
     version: ClassVar[str] = "0.1.3"
-    representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
+    representation: ClassVar = PointCloudRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_POINT_CLOUD_OUTPUTS
 
     config_type: ClassVar = ResiduePointCloudConfig

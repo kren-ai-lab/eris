@@ -1,10 +1,9 @@
 from typing import Any, ClassVar, Dict
 
-from eris.core.contracts.base_contract import BaseContract
 from eris.exceptions import ExecutionError
 
 
-class GranularityContract(BaseContract):
+class GranularityContract:
     level: ClassVar[str]
     REQUIRED_FIELDS: ClassVar[set[str]]
 

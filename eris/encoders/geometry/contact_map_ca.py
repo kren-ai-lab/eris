@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -10,15 +10,12 @@ from eris.core.representations import MatrixRepresentation
 from eris.core.representations.output_declarations import RESIDUE_CONTACT_MAP_OUTPUTS
 from eris.encoders.geometry.distogram_ca import pairwise_distances, residue_fields
 
-if TYPE_CHECKING:
-    from eris.core.representations.base_rep import BaseRepresentation
-
 
 class ContactMapCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_contact_map"
     version: ClassVar[str] = "0.1.2"
-    representation: ClassVar[BaseRepresentation] = MatrixRepresentation("contact")
+    representation: ClassVar = MatrixRepresentation("contact")
     output_declarations_v2: ClassVar = RESIDUE_CONTACT_MAP_OUTPUTS
 
     config_type: ClassVar = ResidueContactMapConfig

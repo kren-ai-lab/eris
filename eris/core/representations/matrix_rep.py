@@ -2,20 +2,15 @@ from typing import Any, ClassVar
 
 from eris.core.artifact_schema_v2 import build_counts, build_feature_keys
 from eris.core.base_encoder import EncodingContext
-from eris.core.contracts.distogram_contract import DistogramContract
-from eris.core.representations.base_rep import BaseRepresentation
 
 
-class MatrixRepresentation(BaseRepresentation):
+class MatrixRepresentation:
     """Residue NxN matrix; ``primary_key`` names the matrix output."""
 
     representation_type: ClassVar[str] = "matrix"
 
     def __init__(self, primary_key: str) -> None:
         self.primary_key = primary_key
-
-    def contracts(self):
-        return [DistogramContract()]
 
     def feature_keys_v2(
         self,

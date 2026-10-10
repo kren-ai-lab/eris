@@ -2,6 +2,8 @@ from typing import Any, Dict
 
 import numpy as np
 
+from eris.core.contracts.granularity import GranularityContract
+
 
 def validate_pos(data: Dict[str, Any]):
     if "pos" not in data:
@@ -20,33 +22,12 @@ def validate_pos(data: Dict[str, Any]):
         raise TypeError("Position validation: 'pos' items must be finite")
 
 
-def validate_node_feature(data: Dict[str, Any], key: str):
-    if key not in data:
-        return
-
-    arr = data[key]
-    pos = data["pos"]
-
-    if arr.shape[0] != pos.shape[0]:
-        raise ValueError(
-            f"Node feature validation: '{key}' must have same length as number of nodes"
-        )
-
-
 def validate_edge_index(data: Dict[str, Any]):
     if "edge_index" not in data:
         raise ValueError("Edge validation: missing 'edge_index'")
 
     edge_index = data["edge_index"]
 
-    # Shape (2, E)
-    if not isinstance(edge_index, np.ndarray):
-        raise TypeError("Edge validation: 'edge_index' must be np.ndarray")
-
-    if edge_index.ndim != 2 or edge_index.shape[0] != 2:
-        raise ValueError("Edge validation: 'edge_index' must have shape (2, E)")
-
-    # Dtype
     if edge_index.dtype != np.int64:
         raise TypeError("Edge validation: 'edge_index' must be int64")
 
@@ -62,16 +43,6 @@ def validate_edge_features(data: Dict[str, Any], key: str = "edge_attr"):
         return
 
     edge_attr = data[key]
-    edge_index = data["edge_index"]
-
-    if not isinstance(edge_attr, np.ndarray):
-        raise TypeError(f"Edge feature validation: {key} must be np.ndarray")
-
-    if edge_attr.ndim != 2:
-        raise ValueError(f"Edge feature validation: {key} must be 2D (E, D)")
-
-    if edge_attr.shape[0] != edge_index.shape[1]:
-        raise ValueError(f"Edge feature validation: {key} must have length E")
 
     if np.isinf(edge_attr).any():
         raise ValueError(f"Edge feature validation: {key} must not contain infinite values")
@@ -134,12 +105,6 @@ def validate_grid(data: Dict[str, Any]):
     # -------------------------
     # GRID (core tensor)
     # -------------------------
-    if not isinstance(grid, np.ndarray):
-        raise TypeError("Grid validation: 'grid' must be np.ndarray")
-
-    if grid.ndim != 4:
-        raise ValueError("Grid validation: 'grid' must have shape (C, D, H, W)")
-
     if not np.issubdtype(grid.dtype, np.floating):
         raise TypeError("Grid validation: 'grid' must be float dtype")
 
@@ -198,3 +163,34 @@ def validate_grid(data: Dict[str, Any]):
             raise ValueError("origin contains non-finite values")
 
     return True
+
+
+def validate_encoder_output(
+    data: Dict[str, Any],
+    representation_type: str,
+    granularity_contract: GranularityContract,
+) -> None:
+    """Check explicit encoder output before Schema v2 strict validation.
+
+    Only checks Schema v2 does not perform live here (dtypes, finiteness, index ranges,
+    centroid and residue string arrays); shapes and cross-output alignment are left to it.
+    """
+    if not isinstance(data, dict):
+        raise TypeError("data must be a dict")
+    if not data:
+        raise ValueError("data cannot be empty")
+    for k, v in data.items():
+        if not isinstance(v, np.ndarray):
+            raise TypeError(f"data[{k}] must be np.ndarray")
+
+    granularity_contract.validate(data)
+
+    if representation_type == "grid":
+        validate_grid(data)
+    else:
+        validate_pos(data)
+    if representation_type == "graph":
+        validate_edge_index(data)
+        validate_edge_features(data, "edge_attr")
+    validate_centroid(data)
+    validate_residue_data(data)

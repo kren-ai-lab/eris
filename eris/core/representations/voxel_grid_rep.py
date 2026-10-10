@@ -2,15 +2,10 @@ from typing import Any, ClassVar
 
 from eris.core.artifact_schema_v2 import build_counts, build_feature_keys
 from eris.core.base_encoder import EncodingContext
-from eris.core.contracts.voxel_grid_contract import VoxelGridContract
-from eris.core.representations.base_rep import BaseRepresentation
 
 
-class VoxelGridRepresentation(BaseRepresentation):
+class VoxelGridRepresentation:
     representation_type: ClassVar[str] = "grid"
-
-    def contracts(self):
-        return [VoxelGridContract()]
 
     def feature_keys_v2(
         self,

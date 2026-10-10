@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueContactMapBinsConfig
@@ -8,15 +8,12 @@ from eris.core.representations import MatrixRepresentation
 from eris.core.representations.output_declarations import RESIDUE_CONTACT_MAP_BINS_OUTPUTS
 from eris.encoders.geometry.distogram_bins_ca import binned_distance_data
 
-if TYPE_CHECKING:
-    from eris.core.representations.base_rep import BaseRepresentation
-
 
 class ContactMapBinsCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_contact_map_bins"
     version: ClassVar[str] = "0.1.2"
-    representation: ClassVar[BaseRepresentation] = MatrixRepresentation("contact_bins")
+    representation: ClassVar = MatrixRepresentation("contact_bins")
     output_declarations_v2: ClassVar = RESIDUE_CONTACT_MAP_BINS_OUTPUTS
 
     config_type: ClassVar = ResidueContactMapBinsConfig

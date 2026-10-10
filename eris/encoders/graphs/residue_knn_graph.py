@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -21,15 +21,12 @@ from eris.features.interface import (
 from eris.features.node.residue import build_node_attr
 from eris.spatial.knn import knn_edges
 
-if TYPE_CHECKING:
-    from eris.core.representations.base_rep import BaseRepresentation
-
 
 class ResidueKNNGraph(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_knn_graph"
     version: ClassVar[str] = "0.1.4"
-    representation: ClassVar[BaseRepresentation] = GraphRepresentation()
+    representation: ClassVar = GraphRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_GRAPH_OUTPUTS
 
     config_type: ClassVar = ResidueKNNGraphConfig

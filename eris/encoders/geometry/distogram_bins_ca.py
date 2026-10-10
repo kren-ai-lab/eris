@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -10,9 +10,6 @@ from eris.core.representations import MatrixRepresentation
 from eris.core.representations.output_declarations import RESIDUE_DISTOGRAM_BINS_OUTPUTS
 from eris.encoders.geometry.distogram_ca import pairwise_distances, residue_fields
 from eris.features.utils import validate_bin_edges
-
-if TYPE_CHECKING:
-    from eris.core.representations.base_rep import BaseRepresentation
 
 
 def binned_distance_data(
@@ -54,7 +51,7 @@ class DistogramBinsCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_distogram_bins"
     version: ClassVar[str] = "0.1.2"
-    representation: ClassVar[BaseRepresentation] = MatrixRepresentation("dist_bins")
+    representation: ClassVar = MatrixRepresentation("dist_bins")
     output_declarations_v2: ClassVar = RESIDUE_DISTOGRAM_BINS_OUTPUTS
 
     config_type: ClassVar = ResidueDistogramBinsConfig

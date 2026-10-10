@@ -20,13 +20,12 @@ from eris.core.cache import (
     parser_hint_from_source,
     parser_hint_matches_format,
 )
-from eris.core.contracts import UniversalContract
+from eris.core.contracts import validate_encoder_output
 from eris.core.types import StructureInput
 
 if TYPE_CHECKING:
     from eris.core.config import CanonicalRepresentationConfig
     from eris.core.contracts.granularity import GranularityContract
-    from eris.core.representations.base_rep import BaseRepresentation
 
 
 def _structure_validation(ctx: EncodingContext):
@@ -75,7 +74,7 @@ class BaseEncoder(ABC):
     name: ClassVar[str]
     representation_family: ClassVar[str] = "explicit"
     granularity_contract: ClassVar[GranularityContract]
-    representation: ClassVar[BaseRepresentation]
+    representation: ClassVar[Any]
     output_declarations_v2: ClassVar[Any]
     config_type: ClassVar[type[CanonicalRepresentationConfig]]
 
@@ -97,9 +96,6 @@ class BaseEncoder(ABC):
         self.config = config
         self.use_cache = use_cache
         self.cache = cache
-
-    def contracts(self):
-        return [UniversalContract(), self.granularity_contract] + self.representation.contracts()
 
     @property
     def encoder_implementation(self) -> str:
@@ -330,8 +326,9 @@ class BaseEncoder(ABC):
 
         data = self._create_data(ctx=ctx)
 
-        for contract in self.contracts():
-            contract.validate(data)
+        validate_encoder_output(
+            data, self.representation.representation_type, self.granularity_contract
+        )
 
         meta = self._build_metadata_v2(
             ctx,

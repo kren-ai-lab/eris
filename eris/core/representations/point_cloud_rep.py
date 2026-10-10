@@ -2,15 +2,10 @@ from typing import Any, ClassVar
 
 from eris.core.artifact_schema_v2 import build_counts, build_feature_keys
 from eris.core.base_encoder import EncodingContext
-from eris.core.contracts.point_cloud_contract import PointCloudContract
-from eris.core.representations.base_rep import BaseRepresentation
 
 
-class PointCloudRepresentation(BaseRepresentation):
+class PointCloudRepresentation:
     representation_type: ClassVar[str] = "cloud"
-
-    def contracts(self):
-        return [PointCloudContract()]
 
     def feature_keys_v2(
         self,

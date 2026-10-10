@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -10,15 +10,12 @@ from eris.core.representations import VoxelGridRepresentation
 from eris.core.representations.output_declarations import VOXEL_OUTPUTS
 from eris.features.grid.grid import build_grid_attr
 
-if TYPE_CHECKING:
-    from eris.core.representations.base_rep import BaseRepresentation
-
 
 class VoxelGridCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_voxel_grid"
     version: ClassVar[str] = "0.1.2"
-    representation: ClassVar[BaseRepresentation] = VoxelGridRepresentation()
+    representation: ClassVar = VoxelGridRepresentation()
     output_declarations_v2: ClassVar = VOXEL_OUTPUTS
 
     config_type: ClassVar = ResidueVoxelGridConfig

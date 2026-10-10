@@ -4,15 +4,10 @@ import numpy as np
 
 from eris.core.artifact_schema_v2 import build_counts, build_feature_keys
 from eris.core.base_encoder import EncodingContext
-from eris.core.contracts.graph_contract import GraphContract
-from eris.core.representations.base_rep import BaseRepresentation
 
 
-class GraphRepresentation(BaseRepresentation):
+class GraphRepresentation:
     representation_type: ClassVar[str] = "graph"
-
-    def contracts(self):
-        return [GraphContract()]
 
     def feature_keys_v2(
         self,
