@@ -5,11 +5,10 @@ from copy import deepcopy
 
 logger = logging.getLogger(__name__)
 
-import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Tuple
 
 import numpy as np
 
@@ -25,7 +24,7 @@ from eris.core.contracts import UniversalContract
 from eris.core.types import StructureInput
 
 if TYPE_CHECKING:
-    from eris.core.cache import DiskCache
+    from eris.core.config import CanonicalRepresentationConfig
     from eris.core.contracts.granularity import GranularityContract
     from eris.core.representations.base_rep import BaseRepresentation
 
@@ -65,7 +64,6 @@ class EncodingContext:
     runtime: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
 class BaseEncoder(ABC):
     """
     Base class for all encoders.
@@ -79,46 +77,29 @@ class BaseEncoder(ABC):
     granularity_contract: ClassVar[GranularityContract]
     representation: ClassVar[BaseRepresentation]
     output_declarations_v2: ClassVar[Any]
+    config_type: ClassVar[type[CanonicalRepresentationConfig]]
 
-    # Instance attr
-    use_cache: bool = True
-    cache: Optional[DiskCache] = None
-    center: bool = True  # center coordinates around centroid
-    scale: Optional[float] = None  # if set, divide coords by this constant
-
-    def __post_init__(self):
-        mandatory = ["name", "granularity_contract", "representation"]
-        cls = type(self)
-
-        missing = [attr for attr in mandatory if not hasattr(cls, attr)]
-
-        if missing:
-            raise ValueError(f"Missing mandatory ClassVar in {cls.__name__}: {missing}")
+    def __init__(
+        self,
+        *,
+        config: CanonicalRepresentationConfig | None = None,
+        use_cache: bool = True,
+        cache: DiskCache | None = None,
+        **representation_kwargs: Any,
+    ) -> None:
+        if config is None:
+            config = self.config_type(**representation_kwargs)
+        elif not isinstance(config, self.config_type):
+            raise TypeError(f"config must be of type {self.config_type.__name__}")
+        elif representation_kwargs:
+            names = ", ".join(sorted(representation_kwargs))
+            raise TypeError(f"config cannot be combined with representation kwargs: {names}")
+        self.config = config
+        self.use_cache = use_cache
+        self.cache = cache
 
     def contracts(self):
         return [UniversalContract(), self.granularity_contract] + self.representation.contracts()
-
-    # Add to exclude granularity_contract and representation?
-    def get_params(self) -> Dict[str, Any]:
-        EXCLUDE = {"cache", "use_cache", "granularity_contract", "representation"}
-
-        return {
-            k: v for k, v in self.__dict__.items() if k not in EXCLUDE and not k.startswith("_")
-        }
-
-    def fingerprint(self) -> str:
-        from eris.core.hashing import sha256_text
-
-        payload = {
-            "name": self.name,
-            "version": self.version,
-            "representation": self.representation.representation_type,
-            "level": self.granularity_contract.level,
-            "params": self.get_params(),
-        }
-
-        text = json.dumps(payload, sort_keys=True)
-        return sha256_text(text)
 
     @property
     def encoder_implementation(self) -> str:
@@ -131,14 +112,14 @@ class BaseEncoder(ABC):
 
         pos_out = pos.astype(np.float32)
 
-        if self.center and n > 0:
+        if self.config.center and n > 0:
             centroid = pos_out.mean(axis=0, keepdims=True).astype(np.float32)
             pos_out = pos_out - centroid
         else:
             centroid = np.zeros((1, 3), dtype=np.float32)
 
-        if self.scale is not None:
-            s = float(self.scale)
+        if self.config.scale is not None:
+            s = float(self.config.scale)
             if s <= 0:
                 raise ValueError("scale must be > 0")
             pos_out = (pos_out / s).astype(np.float32)

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
 from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueKNNGraphConfig
-from eris.core.io import load_and_extract_residue
 from eris.core.representations import GraphRepresentation
 from eris.core.representations.output_declarations import (
     RESIDUE_GRAPH_OUTPUTS,
@@ -24,11 +22,9 @@ from eris.features.node.residue import build_node_attr
 from eris.spatial.knn import knn_edges
 
 if TYPE_CHECKING:
-    from eris.core.cache import DiskCache
     from eris.core.representations.base_rep import BaseRepresentation
 
 
-@dataclass(init=False)
 class ResidueKNNGraph(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_knn_graph"
@@ -36,107 +32,8 @@ class ResidueKNNGraph(BaseResidueEncoder):
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_GRAPH_OUTPUTS
 
-    config: ResidueKNNGraphConfig = field(init=False)
-
-    def __init__(
-        self,
-        *,
-        config: ResidueKNNGraphConfig | None = None,
-        use_cache: bool = True,
-        cache: DiskCache | None = None,
-        **representation_kwargs: Any,
-    ) -> None:
-        if config is not None:
-            if not isinstance(config, ResidueKNNGraphConfig):
-                raise TypeError("config must be a ResidueKNNGraphConfig")
-            if representation_kwargs:
-                names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
-            resolved_config = config
-        else:
-            resolved_config = ResidueKNNGraphConfig(**representation_kwargs)
-
-        self.config = resolved_config
-        self.use_cache = use_cache
-        self.cache = cache
-        super().__post_init__()
-
-    @property
-    def center(self) -> bool:
-        return self.config.center
-
-    @property
-    def scale(self) -> float | None:
-        return self.config.scale
-
-    @property
-    def residue_center(self) -> str:
-        return self.config.residue_center
-
-    @property
-    def amino_acids_only(self) -> bool:
-        return self.config.amino_acids_only
-
-    @property
-    def altloc(self) -> str:
-        return self.config.altloc
-
-    @property
-    def missing_residue_center(self) -> str:
-        return self.config.missing_residue_center
-
-    @property
-    def knn_mode(self) -> str:
-        return self.config.knn_mode
-
-    @property
-    def k(self) -> int:
-        return self.config.k
-
-    @property
-    def cutoff(self) -> float | None:
-        return self.config.cutoff
-
-    @property
-    def symmetric(self) -> bool:
-        return self.config.symmetric
-
-    @property
-    def include_self_loops(self) -> bool:
-        return self.config.include_self_loops
-
-    @property
-    def node_attr_mode(self) -> str:
-        return "+".join(token.name for token in self.config.node_attr_mode.tokens)
-
-    @property
-    def edge_attr_mode(self) -> str:
-        return "+".join(token.name for token in self.config.edge_attr_mode.tokens)
-
-    @property
-    def rbf_k(self) -> int:
-        return self.config.rbf_k
-
-    @property
-    def rbf_dmax(self) -> float:
-        return self.config.rbf_dmax
-
-    @property
-    def local_cutoff(self) -> int:
-        return self.config.local_cutoff
-
-    def get_params(self) -> dict[str, Any]:
-        return self.config.to_dict()
-
-    def _load_structure(self, ctx: EncodingContext) -> dict[str, Any]:
-        return load_and_extract_residue(
-            ctx.inp,
-            amino_acids_only=self.config.amino_acids_only,
-            mode=self.config.residue_center,
-            altloc=self.config.altloc,
-            missing_ca=self.config.missing_residue_center,
-            plddt_source=self.config.plddt_source,
-        )
+    config_type: ClassVar = ResidueKNNGraphConfig
+    config: ResidueKNNGraphConfig
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
         strc = ctx.raw_structure

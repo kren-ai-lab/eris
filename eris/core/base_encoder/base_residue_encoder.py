@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from eris.core.base_encoder.base_encoder import BaseEncoder, EncodingContext
@@ -7,10 +6,8 @@ from eris.core.contracts.granularity import GranularityContract
 from eris.core.io import load_and_extract_residue
 
 
-@dataclass
 class BaseResidueEncoder(BaseEncoder):
     granularity_contract: ClassVar[GranularityContract] = ResidueContract()
-    residue_center: str = "ca"  # ca: alpha carbon - mean: mean of residue atoms - com: center of mass of residue atoms
 
     @staticmethod
     def _external_parameter_blocks(
@@ -50,7 +47,11 @@ class BaseResidueEncoder(BaseEncoder):
         return {"org.eris.external_features": {"invocations": invocations}}
 
     def _load_structure(self, ctx: EncodingContext):
-        mode = self.residue_center
-        strc = load_and_extract_residue(ctx.inp, mode=mode)
-
-        return strc
+        return load_and_extract_residue(
+            ctx.inp,
+            amino_acids_only=self.config.amino_acids_only,
+            mode=self.config.residue_center,
+            altloc=self.config.altloc,
+            missing_ca=self.config.missing_residue_center,
+            plddt_source=self.config.plddt_source,
+        )

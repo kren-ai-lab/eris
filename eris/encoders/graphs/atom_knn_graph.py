@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
@@ -15,11 +14,9 @@ from eris.features.node.atom import build_node_attr
 from eris.spatial.knn import knn_edges
 
 if TYPE_CHECKING:
-    from eris.core.cache import DiskCache
     from eris.core.representations.base_rep import BaseRepresentation
 
 
-@dataclass(init=False)
 class AtomKNNGraph(BaseAtomEncoder):
     """
     Atom-level kNN graph (CA-independent) with deterministic node/edge features baseline.
@@ -38,97 +35,8 @@ class AtomKNNGraph(BaseAtomEncoder):
     representation: ClassVar[BaseRepresentation] = GraphRepresentation()
     output_declarations_v2: ClassVar = ATOM_GRAPH_OUTPUTS
 
-    config: AtomKNNGraphConfig = field(init=False)
-
-    def __init__(
-        self,
-        *,
-        config: AtomKNNGraphConfig | None = None,
-        use_cache: bool = True,
-        cache: DiskCache | None = None,
-        **representation_kwargs: Any,
-    ) -> None:
-        if config is not None:
-            if not isinstance(config, AtomKNNGraphConfig):
-                raise TypeError("config must be an AtomKNNGraphConfig")
-            if representation_kwargs:
-                names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
-            resolved_config = config
-        else:
-            resolved_config = AtomKNNGraphConfig(**representation_kwargs)
-
-        self.config = resolved_config
-        self.use_cache = use_cache
-        self.cache = cache
-        super().__post_init__()
-
-    @property
-    def center(self) -> bool:
-        return self.config.center
-
-    @property
-    def scale(self) -> float | None:
-        return self.config.scale
-
-    @property
-    def include_hetero(self) -> bool:
-        return self.config.include_hetero
-
-    @property
-    def include_h(self) -> bool:
-        return self.config.include_h
-
-    @property
-    def drop_water(self) -> bool:
-        return self.config.drop_water
-
-    @property
-    def keep_ions(self) -> bool:
-        return self.config.keep_ions
-
-    @property
-    def altloc(self) -> str:
-        return self.config.altloc
-
-    @property
-    def amino_acids_only(self) -> bool:
-        return self.config.amino_acids_only
-
-    @property
-    def k(self) -> int:
-        return self.config.k
-
-    @property
-    def cutoff(self) -> float | None:
-        return self.config.cutoff
-
-    @property
-    def symmetric(self) -> bool:
-        return self.config.symmetric
-
-    @property
-    def node_attr_mode(self) -> str:
-        return "+".join(token.name for token in self.config.node_attr_mode.tokens)
-
-    @property
-    def edge_attr_mode(self) -> str:
-        return "+".join(token.name for token in self.config.edge_attr_mode.tokens)
-
-    @property
-    def rbf_k(self) -> int:
-        return self.config.rbf_k
-
-    @property
-    def rbf_dmax(self) -> float:
-        return self.config.rbf_dmax
-
-    @property
-    def local_cutoff(self) -> int:
-        return self.config.local_cutoff
-
-    def get_params(self) -> dict[str, Any]:
-        return self.config.to_dict()
+    config_type: ClassVar = AtomKNNGraphConfig
+    config: AtomKNNGraphConfig
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
         strc = ctx.raw_structure

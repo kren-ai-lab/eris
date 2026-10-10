@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
 from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueDistogramBinsConfig
-from eris.core.io import load_and_extract_residue
 from eris.core.representations import DistogramBinsRepresentation
 from eris.core.representations.output_declarations import RESIDUE_DISTOGRAM_BINS_OUTPUTS
 from eris.features.utils import validate_bin_edges
 
 if TYPE_CHECKING:
-    from eris.core.cache import DiskCache
     from eris.core.representations.base_rep import BaseRepresentation
 
 
@@ -28,7 +25,6 @@ def _validate_class_capacity(config: ResidueDistogramBinsConfig) -> None:
         )
 
 
-@dataclass(init=False)
 class DistogramBinsCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_distogram_bins"
@@ -36,96 +32,8 @@ class DistogramBinsCA(BaseResidueEncoder):
     representation: ClassVar[BaseRepresentation] = DistogramBinsRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_DISTOGRAM_BINS_OUTPUTS
 
-    config: ResidueDistogramBinsConfig = field(init=False)
-
-    def __init__(
-        self,
-        *,
-        config: ResidueDistogramBinsConfig | None = None,
-        use_cache: bool = True,
-        cache: DiskCache | None = None,
-        **representation_kwargs: Any,
-    ) -> None:
-        if config is not None:
-            if not isinstance(config, ResidueDistogramBinsConfig):
-                raise TypeError("config must be a ResidueDistogramBinsConfig")
-            if representation_kwargs:
-                names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
-            resolved_config = config
-        else:
-            resolved_config = ResidueDistogramBinsConfig(**representation_kwargs)
-
-        _validate_class_capacity(resolved_config)
-        self.config = resolved_config
-        self.use_cache = use_cache
-        self.cache = cache
-        super().__post_init__()
-
-    @property
-    def center(self) -> bool:
-        return self.config.center
-
-    @property
-    def scale(self) -> float | None:
-        return self.config.scale
-
-    @property
-    def residue_center(self) -> str:
-        return self.config.residue_center
-
-    @property
-    def amino_acids_only(self) -> bool:
-        return self.config.amino_acids_only
-
-    @property
-    def altloc(self) -> str:
-        return self.config.altloc
-
-    @property
-    def missing_residue_center(self) -> str:
-        return self.config.missing_residue_center
-
-    @property
-    def edges(self) -> tuple[float, ...] | None:
-        return self.config.edges
-
-    @property
-    def dmin(self) -> float | None:
-        return self.config.dmin
-
-    @property
-    def dmax(self) -> float | None:
-        return self.config.dmax
-
-    @property
-    def num_bins(self) -> int | None:
-        return self.config.num_bins
-
-    @property
-    def include_self(self) -> bool:
-        return self.config.include_self
-
-    @property
-    def add_no_contact_class(self) -> bool:
-        return self.config.add_no_contact_class
-
-    @property
-    def dtype(self) -> str:
-        return self.config.dtype
-
-    def get_params(self) -> dict[str, Any]:
-        return self.config.to_dict()
-
-    def _load_structure(self, ctx: EncodingContext) -> dict[str, Any]:
-        return load_and_extract_residue(
-            ctx.inp,
-            amino_acids_only=self.config.amino_acids_only,
-            mode=self.config.residue_center,
-            altloc=self.config.altloc,
-            missing_ca=self.config.missing_residue_center,
-            plddt_source=self.config.plddt_source,
-        )
+    config_type: ClassVar = ResidueDistogramBinsConfig
+    config: ResidueDistogramBinsConfig
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
         strc = ctx.raw_structure

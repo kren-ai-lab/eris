@@ -185,7 +185,6 @@ def register_encoder(
 
     encoder = encoder_type()
     _require_callable(encoder, "encode", name)
-    _require_callable(encoder, "fingerprint", name)
 
     if encoder.name != name:
         raise TypeError(f"Encoder name does not match canonical name: {encoder.name!r} != {name!r}")
@@ -198,10 +197,6 @@ def register_encoder(
         raise TypeError(
             f"Unsupported representation type for '{name}': {info.representation_type!r}"
         )
-
-    fingerprint = encoder.fingerprint()
-    if not isinstance(fingerprint, str) or not fingerprint.strip():
-        raise TypeError(f"Encoder '{name}'.fingerprint() must return a non-empty str.")
 
     _REGISTRY[name] = info
 

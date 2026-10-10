@@ -1,22 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
 from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueContactMapConfig
-from eris.core.io import load_and_extract_residue
 from eris.core.representations import ContactMapRepresentation
 from eris.core.representations.output_declarations import RESIDUE_CONTACT_MAP_OUTPUTS
 
 if TYPE_CHECKING:
-    from eris.core.cache import DiskCache
     from eris.core.representations.base_rep import BaseRepresentation
 
 
-@dataclass(init=False)
 class ContactMapCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_contact_map"
@@ -24,79 +20,8 @@ class ContactMapCA(BaseResidueEncoder):
     representation: ClassVar[BaseRepresentation] = ContactMapRepresentation()
     output_declarations_v2: ClassVar = RESIDUE_CONTACT_MAP_OUTPUTS
 
-    config: ResidueContactMapConfig = field(init=False)
-
-    def __init__(
-        self,
-        *,
-        config: ResidueContactMapConfig | None = None,
-        use_cache: bool = True,
-        cache: DiskCache | None = None,
-        **representation_kwargs: Any,
-    ) -> None:
-        if config is not None:
-            if not isinstance(config, ResidueContactMapConfig):
-                raise TypeError("config must be a ResidueContactMapConfig")
-            if representation_kwargs:
-                names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
-            resolved_config = config
-        else:
-            resolved_config = ResidueContactMapConfig(**representation_kwargs)
-
-        self.config = resolved_config
-        self.use_cache = use_cache
-        self.cache = cache
-        super().__post_init__()
-
-    @property
-    def center(self) -> bool:
-        return self.config.center
-
-    @property
-    def scale(self) -> float | None:
-        return self.config.scale
-
-    @property
-    def residue_center(self) -> str:
-        return self.config.residue_center
-
-    @property
-    def amino_acids_only(self) -> bool:
-        return self.config.amino_acids_only
-
-    @property
-    def altloc(self) -> str:
-        return self.config.altloc
-
-    @property
-    def missing_residue_center(self) -> str:
-        return self.config.missing_residue_center
-
-    @property
-    def cutoff(self) -> float:
-        return self.config.cutoff
-
-    @property
-    def include_self(self) -> bool:
-        return self.config.include_self
-
-    @property
-    def dtype(self) -> str:
-        return self.config.dtype
-
-    def get_params(self) -> dict[str, Any]:
-        return self.config.to_dict()
-
-    def _load_structure(self, ctx: EncodingContext) -> dict[str, Any]:
-        return load_and_extract_residue(
-            ctx.inp,
-            amino_acids_only=self.config.amino_acids_only,
-            mode=self.config.residue_center,
-            altloc=self.config.altloc,
-            missing_ca=self.config.missing_residue_center,
-            plddt_source=self.config.plddt_source,
-        )
+    config_type: ClassVar = ResidueContactMapConfig
+    config: ResidueContactMapConfig
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
         strc = ctx.raw_structure
