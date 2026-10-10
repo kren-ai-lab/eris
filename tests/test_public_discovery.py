@@ -77,7 +77,6 @@ def test_root_exports_documented_public_surface_without_learned_execution():
         "__version__",
         "batch_embed",
         "batch_encode",
-        "batch_export",
         "embed",
         "encode",
         "get_embedder_info",

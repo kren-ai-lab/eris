@@ -117,7 +117,7 @@ The primary Python entry points are:
 - `eris.pool(...)`;
 - `eris.list_representations()` and `eris.get_representation_info(...)`;
 - `eris.list_embedders()` and `eris.get_embedder_info(...)`;
-- `eris.batch_encode(...)`, `eris.batch_embed(...)`, and `eris.batch_export(...)`;
+- `eris.batch_encode(...)` and `eris.batch_embed(...)`;
 - `eris.pack(...)`, `eris.to_torch(...)`, and `eris.to_pyg(...)`.
 
 The CLI exposes `encode`, `embed`, `pack`, `batch`, `export`, `info`, `cache`,
