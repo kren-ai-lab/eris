@@ -21,7 +21,7 @@ from eris.core.learned.backends.gearnet.preprocessing import (
 )
 from eris.core.learned.checkpoints import VerifiedCheckpoint
 from eris.core.learned.config import StructuralEmbedderConfig
-from eris.core.learned.execution import ExecutionCapabilities, ResolvedExecution
+from eris.core.learned.execution import ResolvedExecution
 from eris.core.learned.types import (
     StructuralEmbeddingResult,
     StructuralPreprocessingResult,
@@ -43,13 +43,6 @@ def _forward_error(error: Exception) -> ExecutionError:
 
 class GearNetEdgeBackend:
     """Production GearNet-Edge adapter for the frozen v0.1 stack."""
-
-    def execution_capabilities(self) -> ExecutionCapabilities:
-        return ExecutionCapabilities(
-            devices=("cpu",),
-            precisions=("fp32",),
-            preferred_device="cpu",
-        )
 
     def preprocess(
         self,

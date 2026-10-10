@@ -22,7 +22,6 @@ from eris.core.learned.execution import (
     ResolvedExecution,
     StructuralExecutionConfig,
     build_execution_provenance,
-    execution_cache_identity,
     execution_request_cache_identity,
     resolve_execution,
 )
@@ -317,14 +316,7 @@ class StructuralEmbedderRunner:
         from eris.core.learned.backends.gearnet.backend import GearNetEdgeBackend
 
         backend = GearNetEdgeBackend()
-        resolved_execution = resolve_execution(
-            execution_request,
-            backend.execution_capabilities(),
-        )
-        if execution_cache_identity(resolved_execution) != request_execution_identity:
-            raise ExecutionError(
-                "Resolved execution precision does not match the artifact cache identity"
-            )
+        resolved_execution = resolve_execution(execution_request)
 
         verified_checkpoint = self._resolve_checkpoint(model, checkpoint_path)
         preprocessed = backend.preprocess(structure_input, config=config)

@@ -11,12 +11,10 @@ from eris.core.learned.checkpoints import (
 )
 from eris.core.learned.config import OutputMode, StructuralEmbedderConfig
 from eris.core.learned.execution import (
-    ExecutionCapabilities,
     Precision,
     ResolvedExecution,
     StructuralExecutionConfig,
     build_execution_provenance,
-    execution_cache_identity,
     execution_request_cache_identity,
     resolve_execution,
 )
@@ -34,7 +32,6 @@ __all__ = [
     "CheckpointCache",
     "EmbedderInfo",
     "GEARNET_EDGE_INFO",
-    "ExecutionCapabilities",
     "OutputMode",
     "Precision",
     "ResolvedExecution",
@@ -47,7 +44,6 @@ __all__ = [
     "VerifiedCheckpoint",
     "build_learned_artifact",
     "build_execution_provenance",
-    "execution_cache_identity",
     "execution_request_cache_identity",
     "learned_registry",
     "resolve_execution",
