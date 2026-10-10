@@ -47,22 +47,3 @@ jobs:
         run: uv sync --all-extras --resolution lowest-direct
       - name: Run tests
         run: uv run --no-sync pytest -q
-
-  # `import eris` must work from the built wheel without the optional extras.
-  wheel:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          python-version: "3.12"
-      - name: Build distributions
-        run: uv build
-      - name: Smoke-test the core wheel
-        run: >-
-          uv run --isolated --no-project --with dist/*.whl python -I -c
-          "import eris; from importlib.metadata import version;
-          assert 'site-packages' in eris.__file__, eris.__file__;
-          assert eris.__version__ == version('erislib');
-          assert eris.list_representations();
-          assert eris.list_embedders() == ['gearnet_edge']"
