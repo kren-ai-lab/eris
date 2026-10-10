@@ -27,7 +27,6 @@ from eris.core.learned.execution import (
 )
 from eris.core.learned.registry import EmbedderInfo, learned_registry
 from eris.core.learned.types import (
-    StructuralPreprocessingResult,
     validate_embedding_result,
 )
 from eris.core.types import StructureInput
@@ -319,19 +318,17 @@ class StructuralEmbedderRunner:
         resolved_execution = resolve_execution(execution_request)
 
         verified_checkpoint = self._resolve_checkpoint(model, checkpoint_path)
-        preprocessed = backend.preprocess(structure_input, config=config)
-        if not isinstance(preprocessed, StructuralPreprocessingResult):
-            raise ExecutionError("Backend preprocess() must return StructuralPreprocessingResult")
-        if not parser_hint_matches_format(parser_hint, preprocessed.input_format):
+        prepared, input_format = backend.preprocess(structure_input, config=config)
+        if not parser_hint_matches_format(parser_hint, input_format):
             raise ExecutionError(
                 f"Parser hint {parser_hint!r} is incompatible with backend-confirmed "
-                f"input format {preprocessed.input_format!r}"
+                f"input format {input_format!r}"
             )
 
         input_metadata = build_input_metadata(
             source=structure_input.source,
             source_sha256=source_sha256,
-            input_format=preprocessed.input_format,
+            input_format=input_format,
             model_index=structure_input.model_index,
             chain_ids=structure_input.chain_id,
         )
@@ -341,7 +338,7 @@ class StructuralEmbedderRunner:
         )
         result = backend.infer(
             model_instance,
-            preprocessed.prepared,
+            prepared,
             config=config,
             execution=resolved_execution,
         )

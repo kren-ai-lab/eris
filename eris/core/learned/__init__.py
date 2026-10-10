@@ -22,7 +22,6 @@ from eris.core.learned.registry import GEARNET_EDGE_INFO, EmbedderInfo, learned_
 from eris.core.learned.runner import StructuralEmbedderRunner
 from eris.core.learned.types import (
     StructuralEmbeddingResult,
-    StructuralPreprocessingResult,
     validate_embedding_result,
 )
 
@@ -38,7 +37,6 @@ __all__ = [
     "StructuralEmbedderConfig",
     "StructuralEmbedderRunner",
     "StructuralEmbeddingResult",
-    "StructuralPreprocessingResult",
     "StructuralExecutionConfig",
     "StructuralModelDescriptor",
     "VerifiedCheckpoint",

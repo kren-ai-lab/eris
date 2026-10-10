@@ -24,7 +24,6 @@ from eris.core.learned.config import StructuralEmbedderConfig
 from eris.core.learned.execution import ResolvedExecution
 from eris.core.learned.types import (
     StructuralEmbeddingResult,
-    StructuralPreprocessingResult,
 )
 from eris.core.types import StructureInput
 from eris.exceptions import ExecutionError
@@ -49,7 +48,9 @@ class GearNetEdgeBackend:
         structure: StructureInput,
         *,
         config: StructuralEmbedderConfig,
-    ) -> StructuralPreprocessingResult[GearNetPreparedInput]:
+    ) -> tuple[GearNetPreparedInput, str]:
+        """Return the prepared input and the parser-confirmed structure format."""
+
         if not isinstance(structure, StructureInput):
             raise TypeError("structure must be a StructureInput")
         if not isinstance(config, StructuralEmbedderConfig):
@@ -57,10 +58,7 @@ class GearNetEdgeBackend:
         selected = load_selected_biological_structure(structure)
         records = select_gearnet_transport_records(selected)
         prepared = construct_native_gearnet_input(records, selected.biological_table)
-        return StructuralPreprocessingResult(
-            prepared=prepared,
-            input_format=selected.input_format,
-        )
+        return prepared, selected.input_format
 
     def load(
         self,
