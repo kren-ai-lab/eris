@@ -6,7 +6,7 @@ import numpy as np
 
 from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueContactMapConfig
-from eris.core.representations import ContactMapRepresentation
+from eris.core.representations import MatrixRepresentation
 from eris.core.representations.output_declarations import RESIDUE_CONTACT_MAP_OUTPUTS
 from eris.encoders.geometry.distogram_ca import pairwise_distances, residue_fields
 
@@ -18,7 +18,7 @@ class ContactMapCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_contact_map"
     version: ClassVar[str] = "0.1.2"
-    representation: ClassVar[BaseRepresentation] = ContactMapRepresentation()
+    representation: ClassVar[BaseRepresentation] = MatrixRepresentation("contact")
     output_declarations_v2: ClassVar = RESIDUE_CONTACT_MAP_OUTPUTS
 
     config_type: ClassVar = ResidueContactMapConfig

@@ -6,7 +6,7 @@ import numpy as np
 
 from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueDistogramConfig
-from eris.core.representations import DistogramRepresentation
+from eris.core.representations import MatrixRepresentation
 from eris.core.representations.output_declarations import RESIDUE_DISTOGRAM_OUTPUTS
 
 if TYPE_CHECKING:
@@ -38,7 +38,7 @@ class DistogramCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_distogram"
     version: ClassVar[str] = "0.1.2"
-    representation: ClassVar[BaseRepresentation] = DistogramRepresentation()
+    representation: ClassVar[BaseRepresentation] = MatrixRepresentation("dist")
     output_declarations_v2: ClassVar = RESIDUE_DISTOGRAM_OUTPUTS
 
     config_type: ClassVar = ResidueDistogramConfig

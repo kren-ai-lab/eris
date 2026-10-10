@@ -6,7 +6,7 @@ import numpy as np
 
 from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueContactMapBinsConfig, ResidueDistogramBinsConfig
-from eris.core.representations import DistogramBinsRepresentation
+from eris.core.representations import MatrixRepresentation
 from eris.core.representations.output_declarations import RESIDUE_DISTOGRAM_BINS_OUTPUTS
 from eris.encoders.geometry.distogram_ca import pairwise_distances, residue_fields
 from eris.features.utils import validate_bin_edges
@@ -54,7 +54,7 @@ class DistogramBinsCA(BaseResidueEncoder):
     # Identity
     name: ClassVar[str] = "residue_distogram_bins"
     version: ClassVar[str] = "0.1.2"
-    representation: ClassVar[BaseRepresentation] = DistogramBinsRepresentation()
+    representation: ClassVar[BaseRepresentation] = MatrixRepresentation("dist_bins")
     output_declarations_v2: ClassVar = RESIDUE_DISTOGRAM_BINS_OUTPUTS
 
     config_type: ClassVar = ResidueDistogramBinsConfig

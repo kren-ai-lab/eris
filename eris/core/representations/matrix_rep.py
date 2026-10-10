@@ -6,8 +6,13 @@ from eris.core.contracts.distogram_contract import DistogramContract
 from eris.core.representations.base_rep import BaseRepresentation
 
 
-class DistogramRepresentation(BaseRepresentation):
+class MatrixRepresentation(BaseRepresentation):
+    """Residue NxN matrix; ``primary_key`` names the matrix output."""
+
     representation_type: ClassVar[str] = "matrix"
+
+    def __init__(self, primary_key: str) -> None:
+        self.primary_key = primary_key
 
     def contracts(self):
         return [DistogramContract()]
@@ -22,29 +27,7 @@ class DistogramRepresentation(BaseRepresentation):
     def counts_v2(self, data: dict[str, Any]) -> dict[str, int]:
         return build_counts(
             {
-                "n_nodes": int(data["dist"].shape[0]),
-                "n_omitted_residues": int(data["omitted_residue_ids"].shape[0]),
-            }
-        )
-
-
-class DistogramBinsRepresentation(BaseRepresentation):
-    representation_type: ClassVar[str] = "matrix"
-
-    def contracts(self):
-        return [DistogramContract()]
-
-    def feature_keys_v2(
-        self,
-        data: dict[str, Any],
-        ctx: EncodingContext,
-    ) -> dict[str, list[str]]:
-        return build_feature_keys()
-
-    def counts_v2(self, data: dict[str, Any]) -> dict[str, int]:
-        return build_counts(
-            {
-                "n_nodes": int(data["dist_bins"].shape[0]),
+                "n_nodes": int(data[self.primary_key].shape[0]),
                 "n_omitted_residues": int(data["omitted_residue_ids"].shape[0]),
             }
         )
