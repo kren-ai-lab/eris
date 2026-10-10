@@ -21,7 +21,6 @@ from eris.core.learned.backends.gearnet.metadata import (
     GEARNET_EDGE_NODE_INPUT_DIM,
     GEARNET_EDGE_NUM_ANGLE_BIN,
     GEARNET_EDGE_NUM_RELATION,
-    GEARNET_EDGE_OUTPUT_DIM,
 )
 from eris.core.learned.backends.gearnet.native_graph import NativeGearNetGraph
 from eris.core.learned.checkpoints import VerifiedCheckpoint
@@ -70,14 +69,10 @@ class NativeGearNetEdgeModel(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.input_dim = GEARNET_EDGE_NODE_INPUT_DIM
-        self.output_dim = GEARNET_EDGE_OUTPUT_DIM
         self.dims = [self.input_dim, *GEARNET_EDGE_HIDDEN_DIMS]
         self.edge_dims = [GEARNET_EDGE_EDGE_INPUT_DIM, *self.dims[:-1]]
         self.num_relation = GEARNET_EDGE_NUM_RELATION
         self.num_angle_bin = GEARNET_EDGE_NUM_ANGLE_BIN
-        self.short_cut = True
-        self.concat_hidden = True
-        self.batch_norm = True
         self.layers = nn.ModuleList(
             _GeometricRelationalGraphConv(input_dim, output_dim, self.num_relation)
             for input_dim, output_dim in zip(self.dims, self.dims[1:])
@@ -126,7 +121,7 @@ class NativeGearNetEdgeModel(nn.Module):
         hiddens: list[torch.Tensor] = []
         for index, layer in enumerate(self.layers):
             hidden = layer(source, destination, relation, layer_input)
-            if self.short_cut and hidden.shape == layer_input.shape:
+            if hidden.shape == layer_input.shape:
                 hidden = hidden + layer_input
 
             edge_hidden = self.edge_layers[index](
