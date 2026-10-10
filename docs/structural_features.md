@@ -259,7 +259,7 @@ are ordinary ordered edge attributes.
 
 ## Secondary structure
 
-The selected provider is Biotite 1.6's `annotate_sse`, a P-SEA-style assignment
+The selected provider is Biotite's `annotate_sse`, a P-SEA-style assignment
 based on CA geometry. It is an optional, feature-local dependency and must be
 imported lazily; requesting unrelated Eris functionality must not import it.
 There is no external executable and no network access. It is selected because
@@ -281,17 +281,18 @@ Categorical encoding order, provider package/version, provider algorithm,
 segment handling, and mapping are recorded in provenance. Secondary structure
 is not silently substituted with DSSP or another algorithm.
 
-The frozen optional dependency is `biotite==1.6.0`, which preserves the
-project's Python 3.11 compatibility floor. Biotite documents the P-SEA basis,
-CA-only inputs, state mapping, and deviations from the original program in its
+The dependency is `biotite>=1.6,<2`. The installed Biotite version is recorded as
+`provider_version` in the feature parameters, so it is part of the config fingerprint and cache
+identity: artifacts computed with different Biotite releases never share a cache entry. Biotite
+documents the P-SEA basis, CA-only inputs, state mapping, and deviations from the original
+program in its
 [`annotate_sse` reference](https://www.biotite-python.org/latest/apidoc/biotite.structure.annotate_sse.html).
-The pinned release declares Python 3.11 or newer and publishes CPython 3.11 and
-3.12 wheels on [PyPI](https://pypi.org/project/biotite/1.6.0/). The dependency is
-declared in package metadata and remains lazily imported by these feature paths.
+The dependency is declared in package metadata and remains lazily imported by these feature
+paths.
 
 ## SASA and RSA
 
-The selected provider is Biotite 1.6's Shrake-Rupley implementation with:
+The selected provider is Biotite's Shrake-Rupley implementation with:
 
 - probe radius `1.4` A;
 - `1000` sphere points;

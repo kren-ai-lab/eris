@@ -13,23 +13,22 @@ Main capabilities:
 - batch encoding, artifact packing, datasets, and Torch/PyG export;
 - GearNet-Edge residue and structure embeddings.
 
-## Installation from source
+## Installation
 
-Eris requires Python 3.11 or 3.12.
+Eris requires Python 3.11–3.14.
 
 ```console
-git clone https://github.com/kren-ai-lab/Eris.git
-cd Eris
-python -m pip install .
+pip install erislib
 ```
 
 Install optional integrations as needed:
 
 ```console
-python -m pip install ".[gearnet]"  # GearNet-Edge runtime
-python -m pip install ".[pyg]"      # PyTorch Geometric export
-python -m pip install ".[dev]"      # tests, Ruff, and build tools
+pip install "erislib[gearnet]"  # GearNet-Edge runtime
+pip install "erislib[pyg]"      # PyTorch Geometric export
 ```
+
+For a development setup, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 The GearNet checkpoint is not bundled. On the first cache miss, Eris streams the registered
 official checkpoint over HTTPS, verifies its registered SHA-256, and installs it in the shared

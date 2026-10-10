@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import os
+from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +25,6 @@ from eris.core.learned.backends.gearnet.preprocessing import (
     select_gearnet_transport_records,
 )
 from eris.core.types import StructureInput
-
 
 DATA_DIR = Path(__file__).with_name("data")
 CHECKPOINT_ENV = "ERIS_GEARNET_CHECKPOINT"
@@ -248,17 +248,18 @@ def test_biological_policy_preserves_identity_and_rejects_invalid_retained_resid
 
 
 def test_native_dependency_boundary_and_current_cache_identity(monkeypatch):
-    assert dependencies.GEARNET_PYTHON_REQUIREMENT == ">=3.11,<3.13"
-    assert [item.requirement for item in dependencies.GEARNET_DEPENDENCY_REQUIREMENTS] == [
-        "==2.11.0"
-    ]
+    assert [item.distribution for item in dependencies.GEARNET_DEPENDENCY_REQUIREMENTS] == ["torch"]
     assert GEARNET_EDGE_ENCODER_VERSION == "3"
     assert GEARNET_EDGE_IMPLEMENTATION.endswith("GearNetEdgeBackend")
 
-    monkeypatch.setattr(dependencies, "_current_python_version", lambda: (3, 13))
+    monkeypatch.setattr(
+        dependencies,
+        "_distribution_version",
+        lambda name: (_ for _ in ()).throw(PackageNotFoundError(name)),
+    )
     unavailable = dependencies.probe_gearnet_availability()
     assert unavailable.available is False
-    assert ">=3.11,<3.13" in unavailable.reason
+    assert "torch" in unavailable.reason
 
 
 @requires_torch

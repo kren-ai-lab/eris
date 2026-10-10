@@ -19,9 +19,6 @@ from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
 from eris.encoders.graphs.atom_knn_graph import AtomKNNGraph
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
-from eris.features.node.constants import AA_VOCAB, PHYSchem_KEYS
-from eris.features.node.external import ExternalFeatureError
-from eris.features.node.residue import build_node_attr
 from eris.features.geometry import (
     SIDECHAIN_CHI_DEFINITIONS,
     backbone_torsions,
@@ -30,8 +27,10 @@ from eris.features.geometry import (
     sidechain_torsions,
     signed_dihedral,
 )
+from eris.features.node.constants import AA_VOCAB, PHYSchem_KEYS
+from eris.features.node.external import ExternalFeatureError
+from eris.features.node.residue import build_node_attr
 from eris.pipelines.manifest import StructureManifestRow
-
 
 PDB = Path("tests/data/1AQ2.pdb")
 MMCIF = Path("tests/data/1AQ2.cif")
@@ -1379,7 +1378,7 @@ def test_secondary_structure_assigns_frozen_states_with_provider_provenance() ->
     assert np.all(features.sum(axis=0)[:3] > 0)
     params = artifact.meta["parameters"]["node_attr_mode"][0]["secondary_structure"]
     assert params["provider"] == "biotite"
-    assert params["provider_version"] == "1.6.0"
+    assert params["provider_version"] == metadata.version("biotite")
     assert params["algorithm"] == "P-SEA"
     assert params["state_mapping"] == {
         "": "unassigned",

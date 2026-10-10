@@ -1,6 +1,6 @@
 # Explicit representation defaults
 
-`src/eris/core/config.py` is the executable authority for these defaults. Registry discovery,
+`eris/core/config.py` is the executable authority for these defaults. Registry discovery,
 artifact parameters, and configuration fingerprints derive from the same typed configs.
 
 ## Common geometry and selection
@@ -98,7 +98,7 @@ physical continuity uses an inclusive `max_peptide_bond_distance=2.0` A cutoff.
 chi1–chi4 schema. Chemically undefined angles, missing atoms, unsupported residues, and
 degenerate geometry remain `NaN`; side chains are not reconstructed.
 
-`secondary_structure` runs Biotite 1.6 P-SEA independently for each selected chain and physical
+`secondary_structure` runs Biotite P-SEA independently for each selected chain and physical
 continuity segment. Its four columns are ordered helix, sheet, coil, and unassigned. `sasa` and
 `rsa` share one selected-complex Shrake-Rupley calculation over selected polymer heavy atoms with
 a 1.4 A probe, 1000 Fibonacci points, and ProtOr radii. Incomplete canonical residues receive
@@ -254,8 +254,8 @@ and provenance requirements live in
 | `backbone_torsion_mode` | `"sincos"` |
 | `sidechain_torsion_mode` | `"sincos"` |
 | local-frame epsilon | `1e-6` A |
-| secondary-structure provider | Biotite 1.6 P-SEA (`biotite==1.6.0`) |
-| SASA provider | Biotite 1.6 Shrake-Rupley |
+| secondary-structure provider | Biotite P-SEA (`biotite>=1.6,<2`; installed version recorded) |
+| SASA provider | Biotite Shrake-Rupley |
 | SASA probe radius | `1.4` A |
 | SASA sphere points | `1000`, Fibonacci distribution |
 | SASA radii/context | ProtOr; selected-chain polymer heavy atoms; no ions |

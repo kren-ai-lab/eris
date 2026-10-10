@@ -1,0 +1,67 @@
+name: tests
+
+on:
+  workflow_call:
+  push:
+    paths:
+      - "eris/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/tests.yml"
+  pull_request:
+    paths:
+      - "eris/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/tests.yml"
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Run tests
+        run: uv run pytest -q
+
+  # The declared lower bounds are part of the public contract: an unsupported
+  # floor can break silently.
+  lowest-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.11"
+      - name: Install lowest direct dependencies
+        run: uv sync --all-extras --resolution lowest-direct
+      - name: Run tests
+        run: uv run --no-sync pytest -q
+
+  # `import eris` must work from the built wheel without the optional extras.
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+      - name: Build distributions
+        run: uv build
+      - name: Smoke-test the core wheel
+        run: >-
+          uv run --isolated --no-project --with dist/*.whl python -c
+          "import eris; from importlib.metadata import version;
+          assert eris.__version__ == version('erislib');
+          assert eris.list_representations();
+          assert eris.list_embedders() == ['gearnet_edge']"
