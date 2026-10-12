@@ -175,10 +175,10 @@ def register_encoder(
 
     if encoder.name != name:
         raise TypeError(f"Encoder name does not match canonical name: {encoder.name!r} != {name!r}")
-    if encoder.granularity_contract.level != info.granularity:
+    if encoder.granularity != info.granularity:
         raise TypeError(
             "Encoder granularity does not match canonical config: "
-            f"{encoder.granularity_contract.level!r} != {info.granularity!r}"
+            f"{encoder.granularity!r} != {info.granularity!r}"
         )
     if info.representation_type not in {"cloud", "graph", "matrix", "grid"}:
         raise TypeError(

@@ -639,7 +639,6 @@ def test_serialization_preserves_none_and_excludes_non_parameter_state():
         "cache",
         "name",
         "representation",
-        "granularity_contract",
         "representation_name",
         "granularity",
         "coordinate_source",

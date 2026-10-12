@@ -1,13 +1,11 @@
 from typing import Any, ClassVar
 
 from eris.core.base_encoder.base_encoder import BaseEncoder, EncodingContext
-from eris.core.contracts import ResidueContract
-from eris.core.contracts.granularity import GranularityContract
 from eris.core.io import load_and_extract_residue
 
 
 class BaseResidueEncoder(BaseEncoder):
-    granularity_contract: ClassVar[GranularityContract] = ResidueContract()
+    granularity: ClassVar[str] = "residue"
 
     @staticmethod
     def _external_parameter_blocks(

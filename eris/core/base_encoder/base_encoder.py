@@ -20,12 +20,25 @@ from eris.core.cache import (
     parser_hint_from_source,
     parser_hint_matches_format,
 )
-from eris.core.contracts import validate_encoder_output
 from eris.core.types import StructureInput
 
 if TYPE_CHECKING:
     from eris.core.config import CanonicalRepresentationConfig
-    from eris.core.contracts.granularity import GranularityContract
+
+
+def _check_output_values(data: Dict[str, np.ndarray]) -> None:
+    """Reject values that come from the input rather than our code; Schema v2 checks the shapes."""
+    if len(data["residue_ids"]) == 0:
+        raise exc.ExecutionError("Encoder output contains no atoms/residues")
+    for key in ("pos", "centroid", "grid"):
+        if key in data and not np.isfinite(data[key]).all():
+            raise ValueError(f"Encoder output {key!r} contains non-finite values")
+    if "edge_attr" in data and np.isinf(data["edge_attr"]).any():
+        raise ValueError("Encoder output 'edge_attr' contains infinite values")
+    edge_index = data.get("edge_index")
+    if edge_index is not None and edge_index.size > 0:
+        if edge_index.min() < 0 or edge_index.max() >= len(data["pos"]):
+            raise ValueError("Encoder output 'edge_index' contains out-of-range node indices")
 
 
 def _structure_validation(ctx: EncodingContext):
@@ -67,7 +80,7 @@ class BaseEncoder(ABC):
     version: ClassVar[str] = "0.1.0"
     name: ClassVar[str]
     representation_family: ClassVar[str] = "explicit"
-    granularity_contract: ClassVar[GranularityContract]
+    granularity: ClassVar[str]
     representation: ClassVar[Any]
     output_declarations_v2: ClassVar[Any]
     config_type: ClassVar[type[CanonicalRepresentationConfig]]
@@ -301,9 +314,7 @@ class BaseEncoder(ABC):
 
         data = self._create_data(ctx=ctx)
 
-        validate_encoder_output(
-            data, self.representation.representation_type, self.granularity_contract
-        )
+        _check_output_values(data)
 
         meta = self._build_metadata_v2(
             ctx,
@@ -326,7 +337,7 @@ class BaseEncoder(ABC):
             "Loading structure",
             extra={
                 "source": str(ctx.inp.source),
-                "granularity": self.granularity_contract.level,
+                "granularity": self.granularity,
             },
         )
 

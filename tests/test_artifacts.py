@@ -728,12 +728,26 @@ def test_learned_embeddings_must_be_floating_finite_and_non_empty():
     _assert_invalid(meta, data, "D > 0")
 
 
-@pytest.mark.parametrize("missing", ["residue_ids", "resname"])
-def test_residue_validation_reports_missing_key(missing):
-    from eris.core.contracts.validations import validate_residue_data
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    [
+        ("residue_ids", np.array([], dtype=str), "no atoms/residues"),
+        ("pos", np.array([[np.nan, 0, 0]], dtype=np.float32), "'pos' contains non-finite"),
+        ("edge_attr", np.array([[np.inf]], dtype=np.float32), "'edge_attr' contains infinite"),
+        ("edge_index", np.array([[0], [1]], dtype=np.int64), "out-of-range"),
+    ],
+)
+def test_encoder_output_check_rejects_bad_values(key, value, message):
+    from eris.core.base_encoder.base_encoder import _check_output_values
 
-    data = {"residue_ids": np.array(["A:1::GLY"]), "resname": np.array(["GLY"])}
-    del data[missing]
+    data = {
+        "residue_ids": np.array(["A:1::GLY"]),
+        "pos": np.zeros((1, 3), dtype=np.float32),
+        "edge_index": np.array([[0], [0]], dtype=np.int64),
+        "edge_attr": np.array([[np.nan]], dtype=np.float32),
+    }
+    _check_output_values(data)
+    data[key] = value
 
-    with pytest.raises(ValueError, match=f"missing {missing}"):
-        validate_residue_data(data)
+    with pytest.raises(Exception, match=message):
+        _check_output_values(data)

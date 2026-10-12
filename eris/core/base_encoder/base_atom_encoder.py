@@ -1,13 +1,11 @@
 from typing import ClassVar
 
 from eris.core.base_encoder.base_encoder import BaseEncoder, EncodingContext
-from eris.core.contracts import AtomContract
-from eris.core.contracts.granularity import GranularityContract
 from eris.core.io import load_and_extract_atoms
 
 
 class BaseAtomEncoder(BaseEncoder):
-    granularity_contract: ClassVar[GranularityContract] = AtomContract()
+    granularity: ClassVar[str] = "atom"
 
     def _load_structure(self, ctx: EncodingContext):
         strc = load_and_extract_atoms(
