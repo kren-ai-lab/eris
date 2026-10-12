@@ -1,3 +1,5 @@
+"""Representation types that derive feature keys and counts from encoder output."""
+
 from eris.core.representations.graph_rep import GraphRepresentation
 from eris.core.representations.matrix_rep import MatrixRepresentation
 from eris.core.representations.point_cloud_rep import PointCloudRepresentation

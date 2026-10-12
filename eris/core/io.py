@@ -1,8 +1,10 @@
+"""Structure loading, chain selection and array extraction with Gemmi."""
+
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import gemmi
 import numpy as np
@@ -12,11 +14,14 @@ from eris.core.residue_identity import format_residue_id
 from eris.core.types import StructureInput
 from eris.exceptions import ErisError
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+
 logger = logging.getLogger(__name__)
 
 
 class StructureLoadError(ErisError):
-    pass
+    """Raised when a structure cannot be read or does not yield usable coordinates."""
 
 
 class LoadedStructureData(dict[str, np.ndarray]):
@@ -34,6 +39,7 @@ class LoadedStructureData(dict[str, np.ndarray]):
         chain_ids: tuple[str, ...],
         model_index: int,
     ) -> None:
+        """Wrap the extracted arrays together with the parser-confirmed side data."""
         super().__init__(data)
         self.input_format = input_format
         self.chain_ids = chain_ids
@@ -62,17 +68,18 @@ def _parsed_input_format(st: gemmi.Structure) -> str:
 # Load / chain selection
 # -----------------------
 def load_structure(path: Path) -> gemmi.Structure:
+    """Read a structure file with Gemmi and populate its polymer entities."""
     if not path.exists():
         raise StructureLoadError(f"File not found: {path}")
     try:
         st = gemmi.read_structure(str(path))
         if st is None or len(st) == 0:
-            raise StructureLoadError(f"Empty/invalid structure: {path}")
+            raise StructureLoadError(f"Empty/invalid structure: {path}")  # noqa: TRY301
         # PDB files do not always carry explicit entity records.  Ask Gemmi to
         # populate parser-level polymer classifications so modified polymer
         # amino acids remain distinguishable from ligands.
         st.setup_entities()
-        return st
+        return st  # noqa: TRY300
     except Exception as e:
         raise StructureLoadError(f"Failed to parse structure: {path}") from e
 
@@ -91,6 +98,7 @@ def select_chains(
     chain_id: tuple[str, ...] | None,
     model_index: int,
 ) -> tuple[gemmi.Chain, ...]:
+    """Return the chains of one model that match the requested selection, in model order."""
     if len(st) == 0:
         raise StructureLoadError("Structure has no models.")
     if model_index < 0 or model_index >= len(st):
@@ -115,7 +123,7 @@ def resolve_structure_input(inp: StructureInput, structure: gemmi.Structure | No
     """Resolve a requested selection to an immutable tuple in model order."""
     if structure is None:
         structure = load_structure(Path(inp.source))
-    chains = select_chains(structure, inp.chain_id, inp.model_index)
+    chains = select_chains(structure, cast("tuple[str, ...] | None", inp.chain_id), inp.model_index)
     return StructureInput(
         source=inp.source,
         chain_id=tuple(chain.name for chain in chains),
@@ -131,7 +139,7 @@ def _residue_id(chain: gemmi.Chain, res: gemmi.Residue) -> str:
     """
     return format_residue_id(
         chain_id=chain.name,
-        residue_number=res.seqid.num,
+        residue_number=cast("int", res.seqid.num),
         insertion_code=res.seqid.icode,
         residue_name=res.name,
     )
@@ -141,8 +149,9 @@ def _residue_id(chain: gemmi.Chain, res: gemmi.Residue) -> str:
 # Altloc selection policy
 # -----------------------
 def _altloc_rank(alt: str) -> int:
-    """Prefer blank altloc over 'A' over others (for deterministic tie-breaking).
-    Lower rank is preferred.
+    """Rank an altloc for deterministic tie-breaking; lower is preferred.
+
+    A blank altloc is preferred over 'A', which is preferred over any other.
     """
     a = _altloc_identifier(alt)
     if a == "":
@@ -290,19 +299,12 @@ def _selected_heavy_atoms(
     )
 
 
-def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
-    """Returns:
-    np.ndarray shape (3,) or None if center cannot be computed
-    bfactor_ca: float
-
-    """
+def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str) -> tuple[np.ndarray | None, float]:
+    """Return the residue center, or None if it cannot be computed, and the CA B-factor."""
     # CA-based signals stay anchored to CA independently of the center mode.
     ca_atom = _select_atom_altloc(res["CA"], altloc) if "CA" in res else None
 
-    if ca_atom is not None:
-        bfactor_ca = float(ca_atom.b_iso)
-    else:
-        bfactor_ca = float("nan")
+    bfactor_ca = float(ca_atom.b_iso) if ca_atom is not None else float("nan")
 
     if mode == "ca":
         if ca_atom is None:
@@ -353,7 +355,7 @@ def _next_biological_sequence_position(
 
 def extract_residue_bundle(
     chain: gemmi.Chain,
-    amino_acids_only: bool = True,
+    amino_acids_only: bool = True,  # noqa: FBT001, FBT002
     *,
     altloc: str = "max_occupancy",
     missing_residue: str = "skip",
@@ -382,6 +384,9 @@ def extract_residue_bundle(
           - "ca": alpha carbon
           - "mean": mean of selected residue atom coordinates
           - "com": center of mass of selected residue atoms
+    plddt_source
+        "none" leaves pLDDT as NaN; "bfactor" reads it from the finite CA
+        B-factor, which must lie in [0, 100].
 
     Returns
     -------
@@ -452,9 +457,9 @@ def extract_residue_bundle(
         sequence_position = _next_biological_sequence_position(
             previous_residue_number,
             previous_sequence_position,
-            int(res.seqid.num),
+            int(cast("int", res.seqid.num)),
         )
-        previous_residue_number = int(res.seqid.num)
+        previous_residue_number = int(cast("int", res.seqid.num))
         previous_sequence_position = sequence_position
 
         center, bfactor_ca = _compute_residue_center(res, mode=mode, altloc=altloc)
@@ -565,12 +570,13 @@ def extract_residue_bundle(
 
 def load_select_and_extract(
     inp: StructureInput,
-    extractor: Callable[[object], dict[str, np.ndarray]],
+    extractor: Callable[[gemmi.Chain], dict[str, np.ndarray]],
     structure: gemmi.Structure | None = None,
 ) -> LoadedStructureData:
+    """Load, select chains, extract per-chain bundles and concatenate them in chain order."""
     try:
         st = structure if structure is not None else load_structure(Path(inp.source))
-        chains = select_chains(st, inp.chain_id, inp.model_index)
+        chains = select_chains(st, cast("tuple[str, ...] | None", inp.chain_id), inp.model_index)
         bundles = [extractor(chain) for chain in chains]
         keys = bundles[0].keys()
         data = {key: np.concatenate([bundle[key] for bundle in bundles], axis=0) for key in keys}
@@ -584,7 +590,9 @@ def load_select_and_extract(
                 axis=0,
             ).astype(np.int64)
         if data["pos"].shape[0] == 0:
-            raise StructureLoadError("No positions found in selected chains (after filters/policies).")
+            raise StructureLoadError(  # noqa: TRY301
+                "No positions found in selected chains (after filters/policies)."
+            )
         return LoadedStructureData(
             data,
             input_format=_parsed_input_format(st),
@@ -605,7 +613,7 @@ def load_select_and_extract(
 
 def load_and_extract_residue(
     inp: StructureInput,
-    amino_acids_only: bool = True,
+    amino_acids_only: bool = True,  # noqa: FBT001, FBT002
     *,
     mode: str = "ca",
     altloc: str = "max_occupancy",
@@ -613,7 +621,9 @@ def load_and_extract_residue(
     plddt_source: str = "none",
     structure: gemmi.Structure | None = None,
 ) -> LoadedStructureData:
-    def _extract(ch):
+    """Residue-level extraction wrapper using StructureInput."""
+
+    def _extract(ch: gemmi.Chain) -> dict[str, np.ndarray]:
         return extract_residue_bundle(
             ch,
             amino_acids_only=amino_acids_only,
@@ -658,7 +668,7 @@ def _elem_symbol(atom: gemmi.Atom) -> str:
         if not s:
             return "UNK"
         return s.replace(" ", "")
-    except Exception:
+    except Exception:  # noqa: BLE001
         return "UNK"
 
 
@@ -667,7 +677,8 @@ def _elem_index(atom: gemmi.Atom) -> int:
 
 
 def _atom_role(atom_name: str) -> int:
-    """Stable compact atom-role encoding.
+    """Return a stable compact atom-role code.
+
     0 unknown
     1 backbone N
     2 CA
@@ -705,8 +716,8 @@ def _is_ion_residue(res: gemmi.Residue) -> bool:
             return False
         a = res[0]
         e = _elem_symbol(a)
-        return e in {"NA", "K", "CA", "MG", "ZN", "FE", "CL", "BR", "I"}
-    except Exception:
+        return e in {"NA", "K", "CA", "MG", "ZN", "FE", "CL", "BR", "I"}  # noqa: TRY300
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -844,7 +855,7 @@ def load_and_extract_atoms(
 ) -> LoadedStructureData:
     """Atom-level extraction wrapper using StructureInput."""
 
-    def _extract(ch):
+    def _extract(ch: gemmi.Chain) -> dict[str, np.ndarray]:
         return extract_atom_bundle(
             ch,
             include_hetero=include_hetero,

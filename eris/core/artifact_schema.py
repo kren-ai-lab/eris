@@ -1,3 +1,5 @@
+"""Artifact metadata schema: normalization, builders and validation."""
+
 from __future__ import annotations
 
 import hashlib
@@ -7,7 +9,7 @@ import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TypedDict, Union
+from typing import Any, NoReturn, TypedDict, Union
 
 import numpy as np
 
@@ -78,7 +80,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _ALLOWED_DTYPE_KINDS = {"i", "u", "f", "b", "U"}
 
 
-def _fail(message: str) -> None:
+def _fail(message: str) -> NoReturn:
     raise ArtifactValidationError(message)
 
 
@@ -247,7 +249,7 @@ def _validate_created_at(value: Any) -> None:
     if not value.endswith("Z"):
         _fail("meta.provenance.created_at must be a UTC ISO-8601 string ending in 'Z'")
     try:
-        datetime.fromisoformat(value[:-1] + "+00:00")
+        datetime.fromisoformat(value[:-1] + "+00:00")  # noqa: FURB162 - keep the exact accepted grammar
     except ValueError:
         _fail("meta.provenance.created_at must be a valid UTC ISO-8601 string")
 
@@ -279,7 +281,7 @@ def build_provenance(
     chain_ids: Sequence[str],
 ) -> dict[str, Any]:
     """Build deterministic required provenance without optional environment state."""
-    from eris import __version__
+    from eris import __version__  # noqa: PLC0415
 
     provenance: dict[str, Any] = {
         "eris_version": __version__,
@@ -616,9 +618,8 @@ def _validate_strict_roles(
     if graph_features is not None:
         _require_shape(graph_features, (None,), "graph_features")
     matrix = arrays["matrix"]
-    if matrix is not None:
-        if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
-            _fail(f"role='matrix' requires a square 2-D array, got shape {matrix.shape}")
+    if matrix is not None and (matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]):
+        _fail(f"role='matrix' requires a square 2-D array, got shape {matrix.shape}")
     grid = arrays["grid"]
     if grid is not None:
         _require_shape(grid, (None, None, None, None), "grid")
@@ -746,9 +747,12 @@ def _validate_strict_roles(
             )
 
     counts = meta["counts"]
-    if pooled_features is not None and "n_features" in counts:
-        if counts["n_features"] != pooled_features.shape[0]:
-            _fail("meta.counts.n_features does not match pooled_features")
+    if (
+        pooled_features is not None
+        and "n_features" in counts
+        and counts["n_features"] != pooled_features.shape[0]
+    ):
+        _fail("meta.counts.n_features does not match pooled_features")
     if edge_count is not None and "n_edges" in counts and counts["n_edges"] != edge_count:
         _fail("meta.counts.n_edges does not match edge_index")
     if edge_index is not None and "n_self_loops" in counts:
@@ -770,9 +774,8 @@ def _validate_strict_roles(
     ]
     if node_count_candidates and len(set(node_count_candidates)) != 1:
         _fail("node-oriented outputs do not agree on their first dimension")
-    if node_count_candidates and "n_nodes" in counts:
-        if counts["n_nodes"] != node_count_candidates[0]:
-            _fail("meta.counts.n_nodes does not match node-oriented outputs")
+    if node_count_candidates and "n_nodes" in counts and counts["n_nodes"] != node_count_candidates[0]:
+        _fail("meta.counts.n_nodes does not match node-oriented outputs")
 
 
 def validate_schema(
@@ -786,9 +789,10 @@ def validate_schema(
         _fail("meta must be a mapping")
     if "parameters" in meta:
         _reject_numpy_in_parameters(meta["parameters"])
-    normalized = normalize_metadata(meta)
-    if not isinstance(normalized, dict):
+    result = normalize_metadata(meta)
+    if not isinstance(result, dict):
         _fail("meta must normalize to a mapping")
+    normalized: dict[str, Any] = result
 
     _require_exact_keys(
         normalized,
@@ -817,18 +821,27 @@ def validate_schema(
         _fail(f"meta.granularity must be one of {sorted(_GRANULARITIES)}")
     if normalized["coordinate_source"] not in _COORDINATE_SOURCES:
         _fail(f"meta.coordinate_source must be one of {sorted(_COORDINATE_SOURCES)}")
-    if family == "explicit" and normalized["granularity"] == "atom":
-        if normalized["coordinate_source"] != "atom":
-            _fail("explicit atom granularity requires coordinate_source='atom'")
-    if family == "explicit" and normalized["granularity"] == "residue":
-        if normalized["coordinate_source"] not in {"ca", "residue_mean", "residue_com"}:
-            _fail(
-                "explicit residue granularity requires coordinate_source to be 'ca', "
-                "'residue_mean', or 'residue_com'"
-            )
-    if family == "learned" and normalized["granularity"] in {"structure", "mixed"}:
-        if normalized["coordinate_source"] != "model_specific":
-            _fail("learned structure/mixed granularity requires coordinate_source='model_specific'")
+    if (
+        family == "explicit"
+        and normalized["granularity"] == "atom"
+        and normalized["coordinate_source"] != "atom"
+    ):
+        _fail("explicit atom granularity requires coordinate_source='atom'")
+    if (
+        family == "explicit"
+        and normalized["granularity"] == "residue"
+        and normalized["coordinate_source"] not in {"ca", "residue_mean", "residue_com"}
+    ):
+        _fail(
+            "explicit residue granularity requires coordinate_source to be 'ca', "
+            "'residue_mean', or 'residue_com'"
+        )
+    if (
+        family == "learned"
+        and normalized["granularity"] in {"structure", "mixed"}
+        and normalized["coordinate_source"] != "model_specific"
+    ):
+        _fail("learned structure/mixed granularity requires coordinate_source='model_specific'")
     if representation_type == "vector" and normalized["granularity"] != "structure":
         _fail("representation_type='vector' requires granularity='structure'")
 
@@ -869,7 +882,7 @@ def validate_schema(
             )
         _validate_strict_roles(normalized, arrays, outputs)
 
-    return normalized  # type: ignore[return-value]
+    return normalized
 
 
 __all__ = [

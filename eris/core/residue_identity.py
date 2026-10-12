@@ -1,3 +1,5 @@
+"""Canonical residue identifier format."""
+
 from __future__ import annotations
 
 

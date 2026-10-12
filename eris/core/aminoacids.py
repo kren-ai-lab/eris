@@ -1,3 +1,5 @@
+"""Amino-acid code tables and indices."""
+
 from __future__ import annotations
 
 AA3_TO_AA1: dict[str, str] = {

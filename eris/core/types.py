@@ -1,3 +1,5 @@
+"""Public input types."""
+
 from __future__ import annotations
 
 import os
@@ -7,11 +9,14 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class StructureInput:
+    """Structure source with chain and model selection."""
+
     source: str
     chain_id: str | Sequence[str] | None = None
     model_index: int = 0
 
     def __post_init__(self) -> None:
+        """Validate the input and normalize the chain selection to a tuple."""
         source = os.fspath(self.source)
         if not isinstance(source, str) or not source:
             raise TypeError("source must be a non-empty path string")

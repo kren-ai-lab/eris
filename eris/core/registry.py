@@ -1,9 +1,10 @@
+"""Registry of canonical explicit representations."""
+
 from __future__ import annotations
 
 import types
-from collections.abc import Mapping
 from dataclasses import MISSING, dataclass, fields
-from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from eris.core.base_encoder.base_encoder import BaseEncoder
 from eris.core.config import (
@@ -11,6 +12,9 @@ from eris.core.config import (
     CanonicalRepresentationConfig,
 )
 from eris.exceptions import ConfigError, RepresentationNotFoundError
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def _render_literal(value: Any) -> str:
@@ -65,30 +69,38 @@ def _literal_choices(annotation: Any) -> list[Any] | None:
 
 @dataclass(frozen=True)
 class RepresentationInfo:
+    """Registered config and encoder types of one representation."""
+
     config_type: type[CanonicalRepresentationConfig]
     encoder_type: type[BaseEncoder]
     description: str = ""
 
     @property
     def name(self) -> str:
+        """Canonical representation name."""
         return self.config_type.representation_name
 
     @property
     def representation_type(self) -> str:
+        """Representation type declared by the encoder."""
         return self.encoder_type.representation.representation_type
 
     @property
     def granularity(self) -> str:
+        """Granularity declared by the config."""
         return self.config_type.granularity
 
     @property
     def default_coordinate_source(self) -> str:
+        """Coordinate source of the default configuration."""
         return self.default_config().coordinate_source
 
     def default_config(self) -> CanonicalRepresentationConfig:
+        """Return the default configuration."""
         return self.config_type()
 
     def defaults(self) -> dict[str, Any]:
+        """Return the default configuration as JSON-compatible values."""
         return self.default_config().to_dict()
 
     def params_schema(self) -> list[dict[str, Any]]:
@@ -183,16 +195,19 @@ def register_encoder(
 
 
 def get_encoder(name: str, **kwargs: Any) -> BaseEncoder:
+    """Instantiate the registered encoder ``name`` with ``kwargs``."""
     if name not in _REGISTRY:
         raise KeyError(f"Unknown encoder: {name}")
     return _REGISTRY[name].encoder_type(**kwargs)
 
 
 def list_encoders() -> list[str]:
+    """Return the registered representation names, sorted."""
     return sorted(_REGISTRY)
 
 
 def get_encoder_info(name: str) -> RepresentationInfo:
+    """Return the registration info for ``name``."""
     if name not in _REGISTRY:
         raise KeyError(f"No encoder info: {name}")
     return _REGISTRY[name]

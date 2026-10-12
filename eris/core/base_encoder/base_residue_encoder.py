@@ -1,10 +1,21 @@
-from typing import Any, ClassVar
+"""Base class for residue-level encoders."""
 
-from eris.core.base_encoder.base_encoder import BaseEncoder, EncodingContext
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, ClassVar, cast
+
+from eris.core.base_encoder.base_encoder import BaseEncoder
 from eris.core.io import load_and_extract_residue
+
+if TYPE_CHECKING:
+    from eris.core.base_encoder.base_encoder import EncodingContext
+    from eris.core.config import _ResidueSelectionConfig
+    from eris.core.io import LoadedStructureData
 
 
 class BaseResidueEncoder(BaseEncoder):
+    """Base class for encoders that operate on residues."""
+
     granularity: ClassVar[str] = "residue"
 
     @staticmethod
@@ -24,7 +35,7 @@ class BaseResidueEncoder(BaseEncoder):
         descriptors = self._external_parameter_blocks(parameters)
         if not descriptors:
             return
-        from eris.features.node.external import verify_external_params
+        from eris.features.node.external import verify_external_params  # noqa: PLC0415
 
         for descriptor in descriptors:
             verify_external_params(descriptor)
@@ -44,13 +55,14 @@ class BaseResidueEncoder(BaseEncoder):
             return None
         return {"org.eris.external_features": {"invocations": invocations}}
 
-    def _load_structure(self, ctx: EncodingContext):
+    def _load_structure(self, ctx: EncodingContext) -> LoadedStructureData:
+        config = cast("_ResidueSelectionConfig", self.config)
         return load_and_extract_residue(
             ctx.inp,
-            amino_acids_only=self.config.amino_acids_only,
-            mode=self.config.residue_center,
-            altloc=self.config.altloc,
-            missing_ca=self.config.missing_residue_center,
-            plddt_source=self.config.plddt_source,
+            amino_acids_only=config.amino_acids_only,
+            mode=config.residue_center,
+            altloc=config.altloc,
+            missing_ca=config.missing_residue_center,
+            plddt_source=config.plddt_source,
             structure=ctx.structure,
         )
