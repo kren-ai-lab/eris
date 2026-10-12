@@ -130,7 +130,7 @@ def test_explicit_public_workflow_preserves_identity_failures_and_resume(
     assert _read_rows(results_path) == results
     assert not (artifact_root / "failed").exists()
     for sample_id in ("first", "second"):
-        artifact = StructureArtifact.load(artifact_root / sample_id / "residue_contact_graph", strict=True)
+        artifact = StructureArtifact.load(artifact_root / sample_id / "residue_contact_graph")
         assert artifact.meta["representation_name"] == "residue_contact_graph"
         assert artifact.meta["representation_family"] == "explicit"
 
@@ -181,7 +181,7 @@ def test_explicit_tensor_and_pyg_workflow(tmp_path: Path, monkeypatch: pytest.Mo
     assert [sample["id"] for sample in samples] == ["sample"]
     assert collate_graph(samples)["id"] == ["sample"]
 
-    artifact = StructureArtifact.load(artifact_root / "sample" / "residue_contact_graph", strict=True)
+    artifact = StructureArtifact.load(artifact_root / "sample" / "residue_contact_graph")
     assert eris.to_torch(artifact)["representation_name"] == "residue_contact_graph"
     _install_fake_pyg(monkeypatch)
     pyg_data = eris.to_pyg(artifact)
@@ -215,7 +215,7 @@ def test_learned_public_workflow_uses_canonical_artifacts_and_torch(
         ("learned", "success", "learned")
     ]
     artifact_dir = artifact_root / "learned" / "gearnet_edge"
-    artifact = StructureArtifact.load(artifact_dir, strict=True)
+    artifact = StructureArtifact.load(artifact_dir)
     assert artifact.meta["representation_family"] == "learned"
 
     index_path = tmp_path / "learned-index.csv"

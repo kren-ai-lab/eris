@@ -191,7 +191,7 @@ def test_residue_pool_math_nan_omit_and_schema_vector(mode, expected, expected_k
             "layout": "F",
         }
     ]
-    pooled.validate(strict=True)
+    pooled.validate()
     assert source.meta == meta_before
     _assert_data_unchanged(source, data_before)
 
@@ -239,7 +239,7 @@ def test_residue_pool_nan_policies_round_trip_and_fingerprints(tmp_path: Path):
 
     target = tmp_path / "pooled"
     omit.save(target)
-    loaded = StructureArtifact.load(target, strict=True)
+    loaded = StructureArtifact.load(target)
     assert loaded.meta == omit.meta
     np.testing.assert_equal(loaded.data["pooled_attr"], omit.data["pooled_attr"])
 
@@ -334,7 +334,7 @@ def test_learned_validate_finalize_and_save(tmp_path):
     artifact = _learned_artifact()
     data_before = {name: array.copy() for name, array in artifact.data.items()}
 
-    artifact.validate(strict=False)
+    artifact.validate()
     artifact.finalize()
     artifact.save(tmp_path / "learned")
 
@@ -441,7 +441,7 @@ def test_invalid_operations_do_not_mutate_artifact(tmp_path, operation):
 
     with pytest.raises(ArtifactValidationError, match="n_nodes"):  # noqa: PT012
         if operation == "validate":
-            artifact.validate(strict=False)
+            artifact.validate()
         elif operation == "finalize":
             artifact.finalize()
         else:

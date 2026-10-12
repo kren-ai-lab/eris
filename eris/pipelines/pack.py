@@ -282,7 +282,7 @@ def _candidate_artifact_dirs(root: Path) -> list[Path]:
 
 def _row_from_artifact(root: Path, locator_root: Path, artifact_dir: Path) -> PackedIndexRow:
     try:
-        artifact = StructureArtifact.load(artifact_dir, strict=True)
+        artifact = StructureArtifact.load(artifact_dir)
     except ArtifactValidationError as error:
         raise PackIndexError(
             f"Invalid Artifact Schema directory: {_posix_relative(artifact_dir, root)}"

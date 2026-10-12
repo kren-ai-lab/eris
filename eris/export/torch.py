@@ -309,7 +309,7 @@ def to_torch(
     if not isinstance(artifact, StructureArtifact):
         raise TypeError("to_torch() expects a StructureArtifact instance.")
 
-    artifact.validate(strict=True)
+    artifact.validate()
     family, representation_type = _representation_identity(artifact)
 
     if family == "learned":
@@ -345,7 +345,7 @@ def save_artifact_to_torch(
 ) -> None:
     """Export one artifact directory to a Torch file."""
     torch = _torch()
-    artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
+    artifact = StructureArtifact.load(Path(artifact_dir))
     data = to_torch(
         artifact,
         device=device,

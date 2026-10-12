@@ -18,7 +18,7 @@ console = Console(width=240)
 
 
 def _load_artifact(artifact_dir: Path) -> StructureArtifact:
-    return StructureArtifact.load(artifact_dir, strict=True)
+    return StructureArtifact.load(artifact_dir)
 
 
 def _json(value: Any) -> Syntax:

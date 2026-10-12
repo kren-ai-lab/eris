@@ -137,7 +137,7 @@ def test_batch_encode_success_preserves_order_layout_and_strict(tmp_path: Path) 
     for row in rows:
         target = root / row.id / "residue_contact_map"
         assert target.is_dir()
-        artifact = StructureArtifact.load(target, strict=True)
+        artifact = StructureArtifact.load(target)
         assert artifact.meta["representation_name"] == "residue_contact_map"
         assert artifact.meta["representation_family"] == "explicit"
 
@@ -184,7 +184,7 @@ def test_manifest_batch_and_resume_canonicalize_multichain_selection(
     )
 
     assert result[0].status == "success"
-    artifact = StructureArtifact.load(artifact_root / "protein" / "residue_point_cloud", strict=True)
+    artifact = StructureArtifact.load(artifact_root / "protein" / "residue_point_cloud")
     assert artifact.meta["input"]["chain_ids"] == ["A", "B"]
 
     monkeypatch.setattr(
@@ -337,7 +337,7 @@ def test_existing_output_without_resume_or_overwrite_is_a_failure(tmp_path, monk
 
     assert results[0].status == "failed"
     assert results[0].error_type == "FileExistsError"
-    assert StructureArtifact.load(target, strict=True).meta["representation_name"] == "residue_contact_map"
+    assert StructureArtifact.load(target).meta["representation_name"] == "residue_contact_map"
 
 
 def test_resume_reuses_equivalent_artifact_without_execution(tmp_path, monkeypatch):
@@ -391,7 +391,7 @@ def test_resume_regenerates_invalid_artifact_without_deleting_first(tmp_path, mo
 
     assert len(calls) == 1
     assert results[0].status == "success"
-    assert StructureArtifact.load(target, strict=True).meta["schema_version"] == 1
+    assert StructureArtifact.load(target).meta["schema_version"] == 1
 
 
 @pytest.mark.parametrize(
@@ -439,7 +439,7 @@ def test_resume_regenerates_non_equivalent_explicit_artifacts(
 
     assert len(calls) == 1
     assert results[0].status == "success"
-    loaded = StructureArtifact.load(target, strict=True)
+    loaded = StructureArtifact.load(target)
     assert loaded.meta["representation_name"] == representation
     if "params" in kwargs:
         assert loaded.meta["parameters"]["k"] == 8
@@ -556,9 +556,7 @@ def test_learned_resume_reuses_only_matching_model_identity(tmp_path, monkeypatc
 
     assert len(calls) == 1
     assert results[0].status == "success"
-    assert (
-        StructureArtifact.load(target, strict=True).meta["model"] == GEARNET_EDGE_MODEL_DESCRIPTOR.to_dict()
-    )
+    assert StructureArtifact.load(target).meta["model"] == GEARNET_EDGE_MODEL_DESCRIPTOR.to_dict()
 
 
 def test_result_manifest_uses_canonical_batch_fields(tmp_path, monkeypatch):

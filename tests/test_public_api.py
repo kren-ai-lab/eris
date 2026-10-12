@@ -53,7 +53,7 @@ def test_all_discovered_explicit_representations_encode_strict_artifacts():
         assert isinstance(artifact, StructureArtifact)
         assert artifact.meta["schema_version"] == 1
         assert artifact.meta["representation_name"] == name
-        artifact.validate(strict=True)
+        artifact.validate()
 
 
 def test_public_pool_aggregates_real_residue_node_features_without_mutation():
@@ -393,7 +393,7 @@ def test_explicit_output_saves_same_artifact_and_round_trips(tmp_path, monkeypat
     assert saved == [artifact]
     assert (output / "meta.json").is_file()
     assert (output / "data.npz").is_file()
-    loaded = StructureArtifact.load(output, strict=True)
+    loaded = StructureArtifact.load(output)
     _assert_equivalent(artifact, loaded)
 
 
@@ -421,7 +421,7 @@ def test_cache_hit_is_persisted_to_independent_user_output(tmp_path, monkeypatch
     )
 
     _assert_equivalent(first, second)
-    _assert_equivalent(second, StructureArtifact.load(output, strict=True))
+    _assert_equivalent(second, StructureArtifact.load(output))
     assert output.parent != cache.cache_dir
 
 

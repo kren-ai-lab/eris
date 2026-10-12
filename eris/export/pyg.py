@@ -56,7 +56,7 @@ def _metadata(meta: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _identity(artifact: StructureArtifact) -> tuple[str, str]:
-    artifact.validate(strict=True)
+    artifact.validate()
     family = artifact.meta.get("representation_family")
     representation_type = artifact.meta.get("representation_type")
     if not isinstance(family, str) or not isinstance(representation_type, str):
@@ -198,7 +198,7 @@ def save_artifact_to_pyg(
 ) -> None:
     """Export one artifact directory to a PyG file."""
     torch, _ = _pyg_dependencies()
-    artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
+    artifact = StructureArtifact.load(Path(artifact_dir))
     pyg = to_pyg(artifact, device=device)
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     torch.save(pyg, out_path)

@@ -422,7 +422,7 @@ def _assert_real_gearnet_artifact(
     output_mode: str,
     granularity: str,
 ) -> None:
-    artifact.validate(strict=True)
+    artifact.validate()
     assert artifact.meta["representation_name"] == "gearnet_edge"
     assert artifact.meta["representation_family"] == "learned"
     assert artifact.meta["representation_type"] == "embedding"
@@ -478,7 +478,7 @@ def test_real_gearnet_cli_modes(output_mode, granularity, tmp_path):
 
     assert result.exit_code == 0, result.output
     _assert_real_gearnet_artifact(
-        StructureArtifact.load(output, strict=True),
+        StructureArtifact.load(output),
         output_mode=output_mode,
         granularity=granularity,
     )
@@ -523,10 +523,10 @@ def test_real_gearnet_cli_and_public_api_are_equivalent(tmp_path):
         output=api_output,
         use_cache=False,
     )
-    _assert_artifacts_equivalent(StructureArtifact.load(cli_output, strict=True), api_artifact)
+    _assert_artifacts_equivalent(StructureArtifact.load(cli_output), api_artifact)
     _assert_artifacts_equivalent(
-        StructureArtifact.load(cli_output, strict=True),
-        StructureArtifact.load(api_output, strict=True),
+        StructureArtifact.load(cli_output),
+        StructureArtifact.load(api_output),
     )
 
 
@@ -592,12 +592,12 @@ def test_real_gearnet_checkpoint_cache_and_artifact_cache_work_through_cli(tmp_p
     assert second.exit_code == 0, second.output
     assert third.exit_code == 0, third.output
     _assert_artifacts_equivalent(
-        StructureArtifact.load(first_output, strict=True),
-        StructureArtifact.load(second_output, strict=True),
+        StructureArtifact.load(first_output),
+        StructureArtifact.load(second_output),
     )
     _assert_artifacts_equivalent(
-        StructureArtifact.load(second_output, strict=True),
-        StructureArtifact.load(third_output, strict=True),
+        StructureArtifact.load(second_output),
+        StructureArtifact.load(third_output),
     )
 
 

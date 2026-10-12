@@ -140,7 +140,7 @@ def build_learned_artifact(
     )
     artifact = StructureArtifact(data=data, meta=metadata)
     artifact.finalize()
-    artifact.validate(strict=True)
+    artifact.validate()
     return artifact
 
 

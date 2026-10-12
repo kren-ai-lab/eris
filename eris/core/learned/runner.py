@@ -117,7 +117,7 @@ def _matches_cache_identity(
     execution_request: StructuralExecutionConfig,
 ) -> bool:
     try:
-        artifact.validate(strict=True)
+        artifact.validate()
     except (ArtifactValidationError, TypeError, ValueError):
         return False
 
@@ -187,7 +187,7 @@ def _refresh_input_source(
         chain_ids=_chain_ids(structure_input),
     )
     refreshed = StructureArtifact(data=artifact.data, meta=metadata)
-    refreshed.validate(strict=True)
+    refreshed.validate()
     return refreshed
 
 
@@ -366,7 +366,7 @@ class StructuralEmbedderRunner:
                 )
             },
         )
-        artifact.validate(strict=True)
+        artifact.validate()
 
         if artifact_cache is not None:
             artifact_cache.set(cache_key, artifact)

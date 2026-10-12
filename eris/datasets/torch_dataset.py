@@ -117,7 +117,7 @@ class ErisFolderDataset:
         """Load and validate one sample from its artifact."""
         row = self.rows[idx]
         artifact_dir = _resolve_row_path(cast("Path", self.index_path), row.artifact_dir)
-        artifact = StructureArtifact.load(artifact_dir, strict=True)
+        artifact = StructureArtifact.load(artifact_dir)
         _validate_artifact_consistency(row, artifact)
 
         if row.representation_family == "learned":
