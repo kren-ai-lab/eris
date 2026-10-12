@@ -36,7 +36,7 @@ class DistogramCA(BaseResidueEncoder):
     name: ClassVar[str] = "residue_distogram"
     version: ClassVar[str] = "0.1.2"
     representation: ClassVar = MatrixRepresentation("dist")
-    output_declarations_v2: ClassVar = RESIDUE_DISTOGRAM_OUTPUTS
+    output_declarations: ClassVar = RESIDUE_DISTOGRAM_OUTPUTS
 
     config_type: ClassVar = ResidueDistogramConfig
     config: ResidueDistogramConfig

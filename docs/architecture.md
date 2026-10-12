@@ -5,7 +5,7 @@ Eris has two representation families:
 - explicit encoders compute deterministic arrays from selected structure coordinates;
 - learned backends compute embeddings through an optional model runtime.
 
-Both families return `StructureArtifact` objects and use Artifact Schema v2 for persistence.
+Both families return `StructureArtifact` objects and use the artifact schema for persistence.
 
 ## Code map
 
@@ -18,7 +18,7 @@ Both families return `StructureArtifact` objects and use Artifact Schema v2 for 
 | `eris/core/io.py` | PDB/mmCIF loading, model/chain selection, atom and residue extraction |
 | `eris/core/base_encoder/` | Shared explicit encoding, finalization, and cache flow |
 | `eris/core/artifacts.py` | `StructureArtifact` validation, save, and load |
-| `eris/core/artifact_schema_v2.py` | Executable Schema v2 metadata and array contract |
+| `eris/core/artifact_schema.py` | Executable artifact metadata and array contract |
 | `eris/core/cache.py` | Path-independent artifact cache identity and storage |
 | `eris/features/` | Node, edge, voxel, and graph-statistic feature definitions |
 | `eris/pooling.py` | Residue-feature pooling and source-artifact identity |
@@ -39,7 +39,7 @@ eris.encode(...)
     -> extract atom or residue data
     -> compute coordinates and registered features
     -> construct representation arrays
-    -> finalize and strictly validate Schema v2 metadata
+    -> finalize and strictly validate artifact metadata
     -> optionally cache and/or save the StructureArtifact
 ```
 
@@ -97,7 +97,7 @@ eris.embed(...)
     -> verify the caller-supplied checkpoint
     -> apply frozen GearNet biological selection and graph construction
     -> run the native PyTorch model
-    -> build and strictly validate a learned Schema v2 artifact
+    -> build and strictly validate a learned artifact
     -> optionally cache and/or save it
 ```
 
@@ -142,7 +142,7 @@ topology or reconstructs GearNet internals.
 2. Implement the encoder under the appropriate `eris/encoders/` package using the shared
    base encoder and output declarations.
 3. Register it in the encoder module and import that module through `eris/encoders/__init__.py`.
-4. Preserve the name invariant and finalize through the existing Schema v2 path.
+4. Preserve the name invariant and finalize through the existing artifact schema path.
 5. Add focused encoder, discovery, artifact, CLI, and downstream tests as required.
 6. Document its scientific defaults in `representation_defaults.md`.
 
@@ -176,12 +176,12 @@ bypass the canonical validators, serializers, fingerprints, or cache identity,
 and no new registry, runner, backend, or provider object becomes public API.
 
 - Optional dependencies remain lazy and feature-local.
-- Schema v2 remains `meta.json` plus `data.npz`; `feature_keys` is authoritative.
+- The artifact schema is `meta.json` plus `data.npz`; `feature_keys` is authoritative.
 - Scientific parameters and invocation provenance remain distinct.
 - Cache identity remains based on scientific content, config, implementation, and input selection,
   not local source paths.
 - Biological identity, row order, array order, and exact keys are never inferred or repaired.
 - Incompatible inputs fail instead of being padded, truncated, normalized, or silently omitted.
 
-See [Artifact Schema v2](artifact_schema.md) and
+See [Artifact Schema](artifact_schema.md) and
 [representation defaults](representation_defaults.md) for the executable contract details.

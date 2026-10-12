@@ -12,7 +12,7 @@ from eris.export.torch import to_torch
 
 
 class PyGExportError(ValueError):
-    """Raised when an Artifact Schema v2 artifact cannot be exported as a PyG graph."""
+    """Raised when an artifact cannot be exported as a PyG graph."""
 
 
 _METADATA_ATTRS = (
@@ -175,7 +175,7 @@ def to_pyg(
     device: str | None = None,
 ):
     """
-    Export one explicit graph Artifact Schema v2 artifact to ``torch_geometric.data.Data``.
+    Export one explicit graph artifact schema artifact to ``torch_geometric.data.Data``.
 
     Non-graph artifacts are rejected because this exporter preserves public topology; it
     never invents edges from clouds, matrices, grids, or learned model internals.

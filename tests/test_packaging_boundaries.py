@@ -58,7 +58,7 @@ artifact = eris.encode(
     representation="residue_contact_map",
     use_cache=False,
 )
-if artifact.meta["schema_version"] != 2:
+if artifact.meta["schema_version"] != 1:
     raise SystemExit("core explicit encoding failed without Biotite")
 if "biotite" in sys.modules:
     raise SystemExit("unrelated explicit encoding imported Biotite")
@@ -107,7 +107,7 @@ artifact = eris.encode({str(PDB)!r}, representation="residue_contact_map", use_c
 target = Path({output})
 artifact.save(target)
 loaded_artifact = StructureArtifact.load(target, strict=True)
-assert loaded_artifact.meta["schema_version"] == 2
+assert loaded_artifact.meta["schema_version"] == 1
 
 runner = CliRunner()
 for args in (("--help",), ("representations", "list"), ("embedders", "list")):

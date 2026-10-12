@@ -7,7 +7,7 @@ from dataclasses import FrozenInstanceError, fields
 
 import pytest
 
-from eris.core.artifact_schema_v2 import compute_config_fingerprint
+from eris.core.artifact_schema import compute_config_fingerprint
 from eris.core.learned import (
     ResolvedExecution,
     StructuralEmbedderConfig,

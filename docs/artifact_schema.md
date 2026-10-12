@@ -1,4 +1,4 @@
-# Artifact Schema v2
+# Artifact Schema
 
 Every persisted Eris representation is a directory containing:
 
@@ -9,8 +9,8 @@ artifact/
 ```
 
 `StructureArtifact` in `eris/core/artifacts.py` validates, saves, and loads this form.
-`eris/core/artifact_schema_v2.py` is the executable schema authority. The serialized
-`schema_version` is the integer `2`.
+`eris/core/artifact_schema.py` is the executable schema authority. The serialized
+`schema_version` is the integer `1`.
 
 ## Metadata
 
@@ -18,7 +18,7 @@ No undeclared top-level fields are accepted.
 
 | Field | Contract |
 | --- | --- |
-| `schema_version` | exactly `2` |
+| `schema_version` | exactly `1` |
 | `representation_name` | non-empty public identifier |
 | `representation_family` | `explicit` or `learned` |
 | `representation_type` | `cloud`, `graph`, `matrix`, `grid`, or `vector` for explicit; `embedding` for learned |
@@ -190,7 +190,7 @@ producer-specific provenance but cannot replace a required field or alter the co
 
 ## Strict validation
 
-`validate_schema_v2(meta, data, strict=True)` verifies:
+`validate_schema(meta, data, strict=True)` verifies:
 
 - exact top-level and nested fields;
 - family/type, granularity, coordinate-source, producer, input, and model compatibility;
@@ -214,13 +214,13 @@ Schema validation provides structural integrity, not a complete numeric payload 
 - `data.npz` and `meta.json` are staged and replaced independently, not atomically as a pair;
 - different numeric values can pass when all validated metadata and array invariants still match.
 
-Versionless and non-v2 artifacts are rejected rather than migrated.
+Artifacts with a missing or different `schema_version` are rejected rather than migrated.
 
 ## Artifact cache identity
 
-The v2 cache key combines:
+The cache key combines:
 
-- `cache_contract=2` and `artifact_schema_version=2`;
+- `cache_contract=1` and `artifact_schema_version=1`;
 - representation and encoder identity;
 - configuration fingerprint;
 - input SHA-256 and parser-relevant suffix;
@@ -232,13 +232,10 @@ timestamps are excluded. A hit for identical content at another source path refr
 current `input.source`. Learned hits preserve original generation execution and checkpoint-source
 provenance.
 
-Cache entries live under `v2/<key>/`. Invalid, corrupt, or older entries are misses; Eris does not
+Cache entries live under `artifacts/<key>/`. Invalid or corrupt entries are misses; Eris does not
 migrate or delete them automatically.
 
-## Schema v2 multi-chain and pooling finalization
-
-Because v0.1 has not been released, the multi-chain changes finalized Schema v2 without a
-competing legacy format or schema-version increment.
+## Multi-chain and pooling
 
 Collection-valued `input.chain_ids` replaces scalar `input.chain_id` for
 every artifact. It is a non-empty JSON list of unique strings in selected-model
@@ -265,7 +262,7 @@ Its canonical parameters identify the source array and ordered keys, reduction
 mode, NaN policy, and a source-artifact fingerprint covering the selected
 source data. The source artifact remains immutable.
 
-All other frozen derived features fit Schema v2's ordered node/edge attributes
+All other frozen derived features fit the schema's ordered node/edge attributes
 and declared auxiliary arrays. Exact feature keys, array roles, shapes, units,
 provider information, and scientific parameters are recorded as specified in
 [`structural_features.md`](structural_features.md). Current multi-chain graphs permit spatial

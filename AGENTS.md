@@ -20,8 +20,8 @@
 ## Contract guardrails
 
 - `import eris` must not eagerly import Torch, TorchDrug, PyG, RDKit, or GearNet numerical code.
-- Persistence is `StructureArtifact` Schema v2: `meta.json` plus `data.npz`.
-- Do not change Schema v2, scientific cache identity, or GearNet scientific behavior unless the
+- Persistence is the `StructureArtifact` schema: `meta.json` plus `data.npz`.
+- Do not change the artifact schema, scientific cache identity, or GearNet scientific behavior unless the
   task explicitly requires it.
 - CLI operations must delegate to the equivalent public Python API.
 - Do not expose registries, runners, backends, descriptors, or cache internals as public API

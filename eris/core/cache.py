@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING, Any
 
 from platformdirs import user_cache_dir
 
-from eris.core.artifact_schema_v2 import (
+from eris.core.artifact_schema import (
+    ARTIFACT_SCHEMA_VERSION,
     _IMPLEMENTATION_PATH,
-    ArtifactSchemaV2ValidationError,
+    ArtifactValidationError,
     _require_non_empty_string,
     _require_sha256,
     _validated_chain_ids,
@@ -21,10 +22,10 @@ if TYPE_CHECKING:
     from eris.core.artifacts import StructureArtifact
 
 
-def _validate_cache_key_v2(key: str) -> str:
+def _validate_cache_key(key: str) -> str:
     try:
-        return _require_sha256(key, "v2 cache key")
-    except ArtifactSchemaV2ValidationError as error:
+        return _require_sha256(key, "cache key")
+    except ArtifactValidationError as error:
         raise ValueError(str(error)) from error
 
 
@@ -55,7 +56,7 @@ def parser_hint_matches_format(parser_hint: str, input_format: str) -> bool:
     return expected is None or input_format == expected
 
 
-def compute_cache_key_v2(
+def compute_cache_key(
     *,
     representation_name: str,
     encoder_implementation: str,
@@ -83,7 +84,7 @@ def compute_cache_key_v2(
         if type(model_index) is not int or model_index < 0:
             raise ValueError("model_index must be a plain integer >= 0")
         normalized_chain_ids = _validated_chain_ids(chain_ids, "chain_ids")
-    except ArtifactSchemaV2ValidationError as error:
+    except ArtifactValidationError as error:
         raise ValueError(str(error)) from error
     if model is not None and not isinstance(model, Mapping):
         raise ValueError("model must be a mapping or None")
@@ -91,8 +92,8 @@ def compute_cache_key_v2(
         raise ValueError("execution must be a mapping or None")
 
     payload: dict[str, Any] = {
-        "cache_contract": 2,
-        "artifact_schema_version": 2,
+        "cache_contract": 1,
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "representation_name": representation_name,
         "encoder": {
             "implementation": implementation,
@@ -123,13 +124,13 @@ class DiskCache:
     def __init__(self, cache_dir: Path | None = None) -> None:
         self.cache_dir = cache_dir or default_cache_dir()
 
-    def _v2_entry_dir(self, key: str) -> Path:
-        return self.cache_dir / "v2" / _validate_cache_key_v2(key)
+    def _entry_dir(self, key: str) -> Path:
+        return self.cache_dir / "artifacts" / _validate_cache_key(key)
 
-    def get_v2(self, key: str) -> StructureArtifact | None:
+    def get(self, key: str) -> StructureArtifact | None:
         from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 
-        entry_dir = self._v2_entry_dir(key)
+        entry_dir = self._entry_dir(key)
         if not entry_dir.is_dir():
             return None
         try:
@@ -137,5 +138,5 @@ class DiskCache:
         except (ArtifactValidationError, OSError):
             return None
 
-    def set_v2(self, key: str, artifact: StructureArtifact) -> None:
-        artifact.save(self._v2_entry_dir(key))
+    def set(self, key: str, artifact: StructureArtifact) -> None:
+        artifact.save(self._entry_dir(key))

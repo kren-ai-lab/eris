@@ -11,7 +11,7 @@ from eris.core.artifacts import StructureArtifact
 
 
 class TorchExportError(ValueError):
-    """Raised when an Artifact Schema v2 artifact cannot be exported to Torch."""
+    """Raised when an artifact cannot be exported to Torch."""
 
 
 _COMMON_METADATA = (
@@ -80,7 +80,7 @@ def _metadata(meta: Mapping[str, Any]) -> dict[str, Any]:
 def _output_names(meta: Mapping[str, Any]) -> list[str]:
     outputs = meta.get("outputs")
     if not isinstance(outputs, list):
-        raise TorchExportError("Artifact metadata must contain Schema v2 outputs.")
+        raise TorchExportError("Artifact metadata must contain artifact schema outputs.")
     names: list[str] = []
     for index, output in enumerate(outputs):
         if not isinstance(output, Mapping) or not isinstance(output.get("name"), str):
@@ -308,7 +308,7 @@ def to_torch(
     matrix_as_channel: bool = True,
 ) -> dict[str, Any]:
     """
-    Convert one strict-valid Artifact Schema v2 ``StructureArtifact`` to Torch.
+    Convert one strict-valid artifact schema ``StructureArtifact`` to Torch.
 
     The returned mapping contains Torch tensors plus lightweight metadata. Torch export is
     downstream-only: it does not mutate artifacts, change canonical storage, batch samples,

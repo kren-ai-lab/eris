@@ -16,7 +16,7 @@ class ResiduePointCloudCA(BaseResidueEncoder):
     name: ClassVar[str] = "residue_point_cloud"
     version: ClassVar[str] = "0.1.3"
     representation: ClassVar = PointCloudRepresentation()
-    output_declarations_v2: ClassVar = RESIDUE_POINT_CLOUD_OUTPUTS
+    output_declarations: ClassVar = RESIDUE_POINT_CLOUD_OUTPUTS
 
     config_type: ClassVar = ResiduePointCloudConfig
     config: ResiduePointCloudConfig

@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from eris.core.artifact_schema_v2 import (
+from eris.core.artifact_schema import (
     build_artifact_metadata,
     build_feature_keys,
     build_provenance,

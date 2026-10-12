@@ -98,7 +98,7 @@ runtime requirements.
 - [v0.1 developer handoff](docs/HANDOFF_V0.1.md)
 - [Architecture](docs/architecture.md)
 - [Representation defaults](docs/representation_defaults.md)
-- [Artifact Schema v2](docs/artifact_schema.md)
+- [Artifact Schema](docs/artifact_schema.md)
 - [External residue features](docs/external_residue_features.md)
 - [GearNet-Edge backend](docs/gearnet_edge_backend.md)
 - [Development](DEVELOPMENT.md)

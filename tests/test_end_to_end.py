@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 
 import eris
 from eris.cli.main import app
-from eris.core.artifact_schema_v2 import build_input_metadata
+from eris.core.artifact_schema import build_input_metadata
 from eris.core.artifacts import StructureArtifact
 from eris.core.hashing import sha256_file
 from eris.core.learned import (

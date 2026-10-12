@@ -8,9 +8,9 @@ import numpy as np
 import pytest
 
 import eris
-from eris.core.artifact_schema_v2 import compute_config_fingerprint
+from eris.core.artifact_schema import compute_config_fingerprint
 from eris.core.artifacts import StructureArtifact
-from eris.core.cache import DiskCache, compute_cache_key_v2
+from eris.core.cache import DiskCache, compute_cache_key
 from eris.core.hashing import sha256_file
 from eris.core.types import StructureInput
 from eris.encoders.graphs.residue_contact_graph import ResidueContactGraph
@@ -781,13 +781,13 @@ def test_corrected_graph_cache_version_cannot_reuse_previous_version(
         "model_index": structure_input.model_index,
         "chain_ids": structure_input.chain_id,
     }
-    old_key = compute_cache_key_v2(encoder_version="0.1.3", **common)
-    current_key = compute_cache_key_v2(encoder_version=encoder.version, **common)
-    cache.set_v2(old_key, stale)
+    old_key = compute_cache_key(encoder_version="0.1.3", **common)
+    current_key = compute_cache_key(encoder_version=encoder.version, **common)
+    cache.set(old_key, stale)
 
     assert encoder.version == "0.1.4"
     assert old_key != current_key
-    assert cache.get_v2(current_key) is None
+    assert cache.get(current_key) is None
     result = encoder.encode(structure_input)
     assert result.meta["encoder"]["version"] == "0.1.4"
-    assert cache.get_v2(current_key) is not None
+    assert cache.get(current_key) is not None

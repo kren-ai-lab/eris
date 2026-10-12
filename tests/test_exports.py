@@ -15,7 +15,7 @@ requires_torch = pytest.mark.skipif(
 )
 
 import eris
-from eris.core.artifact_schema_v2 import build_input_metadata
+from eris.core.artifact_schema import build_input_metadata
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.learned import (
     CheckpointDescriptor,
@@ -112,26 +112,6 @@ if loaded:
     raise SystemExit(f"optional frameworks loaded: {loaded}")
 """
     subprocess.run([sys.executable, "-c", script], check=True)
-
-
-def test_torch_export_rejects_schema_v1_boundary() -> None:
-    artifact = StructureArtifact(
-        data={"pos": np.zeros((1, 3), dtype=np.float32)},
-        meta={
-            "schema_version": 1,
-            "encoder_name": "legacy",
-            "encoder_version": "0",
-            "encoder_fingerprint": "legacy",
-            "type": "cloud",
-            "level": "residue",
-            "params": {},
-            "input": {},
-            "feature_keys": {},
-        },
-    )
-
-    with pytest.raises(ArtifactValidationError, match="Schema v1"):
-        to_torch(artifact)
 
 
 @requires_torch

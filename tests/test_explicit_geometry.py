@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from eris.core.artifact_schema_v2 import compute_config_fingerprint, validate_schema_v2
+from eris.core.artifact_schema import compute_config_fingerprint, validate_schema
 from eris.core.hashing import sha256_file
 from eris.core.io import load_and_extract_residue
 from eris.core.representations.output_declarations import (
@@ -394,7 +394,7 @@ def test_experimental_structure_validation_panel(source: Path, expected_chains: 
         use_cache=False,
     ).encode(StructureInput(source=str(source)))
 
-    assert artifact.meta["schema_version"] == 2
+    assert artifact.meta["schema_version"] == 1
     assert artifact.meta["input"]["chain_ids"] == expected_chains
     assert list(dict.fromkeys(artifact.data["chain_id"].tolist())) == expected_chains
     assert artifact.data["node_attr"].dtype == np.float32
@@ -413,13 +413,13 @@ def test_experimental_structure_validation_panel(source: Path, expected_chains: 
 
 
 @pytest.mark.parametrize("encoder_type", ENCODER_TYPES, ids=lambda value: value.name)
-def test_all_explicit_encoders_return_complete_schema_v2(encoder_type):
+def test_all_explicit_encoders_return_complete_schema(encoder_type):
     encoder = encoder_type(use_cache=False)
     artifact = encoder.encode(StructureInput(source=str(PDB)))
     metadata = artifact.meta
 
-    assert validate_schema_v2(metadata, artifact.data, strict=True) == metadata
-    assert metadata["schema_version"] == 2
+    assert validate_schema(metadata, artifact.data, strict=True) == metadata
+    assert metadata["schema_version"] == 1
     assert metadata["representation_name"] == encoder.name
     assert metadata["representation_family"] == "explicit"
     assert metadata["representation_type"] == encoder.representation.representation_type

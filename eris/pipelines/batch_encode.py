@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import eris
-from eris.core.artifact_schema_v2 import compute_config_fingerprint
+from eris.core.artifact_schema import compute_config_fingerprint
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import parser_hint_from_source, parser_hint_matches_format
 from eris.core.config import CanonicalRepresentationConfig
@@ -293,9 +293,7 @@ def _artifact_matches_request(
         return False
 
     matches = (
-        type(meta.get("schema_version")) is int
-        and meta["schema_version"] == 2
-        and meta.get("representation_name") == identity.representation_name
+        meta.get("representation_name") == identity.representation_name
         and meta.get("representation_family") == identity.representation_family
         and meta.get("representation_type") == identity.representation_type
         and meta.get("granularity") == identity.granularity

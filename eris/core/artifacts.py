@@ -10,40 +10,14 @@ from typing import Any, Dict, Mapping
 
 import numpy as np
 
-from eris.exceptions import ErisError
+from eris.core.artifact_schema import ArtifactValidationError, validate_schema
 
 
-class ArtifactValidationError(ErisError):
-    pass
-
-
-_SCHEMA_V1_UNSUPPORTED = (
-    "Artifact Schema v1 is no longer supported by this Eris release. "
-    "Regenerate the artifact from the original structure and configuration."
-)
-
-
-def _require_v2(meta: dict[str, Any]) -> None:
-    if not isinstance(meta, dict):
-        raise ArtifactValidationError("Artifact metadata must be a dict.")
-    if type(meta.get("schema_version")) is not int or meta["schema_version"] != 2:
-        raise ArtifactValidationError(_SCHEMA_V1_UNSUPPORTED)
-
-
-def _validate_artifact_v2(
+def _validate_artifact(
     meta: dict[str, Any],
     data: Mapping[str, np.ndarray],
 ) -> dict[str, Any]:
-    from eris.core.artifact_schema_v2 import (
-        ArtifactSchemaV2ValidationError,
-        validate_schema_v2,
-    )
-
-    _require_v2(meta)
-    try:
-        return validate_schema_v2(meta, data, strict=True)
-    except ArtifactSchemaV2ValidationError as error:
-        raise ArtifactValidationError(str(error)) from error
+    return validate_schema(meta, data, strict=True)
 
 
 def _write_staged_npz(path: Path, data: Mapping[str, np.ndarray]) -> None:
@@ -98,24 +72,24 @@ def _read_artifact_metadata(meta_path: Path) -> dict[str, Any]:
     return meta
 
 
-def _v2_output_names(meta: dict[str, Any]) -> list[str]:
+def _output_names(meta: dict[str, Any]) -> list[str]:
     outputs = meta.get("outputs")
     if not isinstance(outputs, list) or not outputs:
-        raise ArtifactValidationError("Schema v2 meta.outputs must be a non-empty list.")
+        raise ArtifactValidationError("Artifact meta.outputs must be a non-empty list.")
 
     names: list[str] = []
     for index, output in enumerate(outputs):
         if not isinstance(output, dict):
-            raise ArtifactValidationError(f"Schema v2 meta.outputs[{index}] must be an object.")
+            raise ArtifactValidationError(f"Artifact meta.outputs[{index}] must be an object.")
         name = output.get("name")
         if not isinstance(name, str) or not name:
             raise ArtifactValidationError(
-                f"Schema v2 meta.outputs[{index}].name must be a non-empty string."
+                f"Artifact meta.outputs[{index}].name must be a non-empty string."
             )
         names.append(name)
 
     if len(names) != len(set(names)):
-        raise ArtifactValidationError("Schema v2 meta.outputs names must be unique.")
+        raise ArtifactValidationError("Artifact meta.outputs names must be unique.")
     return names
 
 
@@ -127,10 +101,10 @@ def _load_npz_data(data_path: Path, output_names: list[str]) -> dict[str, np.nda
         with loaded as npz:
             member_names = list(npz.files)
             if len(member_names) != len(set(member_names)):
-                raise ArtifactValidationError("Schema v2 data.npz contains duplicate member names.")
+                raise ArtifactValidationError("Artifact data.npz contains duplicate member names.")
             if set(member_names) != set(output_names):
                 raise ArtifactValidationError(
-                    "Schema v2 data.npz members must exactly match meta.outputs names."
+                    "Artifact data.npz members must exactly match meta.outputs names."
                 )
             return {name: np.array(npz[name], copy=True) for name in output_names}
     except ArtifactValidationError:
@@ -153,13 +127,13 @@ class StructureArtifact:
     meta: Dict[str, Any]
 
     def finalize(self) -> None:
-        canonical_meta = _validate_artifact_v2(self.meta, self.data)
+        canonical_meta = _validate_artifact(self.meta, self.data)
         if canonical_meta != self.meta:
             self.meta = canonical_meta
 
     def validate(self, strict=False):
         # Validation is always strict; `strict` is kept for existing callers.
-        _validate_artifact_v2(self.meta, self.data)
+        _validate_artifact(self.meta, self.data)
 
     def save(self, outdir: Path) -> None:
         self.finalize()
@@ -197,7 +171,6 @@ class StructureArtifact:
             )
 
         meta = _read_artifact_metadata(meta_path)
-        _require_v2(meta)
-        data = _load_npz_data(data_path, _v2_output_names(meta))
-        canonical_meta = _validate_artifact_v2(meta, data)
+        data = _load_npz_data(data_path, _output_names(meta))
+        canonical_meta = _validate_artifact(meta, data)
         return StructureArtifact(data=data, meta=canonical_meta)

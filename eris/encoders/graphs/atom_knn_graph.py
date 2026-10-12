@@ -30,7 +30,7 @@ class AtomKNNGraph(BaseAtomEncoder):
     name: ClassVar[str] = "atom_knn_graph"
     version: ClassVar[str] = "0.1.2"
     representation: ClassVar = GraphRepresentation()
-    output_declarations_v2: ClassVar = ATOM_GRAPH_OUTPUTS
+    output_declarations: ClassVar = ATOM_GRAPH_OUTPUTS
 
     config_type: ClassVar = AtomKNNGraphConfig
     config: AtomKNNGraphConfig

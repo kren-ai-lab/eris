@@ -16,7 +16,7 @@ from eris import exceptions as exc
 from eris.core.artifacts import StructureArtifact
 from eris.core.cache import (
     DiskCache,
-    compute_cache_key_v2,
+    compute_cache_key,
     parser_hint_from_source,
     parser_hint_matches_format,
 )
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 def _check_output_values(data: Dict[str, np.ndarray]) -> None:
-    """Reject values that come from the input rather than our code; Schema v2 checks the shapes."""
+    """Reject values that come from the input rather than our code; schema validation checks the shapes."""
     if len(data["residue_ids"]) == 0:
         raise exc.ExecutionError("Encoder output contains no atoms/residues")
     for key in ("pos", "centroid", "grid"):
@@ -82,7 +82,7 @@ class BaseEncoder(ABC):
     representation_family: ClassVar[str] = "explicit"
     granularity: ClassVar[str]
     representation: ClassVar[Any]
-    output_declarations_v2: ClassVar[Any]
+    output_declarations: ClassVar[Any]
     config_type: ClassVar[type[CanonicalRepresentationConfig]]
 
     def __init__(
@@ -126,10 +126,10 @@ class BaseEncoder(ABC):
 
         return centroid, pos_out
 
-    def _output_declarations_v2(self, data: dict[str, np.ndarray]):
-        return self.output_declarations_v2
+    def _output_declarations(self, data: dict[str, np.ndarray]):
+        return self.output_declarations
 
-    def _build_metadata_v2(
+    def _build_metadata(
         self,
         ctx: EncodingContext,
         data: dict[str, np.ndarray],
@@ -137,17 +137,17 @@ class BaseEncoder(ABC):
         parameters: dict[str, Any],
         extensions: dict[str, dict[str, Any]] | None = None,
     ):
-        """Build prospective strict-valid v2 metadata without activating it in encode()."""
-        from eris.core.artifact_schema_v2 import (
+        """Build prospective strict-valid metadata without activating it in encode()."""
+        from eris.core.artifact_schema import (
             build_artifact_metadata,
             build_input_metadata,
             build_provenance,
         )
 
         if ctx.source_sha256 is None:
-            raise ValueError("prospective Schema v2 metadata requires ctx.source_sha256")
+            raise ValueError("prospective artifact metadata requires ctx.source_sha256")
         if ctx.input_format is None:
-            raise ValueError("prospective Schema v2 metadata requires ctx.input_format")
+            raise ValueError("prospective artifact metadata requires ctx.input_format")
 
         representation_name = self.config.representation_name
         granularity = self.config.granularity
@@ -176,13 +176,13 @@ class BaseEncoder(ABC):
                 parameters=parameters,
                 chain_ids=ctx.inp.chain_id,
             ),
-            output_declarations=self._output_declarations_v2(data),
-            feature_keys=self.representation.feature_keys_v2(data, ctx),
-            counts=self.representation.counts_v2(data),
+            output_declarations=self._output_declarations(data),
+            feature_keys=self.representation.feature_keys(data, ctx),
+            counts=self.representation.counts(data),
             extensions=extensions,
         )
 
-    def _matches_cache_identity_v2(
+    def _matches_cache_identity(
         self,
         artifact: StructureArtifact,
         *,
@@ -203,9 +203,7 @@ class BaseEncoder(ABC):
         if not isinstance(input_meta, dict):
             return False
         return (
-            type(meta.get("schema_version")) is int
-            and meta["schema_version"] == 2
-            and meta.get("representation_name") == self.config.representation_name
+            meta.get("representation_name") == self.config.representation_name
             and meta.get("representation_family") == self.representation_family
             and meta.get("representation_type") == self.representation.representation_type
             and meta.get("granularity") == self.config.granularity
@@ -222,7 +220,7 @@ class BaseEncoder(ABC):
             and "model" not in meta
         )
 
-    def _refresh_cache_hit_source_v2(
+    def _refresh_cache_hit_source(
         self,
         artifact: StructureArtifact,
         *,
@@ -230,7 +228,7 @@ class BaseEncoder(ABC):
         source_sha256: str,
         extensions: dict[str, dict[str, Any]] | None,
     ) -> StructureArtifact:
-        from eris.core.artifact_schema_v2 import build_input_metadata
+        from eris.core.artifact_schema import build_input_metadata
 
         meta = deepcopy(artifact.meta)
         meta["input"] = build_input_metadata(
@@ -259,7 +257,7 @@ class BaseEncoder(ABC):
         return None
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
-        from eris.core.artifact_schema_v2 import compute_config_fingerprint
+        from eris.core.artifact_schema import compute_config_fingerprint
         from eris.core.hashing import sha256_file
         from eris.core.io import load_structure, resolve_structure_input
 
@@ -281,7 +279,7 @@ class BaseEncoder(ABC):
         if self.use_cache:
             cache = self.cache or DiskCache()
             parser_hint = parser_hint_from_source(inp.source)
-            key = compute_cache_key_v2(
+            key = compute_cache_key(
                 representation_name=self.config.representation_name,
                 encoder_implementation=self.encoder_implementation,
                 encoder_version=self.version,
@@ -292,8 +290,8 @@ class BaseEncoder(ABC):
                 chain_ids=inp.chain_id,
                 model=None,
             )
-            artifact = cache.get_v2(key)
-            if artifact is not None and self._matches_cache_identity_v2(
+            artifact = cache.get(key)
+            if artifact is not None and self._matches_cache_identity(
                 artifact,
                 inp=inp,
                 source_sha256=source_sha256,
@@ -301,7 +299,7 @@ class BaseEncoder(ABC):
                 parameters=parameters,
                 config_fingerprint=config_fingerprint,
             ):
-                return self._refresh_cache_hit_source_v2(
+                return self._refresh_cache_hit_source(
                     artifact,
                     inp=inp,
                     source_sha256=source_sha256,
@@ -316,7 +314,7 @@ class BaseEncoder(ABC):
 
         _check_output_values(data)
 
-        meta = self._build_metadata_v2(
+        meta = self._build_metadata(
             ctx,
             data,
             parameters=parameters,
@@ -328,7 +326,7 @@ class BaseEncoder(ABC):
         artifact.validate(strict=True)
 
         if cache is not None and key is not None:
-            cache.set_v2(key, artifact)
+            cache.set(key, artifact)
 
         return artifact
 

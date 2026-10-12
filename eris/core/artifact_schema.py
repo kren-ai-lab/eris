@@ -13,7 +13,7 @@ import numpy as np
 
 from eris.exceptions import ErisError
 
-ARTIFACT_SCHEMA_V2_VERSION = 2
+ARTIFACT_SCHEMA_VERSION = 1
 
 JSONValue = Union[  # noqa: UP007 - explicit Union keeps the recursive alias runtime-safe
     None, bool, int, float, str, list["JSONValue"], dict[str, "JSONValue"]
@@ -39,8 +39,8 @@ class InputMetadata(InputMetadataRequired, total=False):
     source_database: str
 
 
-class ArtifactSchemaV2ValidationError(ErisError):
-    """Raised when metadata or array data violates Artifact Schema v2."""
+class ArtifactValidationError(ErisError):
+    """Raised when metadata or array data violates Artifact artifact schema."""
 
 
 _REQUIRED_TOP_LEVEL = {
@@ -79,11 +79,11 @@ _ALLOWED_DTYPE_KINDS = {"i", "u", "f", "b", "U"}
 
 
 def _fail(message: str) -> None:
-    raise ArtifactSchemaV2ValidationError(message)
+    raise ArtifactValidationError(message)
 
 
 def normalize_metadata(value: Any, *, _path: str = "metadata") -> JSONValue:
-    """Return a JSON-safe copy using the controlled Schema v2 normalization rules."""
+    """Return a JSON-safe copy using the controlled artifact schema normalization rules."""
     if isinstance(value, np.ndarray):
         _fail(f"{_path} must not contain numpy arrays")
     if isinstance(value, Path):
@@ -111,7 +111,7 @@ def normalize_metadata(value: Any, *, _path: str = "metadata") -> JSONValue:
 
 
 def canonical_json(value: Any) -> str:
-    """Serialize metadata with the canonical JSON form used by Schema v2 fingerprints."""
+    """Serialize metadata with the canonical JSON form used by artifact schema fingerprints."""
     normalized = normalize_metadata(value)
     return json.dumps(
         normalized,
@@ -232,7 +232,7 @@ def build_input_metadata(
     model_index: int,
     chain_ids: Sequence[str],
 ) -> InputMetadata:
-    """Build the canonical five-field Schema v2 input block."""
+    """Build the canonical five-field artifact schema input block."""
     if not isinstance(source, (str, Path)):
         _fail("source must be a string or pathlib.Path")
     input_meta: InputMetadata = {
@@ -515,9 +515,9 @@ def build_artifact_metadata(
     model: Mapping[str, Any] | None = None,
     extensions: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build and strictly validate complete Schema v2 metadata for any producer family."""
+    """Build and strictly validate complete artifact schema metadata for any producer family."""
     metadata: dict[str, Any] = {
-        "schema_version": ARTIFACT_SCHEMA_V2_VERSION,
+        "schema_version": ARTIFACT_SCHEMA_VERSION,
         "representation_name": representation_name,
         "representation_family": representation_family,
         "representation_type": representation_type,
@@ -540,7 +540,7 @@ def build_artifact_metadata(
             namespace: dict(content) for namespace, content in extensions.items()
         }
 
-    return validate_schema_v2(metadata, data, strict=True)
+    return validate_schema(metadata, data, strict=True)
 
 
 def _outputs_by_role(outputs: list[dict[str, Any]]) -> dict[str, list[str]]:
@@ -781,13 +781,13 @@ def _validate_strict_roles(
             _fail("meta.counts.n_nodes does not match node-oriented outputs")
 
 
-def validate_schema_v2(
+def validate_schema(
     meta: Mapping[str, Any],
     data: Mapping[str, np.ndarray],
     *,
     strict: bool = False,
 ) -> dict[str, Any]:
-    """Validate a synthetic/runtime Schema v2 mapping and return normalized metadata."""
+    """Validate a synthetic/runtime artifact schema mapping and return normalized metadata."""
     if not isinstance(meta, Mapping):
         _fail("meta must be a mapping")
     if "parameters" in meta:
@@ -802,8 +802,11 @@ def validate_schema_v2(
         optional=_OPTIONAL_TOP_LEVEL,
         path="meta",
     )
-    if type(normalized["schema_version"]) is not int or normalized["schema_version"] != 2:
-        _fail("meta.schema_version must equal exactly 2")
+    if (
+        type(normalized["schema_version"]) is not int
+        or normalized["schema_version"] != ARTIFACT_SCHEMA_VERSION
+    ):
+        _fail(f"meta.schema_version must equal exactly {ARTIFACT_SCHEMA_VERSION}")
     _require_non_empty_string(normalized["representation_name"], "meta.representation_name")
 
     family = normalized["representation_family"]
@@ -876,8 +879,8 @@ def validate_schema_v2(
 
 
 __all__ = [
-    "ARTIFACT_SCHEMA_V2_VERSION",
-    "ArtifactSchemaV2ValidationError",
+    "ARTIFACT_SCHEMA_VERSION",
+    "ArtifactValidationError",
     "build_artifact_metadata",
     "build_counts",
     "build_dtypes",
@@ -889,5 +892,5 @@ __all__ = [
     "canonical_json",
     "compute_config_fingerprint",
     "normalize_metadata",
-    "validate_schema_v2",
+    "validate_schema",
 ]

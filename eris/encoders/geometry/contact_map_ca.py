@@ -16,7 +16,7 @@ class ContactMapCA(BaseResidueEncoder):
     name: ClassVar[str] = "residue_contact_map"
     version: ClassVar[str] = "0.1.2"
     representation: ClassVar = MatrixRepresentation("contact")
-    output_declarations_v2: ClassVar = RESIDUE_CONTACT_MAP_OUTPUTS
+    output_declarations: ClassVar = RESIDUE_CONTACT_MAP_OUTPUTS
 
     config_type: ClassVar = ResidueContactMapConfig
     config: ResidueContactMapConfig

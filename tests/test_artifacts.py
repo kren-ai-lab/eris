@@ -6,12 +6,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from eris.core.artifact_schema_v2 import (
-    ARTIFACT_SCHEMA_V2_VERSION,
-    ArtifactSchemaV2ValidationError,
+from eris.core.artifact_schema import (
+    ARTIFACT_SCHEMA_VERSION,
+    ArtifactValidationError,
     compute_config_fingerprint,
     normalize_metadata,
-    validate_schema_v2,
+    validate_schema,
 )
 
 
@@ -26,7 +26,7 @@ def _common_meta(data: dict[str, np.ndarray]) -> dict:
     shapes, dtypes = _maps(data)
     parameters = {"center": True, "selection": {"chain": None}, "scales": [1.0, 2.0]}
     return {
-        "schema_version": ARTIFACT_SCHEMA_V2_VERSION,
+        "schema_version": ARTIFACT_SCHEMA_VERSION,
         "representation_name": "residue_knn_graph",
         "representation_family": "explicit",
         "representation_type": "graph",
@@ -170,14 +170,14 @@ def _pooled_vector() -> tuple[dict, dict[str, np.ndarray]]:
 
 
 def _assert_invalid(meta: dict, data: dict[str, np.ndarray], match: str) -> None:
-    with pytest.raises(ArtifactSchemaV2ValidationError, match=match):
-        validate_schema_v2(meta, data, strict=True)
+    with pytest.raises(ArtifactValidationError, match=match):
+        validate_schema(meta, data, strict=True)
 
 
 def test_explicit_synthetic_graph_is_strict_valid_and_preserves_output_order():
     meta, data = _explicit_graph()
 
-    normalized = validate_schema_v2(meta, data, strict=True)
+    normalized = validate_schema(meta, data, strict=True)
 
     assert [output["name"] for output in normalized["outputs"]] == list(data)
     assert "model" not in normalized
@@ -186,7 +186,7 @@ def test_explicit_synthetic_graph_is_strict_valid_and_preserves_output_order():
 def test_learned_synthetic_embedding_is_strict_valid():
     meta, data = _learned_embedding()
 
-    normalized = validate_schema_v2(meta, data, strict=True)
+    normalized = validate_schema(meta, data, strict=True)
 
     assert normalized["model"]["checkpoint"]["identifier"] == "fake-checkpoint"
     assert normalized["feature_keys"] == {}
@@ -195,7 +195,7 @@ def test_learned_synthetic_embedding_is_strict_valid():
 def test_explicit_pooled_vector_is_strict_valid_and_preserves_nan():
     meta, data = _pooled_vector()
 
-    normalized = validate_schema_v2(meta, data, strict=True)
+    normalized = validate_schema(meta, data, strict=True)
 
     assert normalized["representation_type"] == "vector"
     assert normalized["feature_keys"]["pooled_attr_keys"] == [
@@ -236,7 +236,7 @@ def test_optional_top_level_fields_are_accepted():
     meta, data = _explicit_graph()
     meta["extensions"] = {"org.example.audit": {"reviewed": True}}
 
-    validate_schema_v2(meta, data, strict=True)
+    validate_schema(meta, data, strict=True)
 
 
 def test_unknown_top_level_field_is_rejected():
@@ -246,12 +246,12 @@ def test_unknown_top_level_field_is_rejected():
     _assert_invalid(meta, data, "unknown fields")
 
 
-@pytest.mark.parametrize("schema_version", ["2"])
-def test_only_integer_schema_version_two_is_accepted(schema_version):
+@pytest.mark.parametrize("schema_version", ["1", 2])
+def test_only_integer_schema_version_one_is_accepted(schema_version):
     meta, data = _explicit_graph()
     meta["schema_version"] = schema_version
 
-    _assert_invalid(meta, data, "must equal exactly 2")
+    _assert_invalid(meta, data, "must equal exactly 1")
 
 
 @pytest.mark.parametrize("representation_type", ["cloud", "graph", "matrix", "grid"])
@@ -259,7 +259,7 @@ def test_explicit_representation_types_are_valid(representation_type):
     meta, data = _explicit_graph()
     meta["representation_type"] = representation_type
 
-    validate_schema_v2(meta, data)
+    validate_schema(meta, data)
 
 
 @pytest.mark.parametrize(
@@ -390,7 +390,7 @@ def test_input_optional_fields_and_chain_list_are_accepted():
         }
     )
 
-    validate_schema_v2(meta, data, strict=True)
+    validate_schema(meta, data, strict=True)
 
 
 def test_legacy_scalar_chain_metadata_is_rejected():
@@ -423,7 +423,7 @@ def test_provenance_optional_environment_created_at_and_invocation_are_valid():
         }
     )
 
-    validate_schema_v2(meta, data, strict=True)
+    validate_schema(meta, data, strict=True)
 
 
 @pytest.mark.parametrize("value", [float("nan")])
@@ -441,7 +441,7 @@ def test_parameters_preserve_nested_json_and_none():
         meta["representation_name"], meta["parameters"], chain_ids=["A"]
     )
 
-    normalized = validate_schema_v2(meta, data, strict=True)
+    normalized = validate_schema(meta, data, strict=True)
 
     assert normalized["parameters"] == meta["parameters"]
     assert normalized["parameters"]["selection"]["chain"] is None
@@ -465,7 +465,7 @@ def test_output_declarations_preserve_order_and_optional_fields():
     meta, data = _explicit_graph()
     meta["outputs"][0]["description"] = "Centered residue coordinates"
 
-    normalized = validate_schema_v2(meta, data, strict=True)
+    normalized = validate_schema(meta, data, strict=True)
 
     assert normalized["outputs"] == meta["outputs"]
 
@@ -523,7 +523,7 @@ def test_scalar_shape_is_empty_list():
     meta["granularity"] = "structure"
     meta["outputs"] = [{"name": "score", "role": "score"}]
 
-    validate_schema_v2(meta, data, strict=True)
+    validate_schema(meta, data, strict=True)
     assert meta["shapes"]["score"] == []
 
 
@@ -540,7 +540,7 @@ def test_safe_data_dtypes_are_accepted(array):
     meta = _common_meta(data)
     meta["outputs"] = [{"name": "value", "role": "custom"}]
 
-    validate_schema_v2(meta, data, strict=True)
+    validate_schema(meta, data, strict=True)
 
 
 @pytest.mark.parametrize(
@@ -567,7 +567,7 @@ def test_data_values_must_be_ndarrays():
 
 def test_feature_keys_accept_only_core_known_ordered_lists():
     meta, data = _explicit_graph()
-    normalized = validate_schema_v2(meta, data, strict=True)
+    normalized = validate_schema(meta, data, strict=True)
     assert normalized["feature_keys"]["node_attr_keys"] == [
         "residue.mass",
         "residue.charge",
@@ -580,7 +580,7 @@ def test_feature_keys_accept_only_core_known_ordered_lists():
 def test_empty_feature_keys_are_valid_and_not_inferred():
     meta, data = _learned_embedding()
 
-    normalized = validate_schema_v2(meta, data, strict=True)
+    normalized = validate_schema(meta, data, strict=True)
 
     assert normalized["feature_keys"] == {}
 
@@ -607,7 +607,7 @@ def test_feature_key_cardinality_is_checked_when_applicable(field):
 def test_counts_require_non_negative_plain_integers_and_allow_empty_mapping():
     meta, data = _explicit_graph()
     meta["counts"] = {}
-    validate_schema_v2(meta, data, strict=True)
+    validate_schema(meta, data, strict=True)
 
     meta["counts"] = {"n_nodes": -1}
     _assert_invalid(meta, data, "integer >= 0")
@@ -626,7 +626,7 @@ def test_strict_graph_counts_are_checked_against_roles():
 def test_extensions_are_namespaced_finite_json_mappings():
     meta, data = _explicit_graph()
     meta["extensions"] = {"org.example.analysis": {"score": 1.25}}
-    validate_schema_v2(meta, data, strict=True)
+    validate_schema(meta, data, strict=True)
 
     meta["extensions"] = {"": {}}
     _assert_invalid(meta, data, "namespaces")
@@ -677,7 +677,7 @@ def test_normalization_converts_numpy_scalars_and_tuples_without_mutating_input(
     ],
 )
 def test_normalization_rejects_unsupported_metadata(value, match):
-    with pytest.raises(ArtifactSchemaV2ValidationError, match=match):
+    with pytest.raises(ArtifactValidationError, match=match):
         normalize_metadata(value)
 
 

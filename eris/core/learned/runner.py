@@ -4,11 +4,11 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from eris.core.artifact_schema_v2 import build_input_metadata, compute_config_fingerprint
+from eris.core.artifact_schema import build_input_metadata, compute_config_fingerprint
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import (
     DiskCache,
-    compute_cache_key_v2,
+    compute_cache_key,
     parser_hint_from_source,
     parser_hint_matches_format,
 )
@@ -143,9 +143,7 @@ def _matches_cache_identity(
         else {}
     )
     return (
-        type(meta.get("schema_version")) is int
-        and meta["schema_version"] == 2
-        and meta.get("representation_name") == config.representation_name
+        meta.get("representation_name") == config.representation_name
         and meta.get("representation_family") == "learned"
         and meta.get("representation_type") == "embedding"
         and meta.get("granularity") == _GRANULARITY_BY_MODE[config.output_mode]
@@ -270,7 +268,7 @@ class StructuralEmbedderRunner:
         )
         parser_hint = parser_hint_from_source(structure_input.source)
         request_execution_identity = execution_request_cache_identity(execution_request)
-        cache_key = compute_cache_key_v2(
+        cache_key = compute_cache_key(
             representation_name=config.representation_name,
             encoder_implementation=info.implementation,
             encoder_version=info.encoder_version,
@@ -285,7 +283,7 @@ class StructuralEmbedderRunner:
 
         artifact_cache = self._artifact_cache() if use_artifact_cache else None
         if artifact_cache is not None:
-            cached = artifact_cache.get_v2(cache_key)
+            cached = artifact_cache.get(cache_key)
             if cached is not None and _matches_cache_identity(
                 cached,
                 structure_input=structure_input,
@@ -362,7 +360,7 @@ class StructuralEmbedderRunner:
         artifact.validate(strict=True)
 
         if artifact_cache is not None:
-            artifact_cache.set_v2(cache_key, artifact)
+            artifact_cache.set(cache_key, artifact)
         return artifact
 
 

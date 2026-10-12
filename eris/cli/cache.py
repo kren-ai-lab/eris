@@ -24,8 +24,8 @@ class CacheClearTarget(str, Enum):
     ALL = "all"
 
 
-def _count_artifact_v2_entries(cache_root: Path) -> int:
-    artifact_root = cache_root / "v2"
+def _count_artifact_entries(cache_root: Path) -> int:
+    artifact_root = cache_root / "artifacts"
     if not artifact_root.is_dir():
         return 0
     return sum(
@@ -65,7 +65,7 @@ def _remove_cache_namespace(cache_root: Path, target: Path, label: str) -> bool:
 
 
 def _target_namespaces(cache_root: Path, target: CacheClearTarget) -> list[tuple[str, Path]]:
-    artifact_namespace = ("artifact", cache_root / "v2")
+    artifact_namespace = ("artifact", cache_root / "artifacts")
     checkpoint_namespace = ("checkpoint", cache_root / "checkpoints")
     if target is CacheClearTarget.ARTIFACTS:
         return [artifact_namespace]
@@ -150,14 +150,14 @@ def cache_info() -> None:
     """
 
     cache_root = default_cache_root()
-    artifact_root = cache_root / "v2"
+    artifact_root = cache_root / "artifacts"
     checkpoint_root = cache_root / "checkpoints"
 
     table = Table(title="Eris Cache", show_header=False)
     table.add_column("Field", style="bold cyan")
     table.add_column("Value")
     table.add_row("artifact cache", "present" if artifact_root.is_dir() else "absent")
-    table.add_row("artifact v2 entries", str(_count_artifact_v2_entries(cache_root)))
+    table.add_row("artifact entries", str(_count_artifact_entries(cache_root)))
     table.add_row("checkpoint cache", "present" if checkpoint_root.is_dir() else "absent")
     table.add_row(
         "gearnet_edge checkpoint cached",

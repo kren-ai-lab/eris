@@ -1,13 +1,13 @@
 from typing import Any, ClassVar
 
-from eris.core.artifact_schema_v2 import build_counts, build_feature_keys
+from eris.core.artifact_schema import build_counts, build_feature_keys
 from eris.core.base_encoder import EncodingContext
 
 
 class PointCloudRepresentation:
     representation_type: ClassVar[str] = "cloud"
 
-    def feature_keys_v2(
+    def feature_keys(
         self,
         data: dict[str, Any],
         ctx: EncodingContext,
@@ -16,7 +16,7 @@ class PointCloudRepresentation:
             return build_feature_keys()
         return build_feature_keys(node_attr_keys=ctx.runtime["node_attr_keys"])
 
-    def counts_v2(self, data: dict[str, Any]) -> dict[str, int]:
+    def counts(self, data: dict[str, Any]) -> dict[str, int]:
         counts = {"n_nodes": int(data["pos"].shape[0])}
         if "omitted_residue_ids" in data:
             counts["n_omitted_residues"] = int(data["omitted_residue_ids"].shape[0])

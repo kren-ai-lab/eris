@@ -27,7 +27,7 @@ class ResidueKNNGraph(BaseResidueEncoder):
     name: ClassVar[str] = "residue_knn_graph"
     version: ClassVar[str] = "0.1.4"
     representation: ClassVar = GraphRepresentation()
-    output_declarations_v2: ClassVar = RESIDUE_GRAPH_OUTPUTS
+    output_declarations: ClassVar = RESIDUE_GRAPH_OUTPUTS
 
     config_type: ClassVar = ResidueKNNGraphConfig
     config: ResidueKNNGraphConfig
@@ -151,5 +151,5 @@ class ResidueKNNGraph(BaseResidueEncoder):
 
         return data
 
-    def _output_declarations_v2(self, data: dict[str, np.ndarray]):
+    def _output_declarations(self, data: dict[str, np.ndarray]):
         return residue_graph_output_declarations(data)

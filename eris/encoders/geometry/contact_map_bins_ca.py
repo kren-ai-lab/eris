@@ -17,7 +17,7 @@ class ContactMapBinsCA(BaseResidueEncoder):
     name: ClassVar[str] = "residue_contact_map_bins"
     version: ClassVar[str] = "0.1.2"
     representation: ClassVar = MatrixRepresentation("contact_bins")
-    output_declarations_v2: ClassVar = RESIDUE_CONTACT_MAP_BINS_OUTPUTS
+    output_declarations: ClassVar = RESIDUE_CONTACT_MAP_BINS_OUTPUTS
 
     config_type: ClassVar = ResidueContactMapBinsConfig
     config: ResidueContactMapBinsConfig

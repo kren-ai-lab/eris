@@ -483,22 +483,20 @@ authoritative.
 
 ## Artifact and schema assessment
 
-The following records the final Schema v2 implementation. Because v0.1 is
-unreleased, the additive declarations finalized Schema v2 without a version
-bump; validators, serializers, fixtures, and contract tests use this one
-canonical contract.
+The following records the artifact schema contract. Validators, serializers,
+fixtures, and contract tests use this one canonical contract.
 
-| Capability | Implemented Schema v2 contract | Data/key contract | Version bump? |
-| --- | --- | --- | --- |
-| Multi-chain identity | Canonical `input.chain_ids`, selection parameters, and provenance | Aligned residue `chain_id` | No |
-| External multi-chain features | Canonical chain/model identity and content fingerprint | External `chain_ids` and aligned feature keys | No |
-| Backbone and side-chain torsions | Modes, atom convention, units, continuity/missing policy, definitions, and provenance | Fixed ordered node-feature keys, including chi1–chi4 | No |
-| Local frames/directions | Frame convention, epsilon, and missing policy | Optional declared frame/mask arrays; ordered edge keys | No |
-| Secondary structure | Provider, version, algorithm, segment handling, and state mapping | Ordered node-feature keys | No |
-| SASA/RSA | Calculation context, algorithm, reference table, and units | Ordered node-feature keys | No |
-| Interface features | Contact definition, cutoff, selection, and context | Node/edge keys and ordered residue-ID subset | No |
-| Structure pooling | Mode, NaN policy, source identity, and fingerprint | `pooled_attr` plus ordered keys | No |
-| Altloc/noncanonical/model policy | Canonical selection parameters and provenance | No new required array | No |
+| Capability | Artifact schema contract | Data/key contract |
+| --- | --- | --- |
+| Multi-chain identity | Canonical `input.chain_ids`, selection parameters, and provenance | Aligned residue `chain_id` |
+| External multi-chain features | Canonical chain/model identity and content fingerprint | External `chain_ids` and aligned feature keys |
+| Backbone and side-chain torsions | Modes, atom convention, units, continuity/missing policy, definitions, and provenance | Fixed ordered node-feature keys, including chi1–chi4 |
+| Local frames/directions | Frame convention, epsilon, and missing policy | Optional declared frame/mask arrays; ordered edge keys |
+| Secondary structure | Provider, version, algorithm, segment handling, and state mapping | Ordered node-feature keys |
+| SASA/RSA | Calculation context, algorithm, reference table, and units | Ordered node-feature keys |
+| Interface features | Contact definition, cutoff, selection, and context | Node/edge keys and ordered residue-ID subset |
+| Structure pooling | Mode, NaN policy, source identity, and fingerprint | `pooled_attr` plus ordered keys |
+| Altloc/noncanonical/model policy | Canonical selection parameters and provenance | No new required array |
 
 Arrays use explicit dtypes and exact shapes. String arrays are Unicode, not
 object arrays. Feature key order remains scientifically significant. The

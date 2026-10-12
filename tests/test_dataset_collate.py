@@ -11,7 +11,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from eris.core.artifact_schema_v2 import (
+from eris.core.artifact_schema import (
     build_artifact_metadata,
     build_feature_keys,
     build_input_metadata,
@@ -386,34 +386,6 @@ def test_dataset_does_not_rescan_after_index_creation(tmp_path: Path) -> None:
 
     assert len(dataset) == 1
     assert dataset[0]["id"] == "indexed"
-
-
-def test_dataset_strict_loads_artifact_and_rejects_schema_v1(tmp_path: Path) -> None:
-    artifact_dir = tmp_path / "artifacts" / "legacy" / "residue_point_cloud"
-    artifact_dir.mkdir(parents=True)
-    np.savez_compressed(artifact_dir / "data.npz", pos=np.zeros((1, 3), dtype=np.float32))
-    (artifact_dir / "meta.json").write_text(
-        json.dumps({"schema_version": 1, "encoder_name": "legacy"}),
-        encoding="utf-8",
-    )
-    row = {
-        "id": "legacy",
-        "artifact_dir": "artifacts/legacy/residue_point_cloud",
-        "meta_path": "artifacts/legacy/residue_point_cloud/meta.json",
-        "representation_name": "residue_point_cloud",
-        "representation_family": "explicit",
-        "representation_type": "cloud",
-        "granularity": "residue",
-        "n_nodes": "",
-        "n_edges": "",
-        "shape_summary": "{}",
-    }
-    index = tmp_path / "index.csv"
-    _write_index(index, [row])
-    dataset = ErisFolderDataset(index)
-
-    with pytest.raises(ArtifactValidationError, match="Schema v1"):
-        dataset[0]
 
 
 def test_dataset_rejects_missing_and_corrupt_artifacts(tmp_path: Path) -> None:

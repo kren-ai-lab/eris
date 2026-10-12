@@ -16,7 +16,7 @@ class VoxelGridCA(BaseResidueEncoder):
     name: ClassVar[str] = "residue_voxel_grid"
     version: ClassVar[str] = "0.1.2"
     representation: ClassVar = VoxelGridRepresentation()
-    output_declarations_v2: ClassVar = VOXEL_OUTPUTS
+    output_declarations: ClassVar = VOXEL_OUTPUTS
 
     config_type: ClassVar = ResidueVoxelGridConfig
     config: ResidueVoxelGridConfig

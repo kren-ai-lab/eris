@@ -8,7 +8,7 @@
   parameters and scientific semantics.
 - [Structural feature contracts](structural_features.md): frozen final-v0.1 scientific
   contracts for multi-chain selection, derived geometry, interfaces, and pooling.
-- [Artifact Schema v2](artifact_schema.md): persisted arrays, metadata, validation, and identity.
+- [Artifact Schema](artifact_schema.md): persisted arrays, metadata, validation, and identity.
 - [External residue features](external_residue_features.md): NPZ producer and alignment contract.
 - [GearNet-Edge backend](gearnet_edge_backend.md): learned runtime, checkpoint, preprocessing, and
   outputs.

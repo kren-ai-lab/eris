@@ -5,7 +5,7 @@ from importlib import metadata
 
 import pytest
 
-from eris.core.artifact_schema_v2 import canonical_json, compute_config_fingerprint
+from eris.core.artifact_schema import canonical_json, compute_config_fingerprint
 from eris.core.config import (
     _CONFIG_TYPES_BY_REPRESENTATION,
     AtomKNNGraphConfig,

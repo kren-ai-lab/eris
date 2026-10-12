@@ -1299,7 +1299,7 @@ def test_high_dimensional_external_hybrid_round_trip_and_identity(tmp_path: Path
         != second.meta["provenance"]["config_fingerprint"]
     )
     np.testing.assert_array_equal(second.data["node_attr"][:, -feature_dim:], changed_values)
-    assert len(list((cache.cache_dir / "v2").iterdir())) == 2
+    assert len(list((cache.cache_dir / "artifacts").iterdir())) == 2
 
 
 def test_batch_external_params_by_id_preserve_resume_identity(
@@ -2072,7 +2072,7 @@ def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
     artifact_path = tmp_path / "high-content-graph"
     original.save(artifact_path)
     loaded = StructureArtifact.load(artifact_path, strict=True)
-    assert loaded.meta["schema_version"] == 2
+    assert loaded.meta["schema_version"] == 1
     assert loaded.meta["feature_keys"] == original.meta["feature_keys"]
     assert loaded.meta["provenance"] == original.meta["provenance"]
     assert loaded.data["chain_id"].tolist() == original.data["chain_id"].tolist()
@@ -2126,7 +2126,7 @@ def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
     pooled_path = tmp_path / "high-content-pooled"
     pooled.save(pooled_path)
     loaded_pool = StructureArtifact.load(pooled_path, strict=True)
-    assert loaded_pool.meta["schema_version"] == 2
+    assert loaded_pool.meta["schema_version"] == 1
     assert loaded_pool.data["pooled_attr"].dtype == np.float64
     assert loaded_pool.meta["feature_keys"]["pooled_attr_keys"] == expected_pooled_keys
     np.testing.assert_equal(loaded_pool.data["pooled_attr"], pooled.data["pooled_attr"])

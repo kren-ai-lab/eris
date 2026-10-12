@@ -66,7 +66,7 @@ class DistogramBinsCA(BaseResidueEncoder):
     name: ClassVar[str] = "residue_distogram_bins"
     version: ClassVar[str] = "0.1.2"
     representation: ClassVar = MatrixRepresentation("dist_bins")
-    output_declarations_v2: ClassVar = RESIDUE_DISTOGRAM_BINS_OUTPUTS
+    output_declarations: ClassVar = RESIDUE_DISTOGRAM_BINS_OUTPUTS
 
     config_type: ClassVar = ResidueDistogramBinsConfig
     config: ResidueDistogramBinsConfig
