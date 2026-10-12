@@ -92,9 +92,7 @@ def _checkpoint() -> Path:
 
 
 def _require_gearnet_stack() -> None:
-    torch = pytest.importorskip("torch")
-    if torch.__version__.partition("+")[0] != "2.11.0":
-        pytest.skip("GearNet CLI validation requires torch==2.11.0")
+    pytest.importorskip("torch")
 
 
 def test_embed_help_exposes_public_direct_command_only():

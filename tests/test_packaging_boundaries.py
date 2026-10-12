@@ -71,15 +71,15 @@ def test_core_declares_direct_runtime_imports_and_python_range() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dependencies = set(pyproject["project"]["dependencies"])
 
-    assert pyproject["project"]["name"] == "eris-lib"
-    assert pyproject["project"]["requires-python"] == ">=3.11,<3.13"
+    assert pyproject["project"]["name"] == "erislib"
+    assert pyproject["project"]["requires-python"] == ">=3.11,<3.15"
     for requirement in (
-        "numpy",
-        "gemmi",
-        "platformdirs",
-        "typer>=0.9",
-        "rich",
-        "biotite==1.6.0",
+        "numpy>=2.0,<3",
+        "gemmi>=0.7,<1",
+        "platformdirs>=4.0,<5",
+        "typer>=0.27,<1",
+        "rich>=13.0,<16",
+        "biotite>=1.6,<2",
     ):
         assert requirement in dependencies
 
@@ -142,7 +142,6 @@ if loaded:
     raise SystemExit(f"optional frameworks loaded during learned metadata import: {loaded}")
 
 assert eris.get_embedder_info("gearnet_edge")["name"] == "gearnet_edge"
-assert dependencies.GEARNET_PYTHON_REQUIREMENT == ">=3.11,<3.13"
 dependencies._distribution_version = lambda name: (_ for _ in ()).throw(PackageNotFoundError(name))
 status = dependencies.probe_gearnet_availability()
 if status.available:

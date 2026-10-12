@@ -233,10 +233,6 @@ def test_get_embedder_info_probes_once_without_constructing_backend(monkeypatch)
     assert calls == {"probe": 1}
 
 
-@pytest.mark.skipif(
-    sys.version_info[:2] not in {(3, 11), (3, 12), (3, 13)},
-    reason="GearNet modern-runtime discovery check targets Python 3.11-3.13",
-)
 def test_real_embedder_discovery_supports_modern_core_python():
     availability = probe_gearnet_availability()
     info = eris.get_embedder_info("gearnet_edge")

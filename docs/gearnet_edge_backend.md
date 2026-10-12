@@ -90,13 +90,13 @@ The implementation follows the official
 | angle bins | 8 |
 | output dimension | 3072 |
 
-The implementation lives in `src/eris/core/learned/backends/gearnet/native_model.py`. Six
+The implementation lives in `eris/core/learned/backends/gearnet/native_model.py`. Six
 concatenated 512-dimensional hidden outputs produce the 3072-dimensional representation.
 
 ## Frozen biological selection
 
 Preprocessing is implemented in
-`src/eris/core/learned/backends/gearnet/preprocessing.py`.
+`eris/core/learned/backends/gearnet/preprocessing.py`.
 
 - One selected model and one chain are processed.
 - Accepted residues are ATOM-classified members of the canonical 20 amino acids.
@@ -173,22 +173,25 @@ The supported v0.1 contract is:
 
 | Dependency | Requirement |
 | --- | --- |
-| Python | `>=3.11,<3.13` |
-| PyTorch | `==2.11.0` |
+| Python | `>=3.11,<3.15` |
+| PyTorch | `>=2.11,<3` |
 | device/precision | CPU/fp32 |
 
-For a CPU source checkout, install PyTorch from its CPU index, then Eris:
+Numerical parity with the frozen reference embeddings is verified by
+`tests/test_gearnet_native.py` when `ERIS_GEARNET_CHECKPOINT` points at the official checkpoint.
+
+For a CPU-only environment, install PyTorch from its CPU index, then Eris:
 
 ```console
-python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
-python -m pip install ".[gearnet]"
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install "erislib[gearnet]"
 ```
 
 The `gearnet` extra declares PyTorch but does not bundle a checkpoint or compiled GearNet
 dependency. TorchDrug is not a production dependency.
 
 Dependency probing is explicit and lazy. `import eris` and learned Registry discovery do not
-import Torch. The probe checks the Python range, distribution and public versions, import
+import Torch. The probe checks distribution and import
 availability, and an isolated import smoke; it does not resolve a checkpoint or run inference.
 
 ## Artifact identity and cache behavior

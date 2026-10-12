@@ -8,8 +8,8 @@ artifact/
 `-- data.npz
 ```
 
-`StructureArtifact` in `src/eris/core/artifacts.py` validates, saves, and loads this form.
-`src/eris/core/artifact_schema_v2.py` is the executable schema authority. The serialized
+`StructureArtifact` in `eris/core/artifacts.py` validates, saves, and loads this form.
+`eris/core/artifact_schema_v2.py` is the executable schema authority. The serialized
 `schema_version` is the integer `2`.
 
 ## Metadata

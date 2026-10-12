@@ -1,102 +1,106 @@
 [build-system]
-requires = ["setuptools>=77", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
-name = "eris-lib"
-version = "0.1.0"
+name = "erislib"
+dynamic = ["version"]
 description = "Eris: A modular library for protein structural representations and graph-based encoders."
-readme = "README.md"
-requires-python = ">=3.11,<3.13"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.11,<3.15"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
-  { name = "KrenAI-Lab", email = "krenai@umag.cl" }
+    { name = "Kren AI Lab", email = "krenai@umag.cl" },
 ]
-
 keywords = [
-  "protein",
-  "structural-biology",
-  "graph-neural-networks",
-  "geometric-deep-learning",
-  "bioinformatics",
-  "machine-learning",
-  "voxel",
-  "point-cloud",
-  "protein-graphs"
+    "protein",
+    "structural-biology",
+    "graph-neural-networks",
+    "geometric-deep-learning",
+    "bioinformatics",
+    "machine-learning",
+    "voxel",
+    "point-cloud",
+    "protein-graphs",
 ]
-
 classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Science/Research",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Operating System :: OS Independent",
-  "Topic :: Scientific/Engineering :: Bio-Informatics",
-  "Topic :: Scientific/Engineering :: Artificial Intelligence"
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 
 dependencies = [
-  "aaindex>=1.3.2,<2",
-  "biotite==1.6.0",
-  "numpy",
-  "typer>=0.9",
-  "rich",
-  "gemmi",
-  "platformdirs",
+    "aaindex>=1.3.2,<2",
+    "biotite>=1.6,<2",
+    "gemmi>=0.7,<1",
+    "numpy>=2.0,<3",
+    "platformdirs>=4.0,<5",
+    "rich>=13.0,<16",
+    "typer>=0.27,<1",
 ]
 
 [project.scripts]
 eris = "eris.cli.main:app"
 
 [project.optional-dependencies]
-gearnet = [
-  "torch==2.11.0"
-]
-
+gearnet = ["torch>=2.11,<3"]
 pyg = [
-  "torch",
-  "torch-geometric"
-]
-
-dev = [
-  "pytest",
-  "ruff==0.16.5",
-  "build",
+    "torch>=2.11,<3",
+    "torch-geometric>=2.6,<3",
 ]
 
 [project.urls]
-Homepage = "https://github.com/kren-ai-lab/Eris"
-Repository = "https://github.com/kren-ai-lab/Eris"
-Documentation = "https://github.com/kren-ai-lab/Eris#readme"
-Issues = "https://github.com/kren-ai-lab/Eris/issues"
+Homepage = "https://github.com/kren-ai-lab/eris"
+Repository = "https://github.com/kren-ai-lab/eris"
+Issues = "https://github.com/kren-ai-lab/eris/issues"
+Documentation = "https://github.com/kren-ai-lab/eris#readme"
 
-[tool.setuptools]
-package-dir = { "" = "src" }
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+    "pytest-cov>=7.1",
+    "ruff>=0.16",
+    "pyrefly>1.0",
+    "taskipy>=1.14",
+    "prek",
+]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.version]
+path = "eris/_version.py"
+pattern = '__version__ = "(?P<version>[^"]+)"'
+
+[tool.hatch.build.targets.sdist]
+include = ["/eris"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["eris"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-ra"
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-force-exclude = true
-exclude = [
-  ".git",
-  ".mypy_cache",
-  ".pytest_cache",
-  ".ruff_cache",
-  ".venv",
-  "build",
-  "dist",
-  "notebooks",
-  "out",
-]
+extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = ["E9", "F63", "F7", "F82"]
+
+[tool.taskipy.tasks]
+sort-imports = "ruff check --fix --select I,F401 eris/ tests/"
+format = "task sort-imports && ruff format eris/ tests/"
+lint = "ruff check eris/ tests/"
+lint-fix = "ruff check --fix eris/ tests/"
+test = "pytest -q"
+test-v = "pytest -v"
+test-cov = "pytest --cov=eris --cov-report=html"

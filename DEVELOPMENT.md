@@ -3,69 +3,53 @@
 ## Environment
 
 `pyproject.toml` is the authority for package metadata, Python compatibility, and dependencies.
-The supported development range is Python `>=3.11,<3.13`.
-
-Create and activate an isolated Python 3.11 or 3.12 environment, then install Eris and its
-development tools:
+The supported range is Python `>=3.11,<3.15`. Development uses [uv](https://docs.astral.sh/uv/)
+and the committed `uv.lock`:
 
 ```console
-python -m pip install -e ".[dev]"
-python -m pip check
+uv sync --all-extras
 ```
 
-The distribution name is `eris-lib`; the import package and CLI command are `eris`. Public naming
-is still subject to release hardening.
+The distribution name is `erislib`; the import package and CLI command are `eris`.
 
 ## Optional environments
 
-Install only the integration being developed or tested:
-
-```console
-python -m pip install -e ".[gearnet]"
-python -m pip install -e ".[pyg]"
-```
-
-- `gearnet` installs the pinned PyTorch runtime. On a checkpoint-cache miss, Eris can acquire the
-  registered official checkpoint over HTTPS and verifies its registered SHA-256 before use. Pass
+- `gearnet` installs PyTorch. On a checkpoint-cache miss, Eris can acquire the registered official
+  checkpoint over HTTPS and verifies its registered SHA-256 before use. Pass
   `checkpoint_path` / `--checkpoint` to seed the same cache from a local file or to work offline.
 - `pyg` installs PyTorch and PyTorch Geometric for graph export.
 - `import eris` must work without either optional group and must not import their runtimes.
 
-The GearNet CPU installation and checkpoint contract are in
+`uv sync` without `--all-extras` (or with `--extra gearnet` / `--extra pyg`) gives a narrower
+environment. The GearNet CPU installation and checkpoint contract are in
 [`docs/gearnet_edge_backend.md`](docs/gearnet_edge_backend.md).
 
 ## Tests and checks
 
-Run focused tests while developing:
+Common tasks run through taskipy:
 
 ```console
-python -m pytest -q tests/test_residue_features.py
-```
-
-For cross-cutting changes or a handoff gate, run the tracked suite with a writable pytest base:
-
-```bash
-pt="${HOME}/eris-pytest-temp"
-rm -rf "$pt"
-mkdir -p "$pt"
-
-python -m pytest -q \
-  --basetemp "$pt/base" \
-  -p no:cacheprovider
-```
-
-Run the static and environment checks:
-
-```console
-python -m ruff check .
-python -m ruff format --check .
-python -m pip check
+uv run task test        # pytest -q
+uv run task format      # sort imports + ruff format
+uv run task lint        # ruff check
+uv run prek run --all-files
 git diff --check
 ```
 
-Optional dependency or checkpoint tests may skip when their documented runtime is unavailable. A
-skip is not certification of that integration. `tests/test_packaging_boundaries.py` verifies the
-core lazy-import boundary.
+Run focused tests while developing:
+
+```console
+uv run pytest -q tests/test_residue_features.py
+```
+
+The GearNet numerical-parity test runs only when `ERIS_GEARNET_CHECKPOINT` points at the official
+checkpoint; otherwise it skips. Optional dependency or checkpoint tests may skip when their
+runtime is unavailable. A skip is not certification of that integration.
+`tests/test_packaging_boundaries.py` verifies the core lazy-import boundary.
+
+CI (`.github/workflows/tests.yml`) runs the suite on Python 3.11–3.14, once against the lowest
+declared direct dependencies, and smoke-tests the built wheel. Pushing a `v*` tag publishes to
+PyPI through `publish-pypi.yml`.
 
 ## Workflow
 

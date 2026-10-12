@@ -419,7 +419,7 @@ def test_secondary_structure_parameters_are_canonical_and_fingerprinted():
             {
                 "secondary_structure": {
                     "provider": "biotite",
-                    "provider_version": "1.6.0",
+                    "provider_version": metadata.version("biotite"),
                     "algorithm": "P-SEA",
                     "coordinate_basis": "CA geometry",
                     "state_order": ["helix", "sheet", "coil", "unassigned"],
@@ -459,7 +459,7 @@ def test_sasa_rsa_parameters_are_frozen_and_canonical():
     rsa = config.node_attr_mode.to_list()[1]["rsa"]
 
     assert sasa["provider"] == "biotite"
-    assert sasa["provider_version"] == "1.6.0"
+    assert sasa["provider_version"] == metadata.version("biotite")
     assert sasa["probe_radius_angstrom"] == 1.4
     assert sasa["sphere_point_count"] == 1000
     assert sasa["sphere_point_distribution"] == "Fibonacci"

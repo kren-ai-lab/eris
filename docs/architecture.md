@@ -11,24 +11,24 @@ Both families return `StructureArtifact` objects and use Artifact Schema v2 for 
 
 | Path | Responsibility |
 | --- | --- |
-| `src/eris/api.py` | Public `encode()` and `embed()` entry points |
-| `src/eris/discovery.py` | Public representation and embedder discovery |
-| `src/eris/core/config.py` | Typed explicit-representation configs and scientific defaults |
-| `src/eris/core/registry.py` | Explicit encoder registration and config resolution |
-| `src/eris/core/io.py` | PDB/mmCIF loading, model/chain selection, atom and residue extraction |
-| `src/eris/core/base_encoder/` | Shared explicit encoding, finalization, and cache flow |
-| `src/eris/core/artifacts.py` | `StructureArtifact` validation, save, and load |
-| `src/eris/core/artifact_schema_v2.py` | Executable Schema v2 metadata and array contract |
-| `src/eris/core/cache.py` | Path-independent artifact cache identity and storage |
-| `src/eris/features/` | Node, edge, voxel, and graph-statistic feature definitions |
-| `src/eris/pooling.py` | Residue-feature pooling and source-artifact identity |
-| `src/eris/encoders/` | Explicit cloud, graph, matrix, and grid encoders |
-| `src/eris/core/learned/` | Learned registry, execution, checkpoints, runner, and artifacts |
-| `src/eris/core/learned/backends/gearnet/` | Native GearNet-Edge preprocessing and inference |
-| `src/eris/pipelines/` | Manifest, batch encode/embed, export, and artifact packing |
-| `src/eris/datasets/` | Packed-index dataset and family-specific collates |
-| `src/eris/export/` | Torch conversion and graph-only PyG conversion |
-| `src/eris/cli/` | Typer commands that delegate to public Python operations |
+| `eris/api.py` | Public `encode()` and `embed()` entry points |
+| `eris/discovery.py` | Public representation and embedder discovery |
+| `eris/core/config.py` | Typed explicit-representation configs and scientific defaults |
+| `eris/core/registry.py` | Explicit encoder registration and config resolution |
+| `eris/core/io.py` | PDB/mmCIF loading, model/chain selection, atom and residue extraction |
+| `eris/core/base_encoder/` | Shared explicit encoding, finalization, and cache flow |
+| `eris/core/artifacts.py` | `StructureArtifact` validation, save, and load |
+| `eris/core/artifact_schema_v2.py` | Executable Schema v2 metadata and array contract |
+| `eris/core/cache.py` | Path-independent artifact cache identity and storage |
+| `eris/features/` | Node, edge, voxel, and graph-statistic feature definitions |
+| `eris/pooling.py` | Residue-feature pooling and source-artifact identity |
+| `eris/encoders/` | Explicit cloud, graph, matrix, and grid encoders |
+| `eris/core/learned/` | Learned registry, execution, checkpoints, runner, and artifacts |
+| `eris/core/learned/backends/gearnet/` | Native GearNet-Edge preprocessing and inference |
+| `eris/pipelines/` | Manifest, batch encode/embed, export, and artifact packing |
+| `eris/datasets/` | Packed-index dataset and family-specific collates |
+| `eris/export/` | Torch conversion and graph-only PyG conversion |
+| `eris/cli/` | Typer commands that delegate to public Python operations |
 
 ## Explicit encoding flow
 
@@ -104,7 +104,7 @@ eris.embed(...)
 The learned Registry stores static metadata and lazy factories. Importing `eris`, listing
 embedders, or loading an existing artifact must not import Torch or require a checkpoint.
 GearNet-specific behavior is isolated under
-`src/eris/core/learned/backends/gearnet/` and frozen by
+`eris/core/learned/backends/gearnet/` and frozen by
 [the backend contract](gearnet_edge_backend.md).
 GearNet v0.1 remains single-chain: resolving more than one selected chain fails clearly before
 checkpoint inference.
@@ -138,10 +138,10 @@ topology or reconstructs GearNet internals.
 
 ## Adding an explicit representation
 
-1. Add a typed config in `src/eris/core/config.py`.
-2. Implement the encoder under the appropriate `src/eris/encoders/` package using the shared
+1. Add a typed config in `eris/core/config.py`.
+2. Implement the encoder under the appropriate `eris/encoders/` package using the shared
    base encoder and output declarations.
-3. Register it in the encoder module and import that module through `src/eris/encoders/__init__.py`.
+3. Register it in the encoder module and import that module through `eris/encoders/__init__.py`.
 4. Preserve the name invariant and finalize through the existing Schema v2 path.
 5. Add focused encoder, discovery, artifact, CLI, and downstream tests as required.
 6. Document its scientific defaults in `representation_defaults.md`.
@@ -151,7 +151,7 @@ Do not create a second configuration, serialization, hashing, or artifact mechan
 ## Adding a residue feature
 
 1. Implement the value builder, key builder, parameter normalizer, and any fingerprint projection
-   in `src/eris/features/node/`.
+   in `eris/features/node/`.
 2. Register one `FeatureSpec` in `RESIDUE_NODE_REGISTRY` with a stable physical order.
 3. Route all scientific parameters through `FeatureMode`; keep invocation-only locators out of
    the scientific fingerprint.

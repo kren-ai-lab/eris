@@ -9,7 +9,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-
 requires_torch = pytest.mark.skipif(
     find_spec("torch") is None,
     reason="requires optional dependency 'torch'",
