@@ -157,8 +157,14 @@ class StructureManifestRow:
 
 
 def read_csv_as_text(path: Path) -> pl.DataFrame:
-    """Read a CSV keeping every cell as text, with empty cells as empty strings."""
-    return pl.read_csv(path, infer_schema=False, empty_string_is_null=False, raise_if_empty=False)
+    """Read a CSV keeping every cell as text, with empty cells as empty strings.
+
+    Blank lines are skipped, as the ``csv`` module does; Polars reads them as all-empty rows.
+    """
+    frame = pl.read_csv(path, infer_schema=False, empty_string_is_null=False, raise_if_empty=False)
+    if frame.width == 0:
+        return frame
+    return frame.filter(~pl.all_horizontal(pl.all() == ""))
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:

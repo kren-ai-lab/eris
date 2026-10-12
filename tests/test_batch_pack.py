@@ -154,6 +154,13 @@ def test_manifest_accepts_only_canonical_structure_fields(tmp_path: Path) -> Non
     assert rows == [StructureManifestRow(id="protein", path="protein.pdb", chain=("A",), model=1)]
 
 
+def test_manifest_csv_skips_blank_lines(tmp_path: Path) -> None:
+    manifest = tmp_path / "structures.csv"
+    manifest.write_text("id,path\r\na,a.pdb\r\n\r\nb,b.pdb\r\n\r\n", encoding="utf-8")
+
+    assert [row.id for row in read_manifest(manifest)] == ["a", "b"]
+
+
 def test_manifest_rejects_json_format(tmp_path: Path) -> None:
     manifest = tmp_path / "structures.json"
     manifest.write_text('[{"id": "protein", "path": "protein.pdb"}]\n', encoding="utf-8")
