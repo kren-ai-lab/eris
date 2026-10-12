@@ -1,6 +1,8 @@
+"""Binned CA distogram encoder."""
+
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import numpy as np
 
@@ -8,15 +10,19 @@ from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResidueContactMapBinsConfig, ResidueDistogramBinsConfig
 from eris.core.representations import MatrixRepresentation
 from eris.core.representations.output_declarations import RESIDUE_DISTOGRAM_BINS_OUTPUTS
+from eris.encoders._context import prepared_arrays
 from eris.encoders.geometry.distogram_ca import pairwise_distances, residue_fields
 from eris.features.utils import validate_bin_edges
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def validate_class_capacity(
     config: ResidueDistogramBinsConfig | ResidueContactMapBinsConfig,
 ) -> None:
     """Fail if the largest class ID cannot be stored in the configured dtype."""
-    num_bins = config.num_bins if config.edges is None else len(config.edges) - 1
+    num_bins = cast("int", config.num_bins) if config.edges is None else len(config.edges) - 1
     max_class_id = num_bins if config.add_no_contact_class else num_bins - 1
     capacity = np.iinfo(np.dtype(config.dtype)).max
     if max_class_id > capacity:
@@ -32,15 +38,20 @@ def binned_distance_data(
     key: str,
 ) -> dict[str, Any]:
     """Shared binning for the binned distogram and binned contact map encoders."""
-    dist = pairwise_distances(ctx.pos)
+    dist = pairwise_distances(prepared_arrays(ctx)[2])
 
     if not config.include_self:
         np.fill_diagonal(dist, np.nan)
 
     if config.edges is not None:
-        edges = validate_bin_edges(np.asarray(config.edges, dtype=np.float32))
+        edges = validate_bin_edges(cast("Sequence[float]", np.asarray(config.edges, dtype=np.float32)))
     else:
-        edges = np.linspace(config.dmin, config.dmax, config.num_bins + 1, dtype=np.float32)
+        edges = np.linspace(
+            cast("float", config.dmin),
+            cast("float", config.dmax),
+            cast("int", config.num_bins) + 1,
+            dtype=np.float32,
+        )
 
     num_bins = int(edges.size - 1)
     raw_bins = np.digitize(dist, edges, right=False) - 1
@@ -62,6 +73,8 @@ def binned_distance_data(
 
 
 class DistogramBinsCA(BaseResidueEncoder):
+    """Binned CA distogram."""
+
     # Identity
     name: ClassVar[str] = "residue_distogram_bins"
     version: ClassVar[str] = "0.1.2"
@@ -69,11 +82,11 @@ class DistogramBinsCA(BaseResidueEncoder):
     output_declarations: ClassVar = RESIDUE_DISTOGRAM_BINS_OUTPUTS
 
     config_type: ClassVar = ResidueDistogramBinsConfig
-    config: ResidueDistogramBinsConfig
 
     def __init__(self, **kwargs: Any) -> None:
+        """Validate that the configured dtype can store every class ID."""
         super().__init__(**kwargs)
-        validate_class_capacity(self.config)
+        validate_class_capacity(cast("ResidueDistogramBinsConfig", self.config))
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
-        return binned_distance_data(ctx, self.config, "dist_bins")
+        return binned_distance_data(ctx, cast("ResidueDistogramBinsConfig", self.config), "dist_bins")

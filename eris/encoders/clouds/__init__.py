@@ -1,3 +1,5 @@
+"""Point-cloud encoder registrations."""
+
 from eris.core.config import AtomPointCloudConfig, ResiduePointCloudConfig
 from eris.core.registry import register_encoder
 from eris.encoders.clouds.atom_point_cloud import AtomPointCloud

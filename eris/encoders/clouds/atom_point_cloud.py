@@ -1,6 +1,8 @@
+"""Atom-level point-cloud encoder."""
+
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import numpy as np
 
@@ -8,6 +10,7 @@ from eris.core.base_encoder import BaseAtomEncoder, EncodingContext
 from eris.core.config import AtomPointCloudConfig
 from eris.core.representations import PointCloudRepresentation
 from eris.core.representations.output_declarations import ATOM_POINT_CLOUD_OUTPUTS
+from eris.encoders._context import prepared_arrays
 from eris.features.node.atom import build_node_attr
 
 
@@ -37,19 +40,17 @@ class AtomPointCloud(BaseAtomEncoder):
     output_declarations: ClassVar = ATOM_POINT_CLOUD_OUTPUTS
 
     config_type: ClassVar = AtomPointCloudConfig
-    config: AtomPointCloudConfig
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
-        strc = ctx.raw_structure
-        centroid = ctx.centroid
-        pos_out = ctx.pos
+        config = cast("AtomPointCloudConfig", self.config)
+        strc, centroid, pos_out = prepared_arrays(ctx)
 
         node_attr, node_attr_keys = build_node_attr(
             elem_index=strc["elem_index"],
             atom_role=strc["atom_role"],
             bfactor=strc["bfactor"],
             occ=strc["occ"],
-            mode=self.config.node_attr_mode.to_list(),
+            mode=config.node_attr_mode.to_list(),
             return_keys=True,
         )
 

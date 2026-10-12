@@ -1,6 +1,8 @@
+"""Residue-level point-cloud encoder."""
+
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import numpy as np
 
@@ -8,10 +10,13 @@ from eris.core.base_encoder import BaseResidueEncoder, EncodingContext
 from eris.core.config import ResiduePointCloudConfig
 from eris.core.representations import PointCloudRepresentation
 from eris.core.representations.output_declarations import RESIDUE_POINT_CLOUD_OUTPUTS
+from eris.encoders._context import prepared_arrays
 from eris.features.node.residue import build_node_attr
 
 
 class ResiduePointCloudCA(BaseResidueEncoder):
+    """Residue-level point cloud from CA coordinates."""
+
     # Identity
     name: ClassVar[str] = "residue_point_cloud"
     version: ClassVar[str] = "0.1.3"
@@ -19,12 +24,10 @@ class ResiduePointCloudCA(BaseResidueEncoder):
     output_declarations: ClassVar = RESIDUE_POINT_CLOUD_OUTPUTS
 
     config_type: ClassVar = ResiduePointCloudConfig
-    config: ResiduePointCloudConfig
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
-        strc = ctx.raw_structure
-        centroid = ctx.centroid
-        pos_out = ctx.pos
+        config = cast("ResiduePointCloudConfig", self.config)
+        strc, centroid, pos_out = prepared_arrays(ctx)
 
         node_attr, node_attr_keys = build_node_attr(
             strc["aa_index"],
@@ -46,7 +49,7 @@ class ResiduePointCloudCA(BaseResidueEncoder):
             polymer_heavy_atom_residue_index=strc["polymer_heavy_atom_residue_index"],
             polymer_heavy_atom_name=strc["polymer_heavy_atom_name"],
             polymer_heavy_atom_element=strc["polymer_heavy_atom_element"],
-            mode=self.config.node_attr_mode.to_list(),
+            mode=config.node_attr_mode.to_list(),
             return_keys=True,
         )
 

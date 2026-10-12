@@ -1,6 +1,8 @@
+"""Residue contact graph encoder."""
+
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import numpy as np
 
@@ -11,6 +13,7 @@ from eris.core.representations.output_declarations import (
     RESIDUE_GRAPH_OUTPUTS,
     residue_graph_output_declarations,
 )
+from eris.encoders._context import prepared_arrays
 from eris.features.edge.edge import build_edge_attr
 from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
 from eris.features.interface import (
@@ -21,8 +24,13 @@ from eris.features.interface import (
 from eris.features.node.residue import build_node_attr
 from eris.spatial.contact_graph import neighbor_search_edges
 
+if TYPE_CHECKING:
+    from eris.core.representations.output_declarations import OutputDeclarations
+
 
 class ResidueContactGraph(BaseResidueEncoder):
+    """Residue contact graph from CA coordinates."""
+
     # Identity
     name: ClassVar[str] = "residue_contact_graph"
     version: ClassVar[str] = "0.1.4"
@@ -30,23 +38,21 @@ class ResidueContactGraph(BaseResidueEncoder):
     output_declarations: ClassVar = RESIDUE_GRAPH_OUTPUTS
 
     config_type: ClassVar = ResidueContactGraphConfig
-    config: ResidueContactGraphConfig
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
-        strc = ctx.raw_structure
-        centroid = ctx.centroid
-        pos_out = ctx.pos
+        config = cast("ResidueContactGraphConfig", self.config)
+        strc, centroid, pos_out = prepared_arrays(ctx)
 
         n = int(pos_out.shape[0])
 
         edge_index, edge_dist = neighbor_search_edges(
             pos_out,
-            cutoff=self.config.cutoff,
+            cutoff=config.cutoff,
         )
 
         interface_cutoff = resolve_interface_cutoff(
-            self.config.node_attr_mode.to_list(),
-            self.config.edge_attr_mode.to_list(),
+            config.node_attr_mode.to_list(),
+            config.edge_attr_mode.to_list(),
         )
         interface_flags = None
         interface_pairs = None
@@ -81,11 +87,11 @@ class ResidueContactGraph(BaseResidueEncoder):
             polymer_heavy_atom_name=strc["polymer_heavy_atom_name"],
             polymer_heavy_atom_element=strc["polymer_heavy_atom_element"],
             interface_flags=interface_flags,
-            mode=self.config.node_attr_mode.to_list(),
+            mode=config.node_attr_mode.to_list(),
             return_keys=True,
         )
 
-        if self.config.include_self_loops:
+        if config.include_self_loops:
             loops = np.arange(n, dtype=np.int64)
             loop_edges = np.stack([loops, loops], axis=0)
             loop_dist = np.zeros((n,), dtype=np.float32)
@@ -100,9 +106,9 @@ class ResidueContactGraph(BaseResidueEncoder):
         edge_attr, edge_attr_keys = build_edge_attr(
             edge_index=edge_index,
             edge_dist=edge_dist,
-            mode=self.config.edge_attr_mode.to_list(),
-            rbf_k=self.config.rbf_k,
-            rbf_dmax=self.config.rbf_dmax,
+            mode=config.edge_attr_mode.to_list(),
+            rbf_k=config.rbf_k,
+            rbf_dmax=config.rbf_dmax,
             seq_pos=seq_pos,
             chain_id=strc["chain_id"],
             backbone_n=strc["backbone_n"],
@@ -112,7 +118,7 @@ class ResidueContactGraph(BaseResidueEncoder):
             backbone_ca_mask=strc["backbone_ca_mask"],
             backbone_c_mask=strc["backbone_c_mask"],
             interface_contact=interface_edges,
-            local_cutoff=self.config.local_cutoff,
+            local_cutoff=config.local_cutoff,
             return_keys=True,
         )
 
@@ -147,5 +153,5 @@ class ResidueContactGraph(BaseResidueEncoder):
 
         return data
 
-    def _output_declarations(self, data: dict[str, np.ndarray]):
+    def _output_declarations(self, data: dict[str, np.ndarray]) -> OutputDeclarations:
         return residue_graph_output_declarations(data)
