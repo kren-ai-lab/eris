@@ -9,8 +9,7 @@ from typing import Annotated
 import typer
 
 import eris
-from eris.cli._utils import parse_json_object, usage_error
-from eris.exceptions import ConfigError, ExecutionError, RepresentationNotFoundError
+from eris.cli._utils import parse_json_object
 from eris.pipelines.manifest import ManifestValidationError, StructureManifestRow
 
 app = typer.Typer(add_completion=False, help="Run canonical batch encode/embed workflows.")
@@ -65,26 +64,17 @@ def encode(
     params: Annotated[str | None, typer.Option("--params", help="JSON representation parameters.")] = None,
 ) -> None:
     """Encode one canonical explicit representation for every manifest row."""
-    try:
-        rows = eris.batch_encode(
-            manifest_path=manifest,
-            representation=representation,
-            artifact_root=out,
-            results_path=_result_path(out, results),
-            resume=resume,
-            overwrite=overwrite,
-            fail_fast=fail_fast,
-            use_cache=not no_cache,
-            params=parse_json_object(params),
-        )
-    except (
-        ConfigError,
-        ManifestValidationError,
-        RepresentationNotFoundError,
-        ExecutionError,
-        OSError,
-    ) as error:
-        usage_error(str(error))
+    rows = eris.batch_encode(
+        manifest_path=manifest,
+        representation=representation,
+        artifact_root=out,
+        results_path=_result_path(out, results),
+        resume=resume,
+        overwrite=overwrite,
+        fail_fast=fail_fast,
+        use_cache=not no_cache,
+        params=parse_json_object(params),
+    )
     _summary(rows, "encode")
 
 
@@ -107,29 +97,20 @@ def embed(
     no_cache: Annotated[bool, typer.Option("--no-cache")] = False,
 ) -> None:
     """Embed one canonical learned representation for every manifest row."""
-    try:
-        rows = eris.batch_embed(
-            manifest_path=manifest,
-            representation=representation,
-            artifact_root=out,
-            output_mode=output_mode,
-            checkpoint_path=checkpoint,
-            device=device,
-            precision=precision,
-            results_path=_result_path(out, results),
-            resume=resume,
-            overwrite=overwrite,
-            fail_fast=fail_fast,
-            use_cache=not no_cache,
-        )
-    except (
-        ConfigError,
-        ManifestValidationError,
-        RepresentationNotFoundError,
-        ExecutionError,
-        OSError,
-    ) as error:
-        usage_error(str(error))
+    rows = eris.batch_embed(
+        manifest_path=manifest,
+        representation=representation,
+        artifact_root=out,
+        output_mode=output_mode,
+        checkpoint_path=checkpoint,
+        device=device,
+        precision=precision,
+        results_path=_result_path(out, results),
+        resume=resume,
+        overwrite=overwrite,
+        fail_fast=fail_fast,
+        use_cache=not no_cache,
+    )
     _summary(rows, "embed")
 
 
@@ -154,26 +135,17 @@ def from_folder(
     params: Annotated[str | None, typer.Option("--params", help="JSON representation parameters.")] = None,
 ) -> None:
     """Encode one explicit representation for every matching structure file."""
-    try:
-        rows = eris.batch_encode(
-            rows=_folder_rows(folder, pattern, recursive),
-            representation=representation,
-            artifact_root=out,
-            results_path=_result_path(out, results),
-            resume=resume,
-            overwrite=overwrite,
-            fail_fast=fail_fast,
-            use_cache=not no_cache,
-            params=parse_json_object(params),
-        )
-    except (
-        ConfigError,
-        ManifestValidationError,
-        RepresentationNotFoundError,
-        ExecutionError,
-        OSError,
-    ) as error:
-        usage_error(str(error))
+    rows = eris.batch_encode(
+        rows=_folder_rows(folder, pattern, recursive),
+        representation=representation,
+        artifact_root=out,
+        results_path=_result_path(out, results),
+        resume=resume,
+        overwrite=overwrite,
+        fail_fast=fail_fast,
+        use_cache=not no_cache,
+        params=parse_json_object(params),
+    )
     _summary(rows, "encode")
 
 

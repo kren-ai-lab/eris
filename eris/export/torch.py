@@ -10,12 +10,13 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from eris.core.artifacts import StructureArtifact
+from eris.exceptions import ErisError, OptionalDependencyError
 
 if TYPE_CHECKING:
     from types import ModuleType
 
 
-class TorchExportError(ValueError):
+class TorchExportError(ErisError, ValueError):
     """Raised when an artifact cannot be exported to Torch."""
 
 
@@ -51,7 +52,7 @@ def _torch() -> ModuleType:
     try:
         import torch  # noqa: PLC0415
     except ImportError as error:  # pragma: no cover - environment dependent
-        raise ImportError(
+        raise OptionalDependencyError(
             "Torch export requires optional dependency 'torch'. Install the Torch/export "
             "dependencies before calling eris.export.torch.to_torch()."
         ) from error
@@ -308,7 +309,7 @@ def to_torch(
     if not isinstance(artifact, StructureArtifact):
         raise TypeError("to_torch() expects a StructureArtifact instance.")
 
-    artifact.validate(strict=True)
+    artifact.validate()
     family, representation_type = _representation_identity(artifact)
 
     if family == "learned":
@@ -344,7 +345,7 @@ def save_artifact_to_torch(
 ) -> None:
     """Export one artifact directory to a Torch file."""
     torch = _torch()
-    artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
+    artifact = StructureArtifact.load(Path(artifact_dir))
     data = to_torch(
         artifact,
         device=device,

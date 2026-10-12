@@ -1,6 +1,5 @@
 """Entry point for ``python -m eris``."""
 
-from eris.cli.main import app
+from eris.cli.main import main
 
-if __name__ == "__main__":
-    app()
+raise SystemExit(main())

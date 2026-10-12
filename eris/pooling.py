@@ -169,10 +169,10 @@ def pool(
 ) -> StructureArtifact:
     """Pool one residue-aligned feature matrix into a new structure-level artifact."""
     if isinstance(artifact, (str, Path)):
-        source_artifact = StructureArtifact.load(Path(artifact), strict=True)
+        source_artifact = StructureArtifact.load(Path(artifact))
     elif isinstance(artifact, StructureArtifact):
         source_artifact = artifact
-        source_artifact.validate(strict=True)
+        source_artifact.validate()
     else:
         raise TypeError("artifact must be a StructureArtifact or artifact-directory path")
     if not isinstance(source, str) or not source.strip():

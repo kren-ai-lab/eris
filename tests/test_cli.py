@@ -13,7 +13,7 @@ from typer.testing import CliRunner
 
 import eris
 import eris.cli.embed as embed_cli
-from eris.cli.main import app
+from eris.cli.main import EXIT_CONFIG, EXIT_INTERNAL, EXIT_WORKFLOW, app, main
 from eris.core.artifacts import StructureArtifact
 from eris.exceptions import ExecutionError
 
@@ -284,15 +284,14 @@ def test_batch_from_folder_delegates_sorted_rows(monkeypatch, tmp_path):
     assert captured["use_cache"] is True
 
 
-def test_batch_from_folder_rejects_duplicate_stems(tmp_path):
+def test_batch_from_folder_rejects_duplicate_stems(capsys, tmp_path):
     folder = tmp_path / "structures"
     (folder / "one").mkdir(parents=True)
     (folder / "two").mkdir()
     (folder / "one" / "protein.pdb").write_text("", encoding="ascii")
     (folder / "two" / "protein.pdb").write_text("", encoding="ascii")
 
-    result = runner.invoke(
-        app,
+    code = main(
         [
             "batch",
             "from-folder",
@@ -305,8 +304,8 @@ def test_batch_from_folder_rejects_duplicate_stems(tmp_path):
         ],
     )
 
-    assert result.exit_code == 2
-    assert "duplicate id 'protein'" in result.output
+    assert code == EXIT_WORKFLOW
+    assert "duplicate id 'protein'" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -316,15 +315,16 @@ def test_batch_from_folder_rejects_duplicate_stems(tmp_path):
         (["--representation", "gearnet_edge", "--precision", "wide"], "precision"),
     ],
 )
-def test_expected_request_errors_are_clean(args, expected, tmp_path):
-    result = runner.invoke(app, ["embed", str(PDB), *args, "--out", str(tmp_path)])
+def test_expected_request_errors_are_clean(args, expected, capsys, tmp_path):
+    code = main(["embed", str(PDB), *args, "--out", str(tmp_path)])
 
-    assert result.exit_code == 2
-    assert expected in result.output
-    assert "Traceback" not in result.output
+    err = capsys.readouterr().err
+    assert code == EXIT_CONFIG
+    assert expected in err
+    assert "Traceback" not in err
 
 
-def test_unavailable_backend_error_is_clean(monkeypatch, tmp_path):
+def test_unavailable_backend_error_is_clean(monkeypatch, capsys, tmp_path):
     def fail_embed(*args, **kwargs):
         del args, kwargs
         raise ExecutionError(
@@ -334,8 +334,7 @@ def test_unavailable_backend_error_is_clean(monkeypatch, tmp_path):
 
     monkeypatch.setattr(embed_cli.eris, "embed", fail_embed)
 
-    result = runner.invoke(
-        app,
+    code = main(
         [
             "embed",
             str(PDB),
@@ -346,15 +345,16 @@ def test_unavailable_backend_error_is_clean(monkeypatch, tmp_path):
         ],
     )
 
-    assert result.exit_code == 2
-    assert "unavailable" in result.output
-    assert "ModuleNotFoundError" not in result.output
-    assert "Traceback" not in result.output
+    output = capsys.readouterr().err
+    assert code == EXIT_WORKFLOW
+    assert "unavailable" in output
+    assert "ModuleNotFoundError" not in output
+    assert "Traceback" not in output
     assert not (tmp_path / "meta.json").exists()
     assert not (tmp_path / "data.npz").exists()
 
 
-def test_missing_checkpoint_error_is_clean(monkeypatch, tmp_path):
+def test_missing_checkpoint_error_is_clean(monkeypatch, capsys, tmp_path):
     def fail_embed(*args, **kwargs):
         del args, kwargs
         raise ExecutionError(
@@ -364,8 +364,7 @@ def test_missing_checkpoint_error_is_clean(monkeypatch, tmp_path):
 
     monkeypatch.setattr(embed_cli.eris, "embed", fail_embed)
 
-    result = runner.invoke(
-        app,
+    code = main(
         [
             "embed",
             str(PDB),
@@ -376,11 +375,12 @@ def test_missing_checkpoint_error_is_clean(monkeypatch, tmp_path):
         ],
     )
 
-    assert result.exit_code == 2
-    assert "mc_gearnet_edge.pth" in result.output
-    assert "Automatic download" in result.output
-    assert "--checkpoint" in result.output
-    assert "Traceback" not in result.output
+    output = capsys.readouterr().err
+    assert code == EXIT_WORKFLOW
+    assert "mc_gearnet_edge.pth" in output
+    assert "Automatic download" in output
+    assert "--checkpoint" in output
+    assert "Traceback" not in output
     assert not (tmp_path / "meta.json").exists()
     assert not (tmp_path / "data.npz").exists()
 
@@ -422,7 +422,7 @@ def _assert_real_gearnet_artifact(
     output_mode: str,
     granularity: str,
 ) -> None:
-    artifact.validate(strict=True)
+    artifact.validate()
     assert artifact.meta["representation_name"] == "gearnet_edge"
     assert artifact.meta["representation_family"] == "learned"
     assert artifact.meta["representation_type"] == "embedding"
@@ -478,7 +478,7 @@ def test_real_gearnet_cli_modes(output_mode, granularity, tmp_path):
 
     assert result.exit_code == 0, result.output
     _assert_real_gearnet_artifact(
-        StructureArtifact.load(output, strict=True),
+        StructureArtifact.load(output),
         output_mode=output_mode,
         granularity=granularity,
     )
@@ -523,10 +523,10 @@ def test_real_gearnet_cli_and_public_api_are_equivalent(tmp_path):
         output=api_output,
         use_cache=False,
     )
-    _assert_artifacts_equivalent(StructureArtifact.load(cli_output, strict=True), api_artifact)
+    _assert_artifacts_equivalent(StructureArtifact.load(cli_output), api_artifact)
     _assert_artifacts_equivalent(
-        StructureArtifact.load(cli_output, strict=True),
-        StructureArtifact.load(api_output, strict=True),
+        StructureArtifact.load(cli_output),
+        StructureArtifact.load(api_output),
     )
 
 
@@ -592,10 +592,40 @@ def test_real_gearnet_checkpoint_cache_and_artifact_cache_work_through_cli(tmp_p
     assert second.exit_code == 0, second.output
     assert third.exit_code == 0, third.output
     _assert_artifacts_equivalent(
-        StructureArtifact.load(first_output, strict=True),
-        StructureArtifact.load(second_output, strict=True),
+        StructureArtifact.load(first_output),
+        StructureArtifact.load(second_output),
     )
     _assert_artifacts_equivalent(
-        StructureArtifact.load(second_output, strict=True),
-        StructureArtifact.load(third_output, strict=True),
+        StructureArtifact.load(second_output),
+        StructureArtifact.load(third_output),
     )
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (ExecutionError("backend failed"), EXIT_WORKFLOW),
+        (FileNotFoundError("missing.pdb"), EXIT_WORKFLOW),
+        (RuntimeError("bug [x]"), EXIT_INTERNAL),
+    ],
+)
+def test_main_maps_failures_to_exit_codes(monkeypatch, capsys, tmp_path, error, expected):
+    def fail(**kwargs):
+        del kwargs
+        raise error
+
+    monkeypatch.setattr(eris, "encode", fail)
+
+    code = main(["encode", str(PDB), "--representation", "residue_knn_graph", "--out", str(tmp_path)])
+
+    assert code == expected
+    assert str(error) in capsys.readouterr().err
+
+
+def test_python_module_entry_point_returns_exit_code():
+    result = subprocess.run(
+        [sys.executable, "-m", "eris", "--version"], capture_output=True, text=True, check=False
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == eris.__version__

@@ -134,8 +134,8 @@ class StructureArtifact:
         if canonical_meta != self.meta:
             self.meta = canonical_meta
 
-    def validate(self, strict: bool = False) -> None:  # noqa: ARG002, FBT001, FBT002
-        """Validate ``meta`` against ``data``; ``strict`` is accepted for compatibility and ignored."""
+    def validate(self) -> None:
+        """Validate ``meta`` against ``data``."""
         _validate_artifact(self.meta, self.data)
 
     def save(self, outdir: Path) -> None:
@@ -159,8 +159,8 @@ class StructureArtifact:
         )
 
     @staticmethod
-    def load(indir: Path, *, strict: bool = False) -> StructureArtifact:  # noqa: ARG004
-        """Read and strictly validate an artifact directory; ``strict`` is ignored."""
+    def load(indir: Path) -> StructureArtifact:
+        """Read and strictly validate an artifact directory."""
         if not indir.exists():
             raise ArtifactValidationError(f"Artifact directory does not exist: {indir}")
         if not indir.is_dir():

@@ -256,7 +256,7 @@ class BaseEncoder(ABC):
             refreshed_extensions.update(deepcopy(extensions))
             meta["extensions"] = refreshed_extensions
         refreshed = StructureArtifact(data=artifact.data, meta=meta)
-        refreshed.validate(strict=True)
+        refreshed.validate()
         return refreshed
 
     def _validate_runtime_config_dependencies(self, parameters: dict[str, Any]) -> None:  # noqa: B027
@@ -333,7 +333,7 @@ class BaseEncoder(ABC):
         output_names = [output["name"] for output in meta["outputs"]]
         data = {name: data[name] for name in output_names}
         artifact = StructureArtifact(data=data, meta=meta)
-        artifact.validate(strict=True)
+        artifact.validate()
 
         if cache is not None and key is not None:
             cache.set(key, artifact)

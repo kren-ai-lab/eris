@@ -220,7 +220,7 @@ def _cleanup_staging(staging: Path, target: Path) -> None:
 
 
 def _publish_staging(staging: Path, target: Path) -> None:
-    StructureArtifact.load(staging, strict=True)
+    StructureArtifact.load(staging)
     if target.exists() and not target.is_dir():
         raise FileExistsError(f"Existing artifact path is not a directory: {target}")
     if not target.exists():
@@ -239,7 +239,7 @@ def _save_artifact_safely(artifact: StructureArtifact, target: Path) -> None:
         artifact.save(staging)
         _publish_staging(staging, target)
         published = True
-        StructureArtifact.load(target, strict=True)
+        StructureArtifact.load(target)
     finally:
         if not published:
             _cleanup_staging(staging, target)
@@ -277,7 +277,7 @@ def _artifact_matches_request(
     source_sha256: str,
 ) -> bool:
     try:
-        artifact.validate(strict=True)
+        artifact.validate()
     except (ArtifactValidationError, TypeError, ValueError):
         return False
 
@@ -334,7 +334,7 @@ def _load_equivalent_artifact(
 ) -> StructureArtifact | None:
     try:
         source_sha256 = sha256_file(Path(row.path))
-        artifact = StructureArtifact.load(target, strict=True)
+        artifact = StructureArtifact.load(target)
     except (ArtifactValidationError, OSError):
         return None
     if _artifact_matches_request(
@@ -432,7 +432,7 @@ def _run_batch(
             artifact = execute(row)
             if not isinstance(artifact, StructureArtifact):
                 raise ExecutionError("public execution did not return StructureArtifact")  # noqa: TRY301
-            artifact.validate(strict=True)
+            artifact.validate()
             _save_artifact_safely(artifact, target)
             results.append(
                 _success_row(

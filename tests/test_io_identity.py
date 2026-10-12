@@ -68,7 +68,7 @@ def test_residue_encoder_traces_skipped_residues(tmp_path: Path) -> None:
     assert artifact.data["omitted_residue_ids"].tolist() == ["A:16::GLY"]
     assert artifact.meta["counts"]["n_omitted_residues"] == 1
     assert "omitted_residue_ids" in [output["name"] for output in artifact.meta["outputs"]]
-    artifact.validate(strict=True)
+    artifact.validate()
 
 
 def test_residue_encoder_fails_without_partial_artifact_for_error(tmp_path: Path) -> None:
@@ -95,7 +95,7 @@ def test_zero_omission_output_is_deterministic_and_round_trips(tmp_path: Path) -
     artifact = ResiduePointCloudCA(use_cache=False).encode(StructureInput(source=str(source)))
     target = tmp_path / "artifact"
     artifact.save(target)
-    loaded = StructureArtifact.load(target, strict=True)
+    loaded = StructureArtifact.load(target)
 
     assert artifact.data["omitted_residue_ids"].shape == (0,)
     assert artifact.data["omitted_residue_ids"].dtype.kind == "U"
@@ -159,7 +159,7 @@ def test_old_residue_cache_key_cannot_satisfy_new_output_contract(tmp_path: Path
     stale_meta["dtypes"].pop("omitted_residue_ids")
     stale_meta["counts"].pop("n_omitted_residues")
     stale = StructureArtifact(data=stale_data, meta=stale_meta)
-    stale.validate(strict=True)
+    stale.validate()
 
     encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
     parameters = encoder.config.to_dict()

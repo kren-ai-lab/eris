@@ -11,18 +11,10 @@ from rich.console import Console
 from rich.syntax import Syntax
 from rich.table import Table
 
-from eris.cli._utils import usage_error
-from eris.core.artifacts import ArtifactValidationError, StructureArtifact
+from eris.core.artifacts import StructureArtifact
 
 app = typer.Typer(add_completion=False, help="Artifact inspection utilities.")
 console = Console(width=240)
-
-
-def _load_artifact(artifact_dir: Path) -> StructureArtifact:
-    try:
-        return StructureArtifact.load(artifact_dir, strict=True)
-    except ArtifactValidationError as error:
-        usage_error(str(error))
 
 
 def _json(value: Any) -> Syntax:
@@ -65,7 +57,7 @@ def show(
     artifact_dir: Annotated[Path, typer.Argument(...)],
 ) -> None:
     """Print canonical Artifact Schema metadata after strict validation."""
-    artifact = _load_artifact(artifact_dir)
+    artifact = StructureArtifact.load(artifact_dir)
     meta = artifact.meta
     encoder = meta.get("encoder")
 
@@ -112,5 +104,5 @@ def validate(
     artifact_dir: Annotated[Path, typer.Argument(...)],
 ) -> None:
     """Validate a canonical Artifact Schema directory."""
-    artifact = _load_artifact(artifact_dir)
+    artifact = StructureArtifact.load(artifact_dir)
     typer.echo(f"Artifact is valid: {artifact.meta['representation_name']}")

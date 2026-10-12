@@ -19,3 +19,7 @@ class ConfigError(ErisError):
 
 class CacheError(ErisError):
     """Raised when cache operations fail."""
+
+
+class OptionalDependencyError(ErisError, ImportError):
+    """Raised when a feature needs an optional dependency that is not installed."""

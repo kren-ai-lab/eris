@@ -14,6 +14,7 @@ from zipfile import BadZipFile
 import numpy as np
 
 from eris.core.residue_identity import format_residue_id
+from eris.exceptions import ErisError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -39,7 +40,7 @@ _KEY_COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\Z")
 _PREVIEW_LIMIT = 5
 
 
-class ExternalFeatureError(ValueError):
+class ExternalFeatureError(ErisError, ValueError):
     """Raised when an external residue feature payload violates its contract."""
 
 

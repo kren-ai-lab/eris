@@ -8,15 +8,6 @@ from typing import Annotated, Any
 import typer
 
 import eris
-from eris.cli._utils import usage_error
-from eris.core.artifacts import ArtifactValidationError
-from eris.core.io import StructureLoadError
-from eris.exceptions import (
-    CacheError,
-    ConfigError,
-    ExecutionError,
-    RepresentationNotFoundError,
-)
 
 
 def embed(
@@ -69,20 +60,7 @@ def embed(
     if checkpoint is not None:
         embed_kwargs["checkpoint_path"] = checkpoint
 
-    try:
-        artifact = eris.embed(**embed_kwargs)
-    except FileNotFoundError as error:
-        missing = error.filename if error.filename is not None else input
-        usage_error(f"File not found: {missing}")
-    except (
-        RepresentationNotFoundError,
-        ConfigError,
-        StructureLoadError,
-        ArtifactValidationError,
-        CacheError,
-        ExecutionError,
-    ) as error:
-        usage_error(str(error))
+    artifact = eris.embed(**embed_kwargs)
 
     mode = artifact.meta.get("parameters", {}).get("output_mode", output_mode)
     typer.echo(f"Embedded {artifact.meta['representation_name']} ({mode}) -> {out}")

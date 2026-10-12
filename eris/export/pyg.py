@@ -10,10 +10,11 @@ from typing import Any
 import numpy as np
 
 from eris.core.artifacts import StructureArtifact
+from eris.exceptions import ErisError, OptionalDependencyError
 from eris.export.torch import to_torch
 
 
-class PyGExportError(ValueError):
+class PyGExportError(ErisError, ValueError):
     """Raised when an artifact cannot be exported as a PyG graph."""
 
 
@@ -42,7 +43,7 @@ def _pyg_dependencies() -> tuple[Any, Any]:
         import torch  # noqa: PLC0415
         from torch_geometric.data import Data  # noqa: PLC0415
     except ImportError as error:  # pragma: no cover - environment dependent
-        raise ImportError(
+        raise OptionalDependencyError(
             "PyG export requires optional dependencies 'torch' and 'torch_geometric'. "
             "Install the PyG/export dependencies before calling eris.export.pyg.to_pyg()."
         ) from error
@@ -55,7 +56,7 @@ def _metadata(meta: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _identity(artifact: StructureArtifact) -> tuple[str, str]:
-    artifact.validate(strict=True)
+    artifact.validate()
     family = artifact.meta.get("representation_family")
     representation_type = artifact.meta.get("representation_type")
     if not isinstance(family, str) or not isinstance(representation_type, str):
@@ -197,7 +198,7 @@ def save_artifact_to_pyg(
 ) -> None:
     """Export one artifact directory to a PyG file."""
     torch, _ = _pyg_dependencies()
-    artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
+    artifact = StructureArtifact.load(Path(artifact_dir))
     pyg = to_pyg(artifact, device=device)
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     torch.save(pyg, out_path)

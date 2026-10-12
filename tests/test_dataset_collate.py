@@ -21,6 +21,7 @@ from eris.core.artifact_schema import (
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.datasets.collate import collate_cloud, collate_graph, collate_grid, collate_matrix
 from eris.datasets.torch_dataset import DatasetIndexError, ErisFolderDataset
+from eris.exceptions import OptionalDependencyError
 from eris.pipelines.batch_encode import batch_encode
 from eris.pipelines.manifest import StructureManifestRow
 from eris.pipelines.pack import PACKED_INDEX_FIELDS, pack_artifacts
@@ -560,7 +561,7 @@ def test_dataset_reports_actionable_error_when_torch_conversion_unavailable(
 
     monkeypatch.setattr(dataset_module, "to_torch", missing_torch)
 
-    with pytest.raises(RuntimeError, match="requires optional dependency 'torch'"):
+    with pytest.raises(OptionalDependencyError, match="requires optional dependency 'torch'"):
         ErisFolderDataset(index)[0]
 
 

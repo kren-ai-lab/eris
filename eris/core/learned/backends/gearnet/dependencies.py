@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from types import ModuleType
 
+from eris.exceptions import OptionalDependencyError
+
 
 @dataclass(frozen=True)
 class BackendAvailability:
@@ -48,7 +50,7 @@ def import_native_gearnet_torch() -> ModuleType:
     try:
         import torch  # noqa: PLC0415
     except (ImportError, OSError) as error:
-        raise ImportError(
+        raise OptionalDependencyError(
             "Native GearNet-Edge requires optional dependency torch; "
             "install the 'gearnet' extra: pip install 'erislib[gearnet]'"
         ) from error

@@ -854,7 +854,7 @@ def test_backbone_geometry_realistic_pdb_mmcif_hybrid_round_trip_and_identity(
 
     artifact_dir = tmp_path / "backbone-artifact"
     pdb.save(artifact_dir)
-    loaded = StructureArtifact.load(artifact_dir, strict=True)
+    loaded = StructureArtifact.load(artifact_dir)
     np.testing.assert_equal(loaded.data["node_attr"], pdb.data["node_attr"])
     assert loaded.meta["feature_keys"]["node_attr_keys"] == expected_keys
 
@@ -1019,7 +1019,7 @@ def test_aaindex_composes_and_feature_keys_round_trip(tmp_path: Path) -> None:
 
     outdir = tmp_path / "artifact"
     artifact.save(outdir)
-    loaded = StructureArtifact.load(outdir, strict=True)
+    loaded = StructureArtifact.load(outdir)
     assert loaded.meta["feature_keys"]["node_attr_keys"] == keys
     assert loaded.meta["parameters"]["node_attr_mode"][2]["aaindex"]["provider"] == "aaindex"
     assert loaded.meta["parameters"]["node_attr_mode"][2]["aaindex"]["provider_version"] == metadata.version(
@@ -1062,7 +1062,7 @@ def test_external_features_align_by_exact_residue_id_and_compose(tmp_path: Path)
     artifact_dir = tmp_path / "self-contained-artifact"
     artifact.save(artifact_dir)
     external.unlink()
-    reloaded = StructureArtifact.load(artifact_dir, strict=True)
+    reloaded = StructureArtifact.load(artifact_dir)
     np.testing.assert_array_equal(reloaded.data["node_attr"], artifact.data["node_attr"])
 
 
@@ -1256,7 +1256,7 @@ def test_high_dimensional_external_hybrid_round_trip_and_identity(tmp_path: Path
     first.finalize()
     artifact_dir = tmp_path / "artifact"
     first.save(artifact_dir)
-    loaded = StructureArtifact.load(artifact_dir, strict=True)
+    loaded = StructureArtifact.load(artifact_dir)
 
     expected_keys = [*[f"aa_onehot.{aa}" for aa in AA_VOCAB], "bfactor_ca", *external_keys]
     assert loaded.data["node_attr"].shape == (2, len(AA_VOCAB) + 1 + feature_dim)
@@ -1596,7 +1596,7 @@ def test_secondary_sasa_rsa_hybrid_graph_round_trip(tmp_path: Path) -> None:
     ).encode(inp)
     target = tmp_path / "artifact"
     artifact.save(target)
-    loaded = StructureArtifact.load(target, strict=True)
+    loaded = StructureArtifact.load(target)
 
     assert loaded.meta["feature_keys"]["node_attr_keys"][-7:] == [
         "interface.is_interface",
@@ -1860,7 +1860,7 @@ def test_sidechain_geometry_hybrid_composition_and_artifact_round_trip(tmp_path:
     ).encode(inp)
     target = tmp_path / "sidechain-artifact"
     artifact.save(target)
-    loaded = StructureArtifact.load(target, strict=True)
+    loaded = StructureArtifact.load(target)
 
     sidechain_keys = [
         f"sidechain.chi{chi}_{component}" for chi in range(1, 5) for component in ("sin", "cos")
@@ -2047,7 +2047,7 @@ def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
 
     artifact_path = tmp_path / "high-content-graph"
     original.save(artifact_path)
-    loaded = StructureArtifact.load(artifact_path, strict=True)
+    loaded = StructureArtifact.load(artifact_path)
     assert loaded.meta["schema_version"] == 1
     assert loaded.meta["feature_keys"] == original.meta["feature_keys"]
     assert loaded.meta["provenance"] == original.meta["provenance"]
@@ -2101,7 +2101,7 @@ def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
 
     pooled_path = tmp_path / "high-content-pooled"
     pooled.save(pooled_path)
-    loaded_pool = StructureArtifact.load(pooled_path, strict=True)
+    loaded_pool = StructureArtifact.load(pooled_path)
     assert loaded_pool.meta["schema_version"] == 1
     assert loaded_pool.data["pooled_attr"].dtype == np.float64
     assert loaded_pool.meta["feature_keys"]["pooled_attr_keys"] == expected_pooled_keys

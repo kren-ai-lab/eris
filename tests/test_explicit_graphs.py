@@ -480,7 +480,7 @@ def test_interface_cutoff_chain_filtering_round_trip_and_fingerprint(
 
     output = tmp_path / f"{encoder_type.__name__}-interface"
     contacting.save(output)
-    loaded = StructureArtifact.load(output, strict=True)
+    loaded = StructureArtifact.load(output)
     assert loaded.meta == contacting.meta
     for name in contacting.data:
         np.testing.assert_equal(loaded.data[name], contacting.data[name])
@@ -666,7 +666,7 @@ def test_multichain_edge_feature_composition_is_deterministic_and_round_trips(
 
     target = tmp_path / "edge-composition"
     original.save(target)
-    loaded = StructureArtifact.load(target, strict=True)
+    loaded = StructureArtifact.load(target)
     assert loaded.meta["feature_keys"]["edge_attr_keys"] == expected_keys
     for name, values in original.data.items():
         np.testing.assert_equal(loaded.data[name], values)
@@ -698,7 +698,7 @@ def test_relative_direction_missing_frame_nan_round_trip_and_exports(tmp_path: P
 
     artifact_dir = tmp_path / "orientation-artifact"
     artifact.save(artifact_dir)
-    loaded = StructureArtifact.load(artifact_dir, strict=True)
+    loaded = StructureArtifact.load(artifact_dir)
     np.testing.assert_equal(loaded.data["edge_attr"], artifact.data["edge_attr"])
     assert loaded.meta["feature_keys"]["edge_attr_keys"] == [
         "edge.same_chain",
@@ -757,7 +757,7 @@ def test_corrected_graph_cache_version_cannot_reuse_previous_version(
     stale_meta = deepcopy(current.meta)
     stale_meta["encoder"]["version"] = "0.1.3"
     stale = StructureArtifact(data=dict(current.data), meta=stale_meta)
-    stale.validate(strict=True)
+    stale.validate()
 
     kwargs: dict[str, object] = {"use_cache": True, "cache": cache, "local_cutoff": 1}
     if encoder_type is ResidueKNNGraph:

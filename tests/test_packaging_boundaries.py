@@ -106,7 +106,7 @@ assert eris.get_representation_info("residue_contact_map")["name"] == "residue_c
 artifact = eris.encode({str(PDB)!r}, representation="residue_contact_map", use_cache=False)
 target = Path({output})
 artifact.save(target)
-loaded_artifact = StructureArtifact.load(target, strict=True)
+loaded_artifact = StructureArtifact.load(target)
 assert loaded_artifact.meta["schema_version"] == 1
 
 runner = CliRunner()

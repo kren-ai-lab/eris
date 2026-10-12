@@ -308,7 +308,7 @@ def test_loader_threads_gemmi_confirmed_input_format(source: Path, expected: str
     assert loaded.input_format == expected
 
     artifact = ResiduePointCloudCA(use_cache=False).encode(StructureInput(source=str(source)))
-    artifact.validate(strict=True)
+    artifact.validate()
     assert artifact.meta["input"]["format"] == expected
 
 
