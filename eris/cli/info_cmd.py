@@ -17,10 +17,6 @@ app = typer.Typer(add_completion=False, help="Artifact inspection utilities.")
 console = Console(width=240)
 
 
-def _load_artifact(artifact_dir: Path) -> StructureArtifact:
-    return StructureArtifact.load(artifact_dir)
-
-
 def _json(value: Any) -> Syntax:
     return Syntax(
         json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False),
@@ -61,7 +57,7 @@ def show(
     artifact_dir: Annotated[Path, typer.Argument(...)],
 ) -> None:
     """Print canonical Artifact Schema metadata after strict validation."""
-    artifact = _load_artifact(artifact_dir)
+    artifact = StructureArtifact.load(artifact_dir)
     meta = artifact.meta
     encoder = meta.get("encoder")
 
@@ -108,5 +104,5 @@ def validate(
     artifact_dir: Annotated[Path, typer.Argument(...)],
 ) -> None:
     """Validate a canonical Artifact Schema directory."""
-    artifact = _load_artifact(artifact_dir)
+    artifact = StructureArtifact.load(artifact_dir)
     typer.echo(f"Artifact is valid: {artifact.meta['representation_name']}")

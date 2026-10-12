@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from typing import Any
 
 import typer
@@ -50,14 +49,6 @@ def _print_info(info: dict[str, Any]) -> None:
     console.print(table)
 
 
-def _info_command(
-    name: str,
-    *,
-    lookup: Callable[[str], dict[str, Any]],
-) -> None:
-    _print_info(lookup(name))
-
-
 @representations_app.command("list")
 def list_representations() -> None:
     """List explicit structural representations."""
@@ -67,7 +58,7 @@ def list_representations() -> None:
 @representations_app.command("info")
 def representation_info(name: str) -> None:
     """Show metadata for one explicit representation."""
-    _info_command(name, lookup=eris.get_representation_info)
+    _print_info(eris.get_representation_info(name))
 
 
 @embedders_app.command("list")
@@ -79,7 +70,7 @@ def list_embedders() -> None:
 @embedders_app.command("info")
 def embedder_info(name: str) -> None:
     """Show metadata and availability for one learned embedder."""
-    _info_command(name, lookup=eris.get_embedder_info)
+    _print_info(eris.get_embedder_info(name))
 
 
 app.add_typer(representations_app, name="representations")
