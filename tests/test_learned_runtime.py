@@ -26,7 +26,7 @@ def test_execution_config_is_frozen_minimal_and_defaults_to_auto_fp32():
     assert {field.name for field in fields(request)} == {"device", "precision"}
     assert not hasattr(request, "to_dict")
     with pytest.raises(FrozenInstanceError):
-        request.device = "cpu"
+        request.device = "cpu"  # pyrefly: ignore[read-only]
 
 
 @pytest.mark.parametrize("device", ["auto", "cpu"])
@@ -102,4 +102,4 @@ if loaded:
 assert not hasattr(eris, 'StructuralExecutionConfig')
 """
 
-    subprocess.run([sys.executable, "-c", script], check=True)
+    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603

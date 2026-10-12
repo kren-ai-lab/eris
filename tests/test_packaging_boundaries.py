@@ -36,7 +36,7 @@ def _blocked_import(name, globals=None, locals=None, fromlist=(), level=0):
 
 builtins.__import__ = _blocked_import
 """
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         [sys.executable, "-c", guard + script],
         cwd=ROOT,
         check=True,

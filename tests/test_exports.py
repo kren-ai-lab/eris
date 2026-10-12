@@ -5,14 +5,10 @@ import subprocess
 import sys
 from importlib.util import find_spec
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pytest
-
-requires_torch = pytest.mark.skipif(
-    find_spec("torch") is None,
-    reason="requires optional dependency 'torch'",
-)
 
 import eris
 from eris.core.artifact_schema import build_input_metadata
@@ -25,6 +21,11 @@ from eris.core.learned import (
     build_learned_artifact,
 )
 from eris.export.torch import save_artifact_to_torch, to_torch
+
+requires_torch = pytest.mark.skipif(
+    find_spec("torch") is None,
+    reason="requires optional dependency 'torch'",
+)
 
 PDB = Path("tests/data/1AQ2.pdb")
 
@@ -63,7 +64,7 @@ def _model() -> StructuralModelDescriptor:
 
 
 def _learned_artifact(
-    output_mode: str,
+    output_mode: Literal["both", "global", "node"],
     *,
     with_mask: bool = True,
     dtype=np.float64,
@@ -111,7 +112,7 @@ loaded = sorted(blocked.intersection(sys.modules))
 if loaded:
     raise SystemExit(f"optional frameworks loaded: {loaded}")
 """
-    subprocess.run([sys.executable, "-c", script], check=True)
+    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603
 
 
 @requires_torch

@@ -4,6 +4,7 @@ from copy import deepcopy
 from importlib import metadata
 from importlib.util import find_spec
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -257,7 +258,7 @@ def _rigid_transform_pdb(source: Path, target: Path) -> None:
                 dtype=np.float64,
             )
             x, y, z = coordinate @ rotation.T + translation
-            line = f"{line[:30]}{x:8.3f}{y:8.3f}{z:8.3f}{line[54:]}"
+            line = f"{line[:30]}{x:8.3f}{y:8.3f}{z:8.3f}{line[54:]}"  # noqa: PLW2901
         lines.append(line)
     target.write_text("\n".join([*lines, ""]), encoding="ascii")
 
@@ -267,7 +268,7 @@ def _aaindex_mode(
     *,
     unknown: str = "nan",
     missing: str = "nan",
-) -> list[dict[str, dict[str, object]]]:
+) -> list[dict[str, Any] | str]:
     return [
         {
             "aaindex": {
@@ -405,6 +406,7 @@ def test_plddt_requires_explicit_source_and_preserves_raw_bfactor(tmp_path: Path
     inp = _write_ca_structure(tmp_path / "predicted.pdb", [("ALA", 87.5)])
     config = ResiduePointCloudConfig(
         plddt_source="bfactor",
+        # pyrefly: ignore [bad-argument-type]
         node_attr_mode=["plddt_ca", "bfactor_ca"],
     )
 
@@ -443,6 +445,7 @@ def test_plddt_and_bfactor_feature_normalization_is_explicit() -> None:
         mode=[{"plddt_ca": {"normalization": "unit_interval"}}],
         missing="nan",
     )
+    assert isinstance(unit, np.ndarray)
 
     assert raw_keys == ["plddt_ca", "bfactor_ca"]
     np.testing.assert_equal(raw[:, 0], np.asarray([25.0, np.nan], dtype=np.float32))
@@ -871,6 +874,7 @@ def test_voxel_bfactor_is_raw_unless_normalization_is_requested(tmp_path: Path) 
             grid_size=3,
             fit=False,
             voxel_size=1.0,
+            # pyrefly: ignore [bad-argument-type]
             channels=["bfactor"],
         ),
         use_cache=False,
@@ -880,6 +884,7 @@ def test_voxel_bfactor_is_raw_unless_normalization_is_requested(tmp_path: Path) 
             grid_size=3,
             fit=False,
             voxel_size=1.0,
+            # pyrefly: ignore [bad-argument-type]
             channels=[{"bfactor": {"normalization": "unit_interval"}}],
         ),
         use_cache=False,
@@ -897,6 +902,7 @@ def test_voxel_plddt_normalization_is_explicit(tmp_path: Path) -> None:
             grid_size=3,
             fit=False,
             voxel_size=1.0,
+            # pyrefly: ignore [bad-argument-type]
             channels=["plddt"],
         ),
         use_cache=False,
@@ -907,6 +913,7 @@ def test_voxel_plddt_normalization_is_explicit(tmp_path: Path) -> None:
             grid_size=3,
             fit=False,
             voxel_size=1.0,
+            # pyrefly: ignore [bad-argument-type]
             channels=[{"plddt": {"normalization": "unit_interval"}}],
         ),
         use_cache=False,
@@ -950,6 +957,7 @@ def test_aaindex_unknown_residue_policy(policy: str, expected: float) -> None:
         _aa_indices("AX"),
         mode=_aaindex_mode(["KYTJ820101"], unknown=policy),
     )
+    assert isinstance(features, np.ndarray)
 
     if np.isnan(expected):
         assert np.isnan(features[1, 0])
@@ -974,6 +982,7 @@ def test_aaindex_missing_record_value_policy(policy: str, expected: float) -> No
         _aa_indices("AP"),
         mode=_aaindex_mode(["AVBF000101"], missing=policy),
     )
+    assert isinstance(features, np.ndarray)
 
     if np.isnan(expected):
         assert np.isnan(features[1, 0])
@@ -996,6 +1005,7 @@ def test_aaindex_composes_and_feature_keys_round_trip(tmp_path: Path) -> None:
     )
     node_mode = ["onehot", "physchem", *_aaindex_mode(["KYTJ820101"]), "bfactor_ca"]
     artifact = ResiduePointCloudCA(
+        # pyrefly: ignore [bad-argument-type]
         config=ResiduePointCloudConfig(node_attr_mode=node_mode),
         use_cache=False,
     ).encode(inp)
@@ -1120,16 +1130,11 @@ def test_external_rejects_wrong_model(tmp_path: Path) -> None:
 def test_external_features_align_across_canonical_multichain_selection(tmp_path: Path) -> None:
     structure = tmp_path / "multi.pdb"
     structure.write_text(
-        "\n".join(
-            [
-                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
-                "TER",
-                "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
-                "TER",
-                "END",
-                "",
-            ]
-        ),
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  \n"
+        "TER\n"
+        "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  \n"
+        "TER\n"
+        "END\n",
         encoding="ascii",
     )
     external = _write_external_features(
@@ -1161,7 +1166,8 @@ def test_external_legacy_scalar_chain_field_is_rejected(tmp_path: Path) -> None:
         model_index=np.asarray(0, dtype=np.int64),
     )
 
-    with pytest.raises(ExternalFeatureError, match="missing fields.*chain_ids"):
+    with pytest.raises(ExternalFeatureError, match=r"missing fields.*chain_ids"):
+        # pyrefly: ignore [bad-argument-type]
         ResiduePointCloudConfig(node_attr_mode=[{"external": {"path": str(path)}}])
 
 
@@ -1172,6 +1178,7 @@ def test_external_detects_source_mutation_after_config_resolution(tmp_path: Path
         values=[[1.0, 2.0], [3.0, 4.0]],
         residue_ids=["A:1::ALA", "A:2::GLY"],
     )
+    # pyrefly: ignore [bad-argument-type]
     config = ResiduePointCloudConfig(node_attr_mode=[{"external": {"path": str(external)}}])
     resolved = config.to_dict()["node_attr_mode"][0]["external"]
 
@@ -1327,7 +1334,7 @@ def test_batch_external_params_by_id_preserve_resume_identity(
     np.testing.assert_array_equal(second.data["node_attr"], [[5.0, 6.0], [7.0, 8.0]])
     assert first.meta["provenance"]["config_fingerprint"] != second.meta["provenance"]["config_fingerprint"]
 
-    def fail_encode(*args: object, **kwargs: object) -> StructureArtifact:
+    def fail_encode(*args: object, **kwargs: object) -> StructureArtifact:  # noqa: ARG001
         raise AssertionError("matching per-row external identities must resume without execution")
 
     monkeypatch.setattr(eris, "encode", fail_encode)
@@ -1560,7 +1567,7 @@ def test_sasa_fails_for_unsupported_required_protor_radius(tmp_path: Path) -> No
         ],
     )
 
-    with pytest.raises(ValueError, match="ProtOr radius is unavailable.*MSE:QQ"):
+    with pytest.raises(ValueError, match=r"ProtOr radius is unavailable.*MSE:QQ"):
         ResiduePointCloudCA(node_attr_mode=["sasa"], use_cache=False).encode(inp)
 
 

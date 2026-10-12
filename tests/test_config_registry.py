@@ -177,6 +177,7 @@ def test_granularity_and_coordinate_source_are_independent():
         "com": "residue_com",
     }
     for residue_center, coordinate_source in expected_sources.items():
+        # pyrefly: ignore [bad-argument-type]
         config = ResiduePointCloudConfig(residue_center=residue_center)
         assert config.granularity == "residue"
         assert config.coordinate_source == coordinate_source
@@ -188,13 +189,19 @@ def test_granularity_and_coordinate_source_are_independent():
         lambda: AtomKNNGraphConfig(k=True),
         lambda: AtomKNNGraphConfig(k=0),
         lambda: AtomKNNGraphConfig(cutoff=float("nan")),
+        # pyrefly: ignore [bad-argument-type]
         lambda: ResidueKNNGraphConfig(knn_mode="invalid"),
+        # pyrefly: ignore [bad-argument-type]
         lambda: ResiduePointCloudConfig(residue_center="invalid"),
+        # pyrefly: ignore [bad-argument-type]
         lambda: ResiduePointCloudConfig(plddt_source="automatic"),
+        # pyrefly: ignore [bad-argument-type]
         lambda: ResidueVoxelGridConfig(pool="invalid"),
+        # pyrefly: ignore [bad-argument-type]
         lambda: ResidueVoxelGridConfig(dtype="uint8"),
         lambda: ResidueVoxelGridConfig(grid_size=0),
         lambda: ResidueDistogramBinsConfig(num_bins=0),
+        # pyrefly: ignore [bad-argument-type]
         lambda: ResidueDistogramBinsConfig(edges=[2, 2]),
     ],
 )
@@ -206,8 +213,11 @@ def test_invalid_values_fail_during_construction(factory):
 @pytest.mark.parametrize(
     "factory",
     [
+        # pyrefly: ignore [bad-argument-type]
         lambda: ResiduePointCloudConfig(amino_acids_only=False),
+        # pyrefly: ignore [bad-argument-type]
         lambda: ResiduePointCloudConfig(altloc="first"),
+        # pyrefly: ignore [bad-argument-type]
         lambda: ResiduePointCloudConfig(missing_residue_center="nan"),
     ],
 )
@@ -224,6 +234,7 @@ def test_valid_non_default_edge_cases_remain_representable():
     assert AtomPointCloudConfig(altloc=" all ").altloc == "all"
 
     local = ResidueKNNGraphConfig(knn_mode="local", cutoff=None)
+    # pyrefly: ignore [bad-argument-type]
     global_with_cutoff = ResidueKNNGraphConfig(knn_mode=" GLOBAL ", cutoff=99)
     assert local.cutoff is None
     assert global_with_cutoff.knn_mode == "global"
@@ -242,6 +253,7 @@ def test_valid_non_default_edge_cases_remain_representable():
     assert ResiduePointCloudConfig(residue_center="mean").coordinate_source == "residue_mean"
     assert ResiduePointCloudConfig(residue_center="com").coordinate_source == "residue_com"
     assert ResidueContactMapConfig(dtype="bool").dtype == "bool"
+    # pyrefly: ignore [bad-argument-type]
     assert ResidueDistogramBinsConfig(edges=[2, 4, 8]).edges == (2.0, 4.0, 8.0)
 
 
@@ -264,6 +276,7 @@ def test_feature_mode_preserves_requested_order_and_grid_parameters():
         },
         "occupancy",
     ]
+    # pyrefly: ignore [bad-argument-type]
     config = ResidueVoxelGridConfig(channels=channels)
 
     assert config.to_dict()["channels"] == channels
@@ -272,9 +285,11 @@ def test_feature_mode_preserves_requested_order_and_grid_parameters():
 
 def test_nested_feature_parameter_order_is_canonical():
     first = ResidueVoxelGridConfig(
+        # pyrefly: ignore [bad-argument-type]
         channels=[{"density": {"z": 1, "a": {"y": 2, "x": 3}}}],
     )
     second = ResidueVoxelGridConfig(
+        # pyrefly: ignore [bad-argument-type]
         channels=[{"density": {"a": {"x": 3, "y": 2}, "z": 1}}],
     )
 
@@ -320,9 +335,11 @@ def test_parameterized_residue_features_are_canonical_and_provider_pinned():
 
 def test_backbone_geometry_parameters_canonicalize_and_fingerprint_scientific_changes():
     minimal = ResiduePointCloudConfig(
+        # pyrefly: ignore [bad-argument-type]
         node_attr_mode=[{"backbone_geometry": {"mode": " BOTH ", "max_peptide_bond_distance": 2}}]
     )
     explicit = ResiduePointCloudConfig(
+        # pyrefly: ignore [bad-argument-type]
         node_attr_mode=[
             {
                 "backbone_geometry": {
@@ -335,8 +352,10 @@ def test_backbone_geometry_parameters_canonicalize_and_fingerprint_scientific_ch
             }
         ]
     )
+    # pyrefly: ignore [bad-argument-type]
     changed_mode = ResiduePointCloudConfig(node_attr_mode=[{"backbone_geometry": {"mode": "raw"}}])
     changed_threshold = ResiduePointCloudConfig(
+        # pyrefly: ignore [bad-argument-type]
         node_attr_mode=[{"backbone_geometry": {"mode": "both", "max_peptide_bond_distance": 1.9}}]
     )
 
@@ -360,8 +379,10 @@ def test_backbone_geometry_parameters_canonicalize_and_fingerprint_scientific_ch
 
 
 def test_sidechain_geometry_parameters_canonicalize_and_fingerprint_modes():
+    # pyrefly: ignore [bad-argument-type]
     minimal = ResiduePointCloudConfig(node_attr_mode=["sidechain_geometry"])
     explicit = ResiduePointCloudConfig(
+        # pyrefly: ignore [bad-argument-type]
         node_attr_mode=[
             {
                 "sidechain_geometry": {
@@ -375,7 +396,9 @@ def test_sidechain_geometry_parameters_canonicalize_and_fingerprint_modes():
             }
         ]
     )
+    # pyrefly: ignore [bad-argument-type]
     raw = ResiduePointCloudConfig(node_attr_mode=[{"sidechain_geometry": {"mode": "raw"}}])
+    # pyrefly: ignore [bad-argument-type]
     both = ResiduePointCloudConfig(node_attr_mode=[{"sidechain_geometry": {"mode": "both"}}])
 
     assert minimal == explicit
@@ -399,8 +422,10 @@ def test_sidechain_geometry_parameters_canonicalize_and_fingerprint_modes():
 
 
 def test_secondary_structure_parameters_are_canonical_and_fingerprinted():
+    # pyrefly: ignore [bad-argument-type]
     minimal = ResiduePointCloudConfig(node_attr_mode=["secondary_structure"])
     explicit = ResiduePointCloudConfig(
+        # pyrefly: ignore [bad-argument-type]
         node_attr_mode=[
             {
                 "secondary_structure": {
@@ -423,6 +448,7 @@ def test_secondary_structure_parameters_are_canonical_and_fingerprinted():
         ]
     )
     changed = ResiduePointCloudConfig(
+        # pyrefly: ignore [bad-argument-type]
         node_attr_mode=[{"secondary_structure": {"max_peptide_bond_distance": 1.9}}]
     )
 
@@ -440,6 +466,7 @@ def test_secondary_structure_parameters_are_canonical_and_fingerprinted():
 
 
 def test_sasa_rsa_parameters_are_frozen_and_canonical():
+    # pyrefly: ignore [bad-argument-type]
     config = ResiduePointCloudConfig(node_attr_mode=["sasa", "rsa"])
     sasa = config.node_attr_mode.to_list()[0]["sasa"]
     rsa = config.node_attr_mode.to_list()[1]["rsa"]
@@ -455,8 +482,10 @@ def test_sasa_rsa_parameters_are_frozen_and_canonical():
     assert rsa["clipping"] == "none"
 
     with pytest.raises(ValueError, match="probe_radius_angstrom"):
+        # pyrefly: ignore [bad-argument-type]
         ResiduePointCloudConfig(node_attr_mode=[{"sasa": {"probe_radius_angstrom": 1.5}}])
     with pytest.raises(ValueError, match="clipping"):
+        # pyrefly: ignore [bad-argument-type]
         ResiduePointCloudConfig(node_attr_mode=[{"rsa": {"clipping": "unit_interval"}}])
 
 
@@ -481,6 +510,7 @@ def test_relative_direction_parameters_are_canonical_and_residue_graph_only():
     )
 
     assert minimal == explicit
+    # pyrefly: ignore [bad-argument-type]
     minimal_config = ResidueKNNGraphConfig(edge_attr_mode=["relative_direction"])
     explicit_config = ResidueKNNGraphConfig(edge_attr_mode=explicit)
     assert minimal_config.to_fingerprint_dict() == explicit_config.to_fingerprint_dict()
@@ -489,6 +519,7 @@ def test_relative_direction_parameters_are_canonical_and_residue_graph_only():
         minimal_config.to_fingerprint_dict(),
         chain_ids=["A"],
     )
+    # pyrefly: ignore [bad-argument-type]
     distance_config = ResidueKNNGraphConfig(edge_attr_mode=["dist"])
     assert orientation_fingerprint != compute_config_fingerprint(
         distance_config.representation_name,
@@ -496,7 +527,7 @@ def test_relative_direction_parameters_are_canonical_and_residue_graph_only():
         chain_ids=["A"],
     )
     assert ResidueKNNGraphConfig(
-        edge_attr_mode=["same_chain", "inter_chain", "relative_direction"]
+        edge_attr_mode=["same_chain", "inter_chain", "relative_direction"]  # pyrefly: ignore [bad-argument-type]
     ).edge_attr_mode.to_list() == [
         "same_chain",
         "inter_chain",
@@ -504,6 +535,7 @@ def test_relative_direction_parameters_are_canonical_and_residue_graph_only():
     ]
     for token in ("same_chain", "inter_chain", "relative_direction"):
         with pytest.raises(ValueError, match="residue-only edge features"):
+            # pyrefly: ignore [bad-argument-type]
             AtomKNNGraphConfig(edge_attr_mode=[token])
     with pytest.raises(ValueError, match="frame_epsilon"):
         FeatureMode.from_value(
@@ -514,7 +546,9 @@ def test_relative_direction_parameters_are_canonical_and_residue_graph_only():
 
 def test_interface_features_require_a_matched_residue_graph_pair():
     config = ResidueContactGraphConfig(
+        # pyrefly: ignore [bad-argument-type]
         node_attr_mode=[{"interface": {"cutoff": 4.5}}],
+        # pyrefly: ignore [bad-argument-type]
         edge_attr_mode=[{"interface_contact": {"cutoff": 4.5}}],
     )
 
@@ -530,15 +564,20 @@ def test_interface_features_require_a_matched_residue_graph_pair():
     }
 
     with pytest.raises(ValueError, match="requires both"):
+        # pyrefly: ignore [bad-argument-type]
         ResidueKNNGraphConfig(node_attr_mode=["interface"])
     with pytest.raises(ValueError, match="same cutoff"):
         ResidueKNNGraphConfig(
+            # pyrefly: ignore [bad-argument-type]
             node_attr_mode=[{"interface": {"cutoff": 4.0}}],
+            # pyrefly: ignore [bad-argument-type]
             edge_attr_mode=[{"interface_contact": {"cutoff": 5.0}}],
         )
     with pytest.raises(ValueError, match="only by residue graphs"):
+        # pyrefly: ignore [bad-argument-type]
         ResiduePointCloudConfig(node_attr_mode=["interface"])
     with pytest.raises(ValueError, match="residue-only edge features"):
+        # pyrefly: ignore [bad-argument-type]
         AtomKNNGraphConfig(edge_attr_mode=["interface_contact"])
 
 
@@ -578,6 +617,7 @@ def test_feature_mode_rejects_duplicates_unknowns_and_unsupported_params(value, 
 
 def test_explicit_edges_override_generation_fields_canonically():
     with_ignored_generation = ResidueDistogramBinsConfig(
+        # pyrefly: ignore [bad-argument-type]
         edges=[2, 4, 8],
         dmin=-100,
         dmax=-99,
@@ -593,24 +633,32 @@ def test_explicit_edges_override_generation_fields_canonically():
 
 
 def test_configs_and_nested_state_are_immutable():
+    # pyrefly: ignore [bad-argument-type]
     config = ResidueDistogramBinsConfig(edges=[2, 4, 8])
     mode = ResidueVoxelGridConfig(
+        # pyrefly: ignore [bad-argument-type]
         channels=[{"density": {"nested": [1, 2]}}],
     ).channels
 
     with pytest.raises(FrozenInstanceError):
+        # pyrefly: ignore [read-only]
         config.edges = (1.0, 2.0)
     with pytest.raises(TypeError):
+        # pyrefly: ignore [unsupported-operation]
         config.edges[0] = 1.0
     with pytest.raises(FrozenInstanceError):
+        # pyrefly: ignore [read-only]
         mode.tokens = ()
     with pytest.raises(FrozenInstanceError):
+        # pyrefly: ignore [read-only]
         mode.tokens[0].params.items = ()
 
 
 def test_direct_feature_construction_cannot_retain_mutable_containers():
     raw_params = {"nested": [1, 2]}
+    # pyrefly: ignore [bad-argument-type]
     token = FeatureToken(name=" density ", params=raw_params)
+    # pyrefly: ignore [bad-argument-type]
     mode = FeatureMode(tokens=[token])
     raw_params["nested"].append(3)
 
@@ -621,6 +669,7 @@ def test_direct_feature_construction_cannot_retain_mutable_containers():
 
 def test_catalog_is_immutable():
     with pytest.raises(TypeError):
+        # pyrefly: ignore [unsupported-operation]
         _CONFIG_TYPES_BY_REPRESENTATION["extra"] = AtomPointCloudConfig
 
 

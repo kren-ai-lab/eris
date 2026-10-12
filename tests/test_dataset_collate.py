@@ -3,7 +3,9 @@ from __future__ import annotations
 import csv
 import subprocess
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -28,7 +30,7 @@ PDB = Path("tests/data/1AQ2.pdb")
 
 def _write_index(
     path: Path,
-    rows: list[dict[str, object]],
+    rows: Sequence[Mapping[str, object]],
     *,
     extra: list[str] | None = None,
 ) -> None:
@@ -46,7 +48,7 @@ def _read_index(path: Path) -> list[dict[str, str]]:
 
 
 def _index_row(path: Path, **overrides: object) -> dict[str, object]:
-    row = _read_index(path)[0]
+    row: dict[str, object] = dict(_read_index(path)[0])
     row.update(overrides)
     return row
 
@@ -89,7 +91,7 @@ def _artifact_metadata(
                 "layout": "N",
             }
         )
-    kwargs: dict[str, object] = {}
+    kwargs: dict[str, Any] = {}
     if representation_family == "learned":
         kwargs["model"] = {
             "architecture": "SyntheticModel",
@@ -278,7 +280,7 @@ def test_dataset_rejects_missing_required_columns(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "field,value,match",
+    ("field", "value", "match"),
     [
         ("id", "", "non-empty"),
         ("representation_family", "other", "representation_family"),
@@ -345,11 +347,11 @@ def test_dataset_rejects_duplicate_identity_and_artifact_dir(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize(
-    "index_factory,expected",
+    ("index_factory", "expected"),
     [
-        (lambda tmp, root: tmp / "index.csv", "artifacts/sample/residue_point_cloud"),
+        (lambda tmp, root: tmp / "index.csv", "artifacts/sample/residue_point_cloud"),  # noqa: ARG005
         (
-            lambda tmp, root: tmp / "collections" / "index.csv",
+            lambda tmp, root: tmp / "collections" / "index.csv",  # noqa: ARG005
             "../artifacts/sample/residue_point_cloud",
         ),
     ],
@@ -416,7 +418,7 @@ def test_dataset_rejects_meta_path_inconsistency(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "field,value,match",
+    ("field", "value", "match"),
     [
         ("representation_name", "atom_point_cloud", "representation_name"),
         ("n_nodes", "999", "n_nodes"),
@@ -483,6 +485,7 @@ def test_dataset_samples_feed_each_canonical_explicit_collate(
     index = tmp_path / "index.csv"
     _pack(root, index)
 
+    # pyrefly: ignore [bad-argument-type]
     samples = list(ErisFolderDataset(index))
     out = collate(samples)
 
@@ -550,7 +553,7 @@ def test_dataset_reports_actionable_error_when_torch_conversion_unavailable(
     index = tmp_path / "index.csv"
     _pack(root, index)
 
-    def missing_torch(*args: object, **kwargs: object) -> dict[str, object]:
+    def missing_torch(*args: object, **kwargs: object) -> dict[str, object]:  # noqa: ARG001
         raise ImportError("No module named torch")
 
     import eris.datasets.torch_dataset as dataset_module
@@ -573,4 +576,4 @@ if loaded:
     raise SystemExit(f"optional frameworks loaded: {loaded}")
 assert ErisFolderDataset is not None
 """
-    subprocess.run([sys.executable, "-c", script], check=True)
+    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 from copy import deepcopy
 from importlib.util import find_spec
 from pathlib import Path
@@ -265,7 +266,7 @@ def test_insertion_codes_preserve_source_order_adjacency(
 
     residue_ids = artifact.data["residue_ids"].tolist()
     assert residue_ids == ["A:20::ALA", "A:20:A:GLY", "A:20:B:SER", "A:21::THR"]
-    for source_id, target_id in zip(residue_ids, residue_ids[1:]):
+    for source_id, target_id in itertools.pairwise(residue_ids):
         assert _edge_feature(artifact, source_id, target_id, "seq_sep") == 1.0
         assert _edge_feature(artifact, source_id, target_id, "flag.is_local_le_1") == 1.0
 
@@ -557,8 +558,8 @@ def test_orientation_edges_are_invariant_directed_and_multichain(
     forward = _edge_features(original, "A:1::ALA", "A:2::GLY", direction_keys)
     reverse = _edge_features(original, "A:2::GLY", "A:1::ALA", direction_keys)
     root_half = np.float32(1.0 / np.sqrt(2.0))
-    np.testing.assert_allclose(forward, [root_half, root_half, 0.0], atol=1e-6)
-    np.testing.assert_allclose(reverse, [-root_half, 0.0, -root_half], atol=1e-6)
+    np.testing.assert_allclose(forward, np.array([root_half, root_half, 0.0]), atol=1e-6)
+    np.testing.assert_allclose(reverse, np.array([-root_half, 0.0, -root_half]), atol=1e-6)
     assert not np.allclose(reverse, -forward)
 
     assert _edge_feature(original, "A:1::ALA", "A:2::GLY", "edge.same_chain") == 1.0
@@ -596,7 +597,7 @@ def test_multichain_edge_feature_composition_is_deterministic_and_round_trips(
     )
     translation = np.asarray([9.0, -6.0, 2.0], dtype=np.float64)
 
-    def encode(path: Path):
+    def encode(path: str):
         return ResidueKNNGraph(
             k=2,
             cutoff=None,
@@ -749,6 +750,8 @@ def test_corrected_graph_cache_version_cannot_reuse_previous_version(
         tmp_path / "cache.pdb",
         [(17, " ", 0.0, "ALA", "CA", "A"), (20, " ", 1.0, "GLY", "CA", "A")],
     )
+    chain_ids = structure_input.chain_id
+    assert isinstance(chain_ids, tuple)
     cache = DiskCache(tmp_path / "cache")
     current = _encode(encoder_type, structure_input)
     stale_meta = deepcopy(current.meta)
@@ -766,13 +769,11 @@ def test_corrected_graph_cache_version_cannot_reuse_previous_version(
     common = {
         "representation_name": encoder.name,
         "encoder_implementation": encoder.encoder_implementation,
-        "config_fingerprint": compute_config_fingerprint(
-            encoder.name, parameters, chain_ids=structure_input.chain_id
-        ),
+        "config_fingerprint": compute_config_fingerprint(encoder.name, parameters, chain_ids=chain_ids),
         "source_sha256": sha256_file(Path(structure_input.source)),
         "parser_hint": ".pdb",
         "model_index": structure_input.model_index,
-        "chain_ids": structure_input.chain_id,
+        "chain_ids": chain_ids,
     }
     old_key = compute_cache_key(encoder_version="0.1.3", **common)
     current_key = compute_cache_key(encoder_version=encoder.version, **common)

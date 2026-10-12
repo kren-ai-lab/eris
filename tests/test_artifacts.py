@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -348,7 +349,7 @@ def test_explicit_model_is_forbidden_and_learned_model_is_required():
 
 
 @pytest.mark.parametrize(
-    "mutation,match",
+    ("mutation", "match"),
     [
         (lambda model: model.pop("architecture"), "missing required"),
         (lambda model: model["checkpoint"].pop("identifier"), "missing required"),
@@ -363,7 +364,7 @@ def test_learned_model_and_checkpoint_are_strict(mutation, match):
 
 
 @pytest.mark.parametrize(
-    "mutation,match",
+    ("mutation", "match"),
     [
         (lambda value: value.update({"source_sha256": "A" * 64}), "lowercase"),
         (lambda value: value.update({"model_index": -1}), "integer >= 0"),
@@ -448,7 +449,7 @@ def test_parameters_preserve_nested_json_and_none():
 
 
 @pytest.mark.parametrize(
-    "value,match",
+    ("value", "match"),
     [
         (float("nan"), "finite"),
         (np.int64(1), "NumPy"),
@@ -560,7 +561,7 @@ def test_pickle_dependent_or_unsupported_data_dtypes_are_rejected(array):
 
 def test_data_values_must_be_ndarrays():
     meta, data = _explicit_graph()
-    data["pos"] = [[0.0, 0.0, 0.0]]
+    cast("dict[str, Any]", data)["pos"] = [[0.0, 0.0, 0.0]]
 
     _assert_invalid(meta, data, "numpy.ndarray")
 
@@ -659,7 +660,7 @@ def test_strict_validation_checks_config_fingerprint_against_name_and_parameters
 
 
 def test_normalization_converts_numpy_scalars_and_tuples_without_mutating_input():
-    original = {"values": (np.int64(1), np.float32(2.5)), "enabled": np.bool_(True)}
+    original = {"values": (np.int64(1), np.float32(2.5)), "enabled": np.bool_(True)}  # noqa: FBT003
     snapshot = deepcopy(original)
 
     normalized = normalize_metadata(original)
@@ -670,7 +671,7 @@ def test_normalization_converts_numpy_scalars_and_tuples_without_mutating_input(
 
 
 @pytest.mark.parametrize(
-    "value,match",
+    ("value", "match"),
     [
         (Path("artifact"), "Path"),
         (float("nan"), "finite"),

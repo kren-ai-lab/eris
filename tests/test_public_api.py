@@ -197,7 +197,7 @@ def test_multichain_selection_is_canonical_and_excludes_nonprotein_chains(tmp_pa
 
 @pytest.mark.parametrize("chain_id", [[], ["A", "A"]])
 def test_invalid_multichain_requests_fail_before_execution(chain_id):
-    with pytest.raises((ConfigError, ValueError), match="empty|duplicate|must not be empty"):
+    with pytest.raises((ConfigError, ValueError), match=r"empty|duplicate|must not be empty"):
         eris.encode(
             PDB,
             representation="residue_point_cloud",
@@ -234,20 +234,15 @@ def test_all_explicit_residue_representations_support_multichain_selection(tmp_p
 def test_multichain_selection_is_resolved_independently_per_model(tmp_path: Path):
     source = tmp_path / "models.pdb"
     source.write_text(
-        "\n".join(
-            [
-                "MODEL        1",
-                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
-                "TER",
-                "ENDMDL",
-                "MODEL        2",
-                "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
-                "TER",
-                "ENDMDL",
-                "END",
-                "",
-            ]
-        ),
+        "MODEL        1\n"
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  \n"
+        "TER\n"
+        "ENDMDL\n"
+        "MODEL        2\n"
+        "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  \n"
+        "TER\n"
+        "ENDMDL\n"
+        "END\n",
         encoding="ascii",
     )
 
@@ -265,16 +260,11 @@ def test_default_selection_includes_parser_identified_noncanonical_polymer_chain
 ):
     source = tmp_path / "noncanonical.pdb"
     source.write_text(
-        "\n".join(
-            [
-                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
-                "TER",
-                "ATOM      2  CA  MSE B   1       1.000   0.000   0.000  1.00 20.00           C  ",
-                "TER",
-                "END",
-                "",
-            ]
-        ),
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  \n"
+        "TER\n"
+        "ATOM      2  CA  MSE B   1       1.000   0.000   0.000  1.00 20.00           C  \n"
+        "TER\n"
+        "END\n",
         encoding="ascii",
     )
 
@@ -295,7 +285,7 @@ def test_structure_input_preserves_identity_and_allows_identical_overrides(monke
             captured.append(value)
             return expected
 
-    monkeypatch.setattr(api_module, "get_encoder", lambda *args, **kwargs: CapturingEncoder())
+    monkeypatch.setattr(api_module, "get_encoder", lambda *args, **kwargs: CapturingEncoder())  # noqa: ARG005
     without_overrides = eris.encode(
         structure_input,
         representation="residue_contact_map",
@@ -453,4 +443,4 @@ if loaded:
     raise SystemExit(f'optional frameworks loaded: {loaded}')
 """
 
-    subprocess.run([sys.executable, "-c", script], check=True)
+    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603

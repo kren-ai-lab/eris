@@ -3,13 +3,13 @@ from __future__ import annotations
 import inspect
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pytest
 
 import eris.core.cache as cache_module
 from eris.core.artifact_schema import (
-    ArtifactValidationError,
     build_artifact_metadata,
     build_feature_keys,
     build_input_metadata,
@@ -103,7 +103,7 @@ def _write_entry(cache_root, key: str, *, meta: dict, data: dict[str, np.ndarray
     entry = _entry(cache_root, key)
     entry.mkdir(parents=True)
     (entry / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
-    np.savez_compressed(entry / "data.npz", **data)
+    np.savez_compressed(entry / "data.npz", **cast("dict[str, Any]", data))
 
 
 def test_compute_cache_key_is_deterministic_and_has_explicit_inputs():
@@ -348,7 +348,7 @@ def test_active_encoder_cache_miss_then_hit_uses_only_api(
     first = first_encoder.encode(inp)
     second_encoder = ResidueKNNGraph(use_cache=True, cache=cache)
 
-    def fail_recompute(ctx):
+    def fail_recompute(ctx):  # noqa: ARG001
         raise AssertionError("a valid cache hit must not recompute arrays")
 
     monkeypatch.setattr(second_encoder, "_create_data", fail_recompute)
@@ -379,7 +379,7 @@ def test_cache_hit_refreshes_current_source_without_rewriting_cached_metadata(
     first = ResiduePointCloudCA(use_cache=True, cache=cache).encode(StructureInput(source=str(source_a)))
     second_encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
 
-    def fail_recompute(ctx):
+    def fail_recompute(ctx):  # noqa: ARG001
         raise AssertionError("same bytes and suffix must hit the cache")
 
     monkeypatch.setattr(second_encoder, "_create_data", fail_recompute)
@@ -439,14 +439,16 @@ def test_strict_valid_cache_artifact_with_wrong_identity_is_a_miss(tmp_path):
     assert result.meta["representation_name"] == "residue_point_cloud"
     assert cache.get_keys == [key]
     assert cache.set_keys == [key]
-    assert cache.get(key).meta["representation_name"] == "residue_point_cloud"
+    cached = cache.get(key)
+    assert cached is not None
+    assert cached.meta["representation_name"] == "residue_point_cloud"
 
 
 def test_use_cache_false_does_not_instantiate_or_compute_cache(monkeypatch):
     def fail_cache_construction():
         raise AssertionError("use_cache=False must not instantiate DiskCache")
 
-    def fail_cache_key(**kwargs):
+    def fail_cache_key(**kwargs):  # noqa: ARG001
         raise AssertionError("use_cache=False must not compute a cache key")
 
     monkeypatch.setattr(cache_module, "DiskCache", fail_cache_construction)

@@ -4,6 +4,7 @@ import hashlib
 import io
 import tempfile
 from pathlib import Path
+from typing import Any, cast
 from urllib.error import URLError
 
 import pytest
@@ -86,7 +87,7 @@ def test_cached_checkpoint_has_priority_and_does_not_open_network(monkeypatch, t
     candidate.write_bytes(CHECKPOINT_BYTES)
     runner = _runner(tmp_path)
     descriptor = _descriptor()
-    cached = runner._checkpoint_cache().put(candidate, descriptor)
+    cached = runner._checkpoint_cache().put(candidate, descriptor)  # noqa: SLF001
 
     def fail_urlopen(*args, **kwargs):
         del args, kwargs
@@ -94,7 +95,7 @@ def test_cached_checkpoint_has_priority_and_does_not_open_network(monkeypatch, t
 
     monkeypatch.setattr(checkpoint_acquisition, "_open_registered_url", fail_urlopen)
 
-    resolved = runner._resolve_checkpoint(_model(), None)
+    resolved = runner._resolve_checkpoint(_model(), None)  # noqa: SLF001
 
     assert resolved.path == cached.path
     assert resolved.sha256 == CHECKPOINT_SHA256
@@ -111,11 +112,11 @@ def test_explicit_checkpoint_has_priority_over_registered_download(monkeypatch, 
 
     monkeypatch.setattr(checkpoint_acquisition, "_open_registered_url", fail_urlopen)
 
-    resolved = runner._resolve_checkpoint(_model(), candidate)
+    resolved = runner._resolve_checkpoint(_model(), candidate)  # noqa: SLF001
 
     assert resolved.sha256 == CHECKPOINT_SHA256
     assert resolved.path != candidate.resolve()
-    assert runner._checkpoint_cache().get(_descriptor()) == resolved
+    assert runner._checkpoint_cache().get(_descriptor()) == resolved  # noqa: SLF001
 
 
 def test_cache_miss_streams_registered_download_through_verified_cache(monkeypatch, tmp_path):
@@ -132,13 +133,13 @@ def test_cache_miss_streams_registered_download_through_verified_cache(monkeypat
     monkeypatch.setattr(checkpoint_acquisition, "_open_registered_url", fake_urlopen)
     runner = _runner(tmp_path)
 
-    resolved = runner._resolve_checkpoint(_model(), None)
+    resolved = runner._resolve_checkpoint(_model(), None)  # noqa: SLF001
 
     assert seen_request == {"url": DOWNLOAD_URL}
     assert response.read_sizes == [1024 * 1024, 1024 * 1024]
     assert resolved.sha256 == CHECKPOINT_SHA256
     assert resolved.path.read_bytes() == CHECKPOINT_BYTES
-    assert runner._checkpoint_cache().get(_descriptor()) == resolved
+    assert runner._checkpoint_cache().get(_descriptor()) == resolved  # noqa: SLF001
     assert list(download_dir.iterdir()) == []
 
 
@@ -149,14 +150,14 @@ def test_bad_download_digest_is_rejected_without_install_or_temp_file(monkeypatc
     monkeypatch.setattr(
         checkpoint_acquisition,
         "_open_registered_url",
-        lambda *args, **kwargs: _StreamingResponse(b"tampered bytes"),
+        lambda *args, **kwargs: _StreamingResponse(b"tampered bytes"),  # noqa: ARG005
     )
     runner = _runner(tmp_path)
 
     with pytest.raises(ExecutionError, match="failed verification"):
-        runner._resolve_checkpoint(_model(), None)
+        runner._resolve_checkpoint(_model(), None)  # noqa: SLF001
 
-    assert runner._checkpoint_cache().get(_descriptor()) is None
+    assert runner._checkpoint_cache().get(_descriptor()) is None  # noqa: SLF001
     assert list(download_dir.iterdir()) == []
 
 
@@ -173,13 +174,13 @@ def test_network_failure_is_actionable_and_leaves_no_temp_file(monkeypatch, tmp_
     runner = _runner(tmp_path)
 
     with pytest.raises(ExecutionError) as raised:
-        runner._resolve_checkpoint(_model(), None)
+        runner._resolve_checkpoint(_model(), None)  # noqa: SLF001
 
     message = str(raised.value)
     assert "Automatic download" in message
     assert "offline" in message
     assert "--checkpoint" in message
-    assert runner._checkpoint_cache().get(_descriptor()) is None
+    assert runner._checkpoint_cache().get(_descriptor()) is None  # noqa: SLF001
     assert list(download_dir.iterdir()) == []
 
 
@@ -190,11 +191,11 @@ def test_interrupted_transfer_removes_partial_temp_file(monkeypatch, tmp_path):
     monkeypatch.setattr(
         checkpoint_acquisition,
         "_open_registered_url",
-        lambda *args, **kwargs: _InterruptedResponse(CHECKPOINT_BYTES),
+        lambda *args, **kwargs: _InterruptedResponse(CHECKPOINT_BYTES),  # noqa: ARG005
     )
 
     with pytest.raises(ExecutionError, match="connection interrupted"):
-        _runner(tmp_path)._resolve_checkpoint(_model(), None)
+        _runner(tmp_path)._resolve_checkpoint(_model(), None)  # noqa: SLF001
 
     assert list(download_dir.iterdir()) == []
 
@@ -207,7 +208,7 @@ def test_descriptor_without_registered_url_never_attempts_network(monkeypatch, t
     monkeypatch.setattr(checkpoint_acquisition, "_open_registered_url", fail_urlopen)
 
     with pytest.raises(ExecutionError, match="registered official download") as raised:
-        _runner(tmp_path)._resolve_checkpoint(_model(download_url=None), None)
+        _runner(tmp_path)._resolve_checkpoint(_model(download_url=None), None)  # noqa: SLF001
 
     assert "--checkpoint" in str(raised.value)
 
@@ -218,7 +219,7 @@ def test_acquisition_url_is_excluded_from_artifact_and_cache_identity():
 
     assert first.to_dict() == second.to_dict()
     assert first.to_cache_identity() == second.to_cache_identity()
-    assert "download_url" not in first.to_dict()["checkpoint"]
+    assert "download_url" not in cast("dict[str, Any]", first.to_dict())["checkpoint"]
 
 
 @pytest.mark.parametrize(
@@ -239,11 +240,11 @@ def test_redirect_to_non_https_url_is_rejected(monkeypatch, tmp_path):
     monkeypatch.setattr(
         checkpoint_acquisition,
         "_open_registered_url",
-        lambda *args, **kwargs: _StreamingResponse(
+        lambda *args, **kwargs: _StreamingResponse(  # noqa: ARG005
             CHECKPOINT_BYTES,
             final_url="http://models.example.test/model.pth",
         ),
     )
 
     with pytest.raises(ExecutionError, match="unsafe non-HTTPS URL"):
-        _runner(tmp_path)._resolve_checkpoint(_model(), None)
+        _runner(tmp_path)._resolve_checkpoint(_model(), None)  # noqa: SLF001

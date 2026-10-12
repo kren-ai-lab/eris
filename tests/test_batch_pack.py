@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import shutil
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -61,10 +62,10 @@ def _explicit_artifact(
 def _learned_artifact(
     *,
     source: Path = PDB,
-    output_mode: str = "both",
+    output_mode: Literal["both", "global", "node"] = "both",
     chain_id: str | None = None,
     model_index: int = 0,
-    precision: str = "fp32",
+    precision: Literal["fp32"] = "fp32",
     checkpoint_identifier: str | None = None,
 ) -> StructureArtifact:
     config = GearNetEdgeConfig(
@@ -158,16 +159,11 @@ def test_manifest_batch_and_resume_canonicalize_multichain_selection(
 ) -> None:
     source = tmp_path / "multi.pdb"
     source.write_text(
-        "\n".join(
-            [
-                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
-                "TER",
-                "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
-                "TER",
-                "END",
-                "",
-            ]
-        ),
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  \n"
+        "TER\n"
+        "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  \n"
+        "TER\n"
+        "END\n",
         encoding="ascii",
     )
     manifest = tmp_path / "structures.json"
@@ -194,7 +190,7 @@ def test_manifest_batch_and_resume_canonicalize_multichain_selection(
     monkeypatch.setattr(
         batch_module.eris,
         "encode",
-        lambda *args, **kwargs: pytest.fail("equivalent resumed artifact must be reused"),
+        lambda *args, **kwargs: pytest.fail("equivalent resumed artifact must be reused"),  # noqa: ARG005
     )
     resumed = batch_encode(
         [StructureManifestRow(id="protein", path=str(source), chain=["A", "B"])],
@@ -226,10 +222,10 @@ def test_manifest_rejects_legacy_structure_field_aliases(tmp_path: Path, alias: 
 
 def test_batch_encode_uses_artifact_root_only(tmp_path: Path) -> None:
     with pytest.raises(TypeError, match="unexpected keyword argument 'out'"):
-        batch_encode(
+        batch_encode(  # pyrefly: ignore[missing-argument]
             [StructureManifestRow(id="protein", path=str(PDB))],
             representation="residue_contact_map",
-            out=tmp_path,
+            out=tmp_path,  # pyrefly: ignore[unexpected-keyword]
         )
 
     import inspect
@@ -260,7 +256,7 @@ def test_batch_encode_delegates_to_public_api_and_propagates_config(monkeypatch,
     artifact = _explicit_artifact()
     captured = []
 
-    def fake_encode(input, **kwargs):
+    def fake_encode(input, **kwargs):  # noqa: A002
         captured.append((input, kwargs))
         return artifact
 
@@ -294,7 +290,7 @@ def test_batch_encode_partial_failure_continues_and_writes_results(tmp_path, mon
     artifact = _explicit_artifact()
     calls = []
 
-    def fake_encode(input, **kwargs):
+    def fake_encode(input, **kwargs):  # noqa: A002, ARG001
         calls.append(input)
         if input == "bad.pdb":
             raise ValueError("cannot parse")
@@ -328,7 +324,7 @@ def test_existing_output_without_resume_or_overwrite_is_a_failure(tmp_path, monk
     target = tmp_path / "artifacts" / "protein" / "residue_contact_map"
     _explicit_artifact().save(target)
 
-    def fail_encode(*args, **kwargs):
+    def fail_encode(*args, **kwargs):  # noqa: ARG001
         raise AssertionError("existing output must not execute without resume or overwrite")
 
     monkeypatch.setattr(batch_module.eris, "encode", fail_encode)
@@ -348,7 +344,7 @@ def test_resume_reuses_equivalent_artifact_without_execution(tmp_path, monkeypat
     target = tmp_path / "artifacts" / "protein" / "residue_contact_map"
     _explicit_artifact().save(target)
 
-    def fail_encode(*args, **kwargs):
+    def fail_encode(*args, **kwargs):  # noqa: ARG001
         raise AssertionError("equivalent resume must not execute")
 
     monkeypatch.setattr(batch_module.eris, "encode", fail_encode)
@@ -399,7 +395,7 @@ def test_resume_regenerates_invalid_artifact_without_deleting_first(tmp_path, mo
 
 
 @pytest.mark.parametrize(
-    "existing_artifact_factory,kwargs",
+    ("existing_artifact_factory", "kwargs"),
     [
         (
             lambda: _explicit_artifact(representation="residue_contact_map"),
@@ -452,7 +448,7 @@ def test_resume_regenerates_non_equivalent_explicit_artifacts(
 def test_fail_fast_persists_current_failure_before_raising(tmp_path, monkeypatch):
     artifact = _explicit_artifact()
 
-    def fake_encode(input, **kwargs):
+    def fake_encode(input, **kwargs):  # noqa: A002, ARG001
         if input == "bad.pdb":
             raise ValueError("boom")
         return artifact
@@ -482,7 +478,7 @@ def test_batch_embed_delegates_to_public_api_and_propagates_learned_options(tmp_
     artifact = _learned_artifact(output_mode="node")
     captured = []
 
-    def fake_embed(input, **kwargs):
+    def fake_embed(input, **kwargs):  # noqa: A002
         captured.append((input, kwargs))
         return artifact
 
@@ -522,7 +518,7 @@ def test_learned_resume_reuses_only_matching_model_identity(tmp_path, monkeypatc
     target = tmp_path / "artifacts" / "protein" / "gearnet_edge"
     _learned_artifact().save(target)
 
-    def fail_embed(*args, **kwargs):
+    def fail_embed(*args, **kwargs):  # noqa: ARG001
         raise AssertionError("matching learned artifact must be reused")
 
     monkeypatch.setattr(batch_module.eris, "embed", fail_embed)
@@ -567,7 +563,7 @@ def test_learned_resume_reuses_only_matching_model_identity(tmp_path, monkeypatc
 
 def test_result_manifest_uses_canonical_batch_fields(tmp_path, monkeypatch):
     artifact = _explicit_artifact()
-    monkeypatch.setattr(batch_module.eris, "encode", lambda *args, **kwargs: artifact)
+    monkeypatch.setattr(batch_module.eris, "encode", lambda *args, **kwargs: artifact)  # noqa: ARG005
     results_path = tmp_path / "batch_results.csv"
 
     batch_encode(

@@ -58,7 +58,9 @@ def _reference_graph(path: Path) -> dict[str, np.ndarray]:
 
 
 def _records(path: Path):
-    selected = load_selected_biological_structure(StructureInput(source=path, chain_id="A", model_index=0))
+    selected = load_selected_biological_structure(
+        StructureInput(source=str(path), chain_id="A", model_index=0)
+    )
     return select_gearnet_transport_records(selected)
 
 
@@ -73,21 +75,16 @@ def _canonical_line_graph_triples(
 def test_gearnet_v01_rejects_multichain_selection(tmp_path: Path) -> None:
     source = tmp_path / "multi.pdb"
     source.write_text(
-        "\n".join(
-            [
-                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
-                "TER",
-                "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
-                "TER",
-                "END",
-                "",
-            ]
-        ),
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  \n"
+        "TER\n"
+        "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  \n"
+        "TER\n"
+        "END\n",
         encoding="ascii",
     )
 
     with pytest.raises(GearNetPreprocessingError, match="exactly one selected chain"):
-        load_selected_biological_structure(StructureInput(source=source))
+        load_selected_biological_structure(StructureInput(source=str(source)))
 
 
 def _atom_line(
@@ -127,10 +124,10 @@ def test_frozen_reference_payloads_and_metadata_are_path_safe():
 @requires_torch
 @pytest.mark.parametrize(
     ("input_name", "graph_name"),
-    (
+    [
         ("gearnet_reference.pdb", "gearnet_reference_graph.npz"),
         ("gearnet_spatial_reference.pdb", "gearnet_spatial_reference_graph.npz"),
-    ),
+    ],
 )
 def test_native_graph_matches_each_frozen_reference_exactly(input_name: str, graph_name: str):
     native = construct_native_gearnet_graph(_records(DATA_DIR / input_name))
@@ -168,7 +165,7 @@ def test_line_graph_endpoint_ties_use_stable_sorting(monkeypatch):
     source = np.array((0, 2, 0, 1), dtype=np.int64)
     destination = np.array((1, 1, 2, 2), dtype=np.int64)
 
-    line_source, line_destination, _ = native_graph._line_graph(positions, source, destination)
+    line_source, line_destination, _ = native_graph._line_graph(positions, source, destination)  # noqa: SLF001
 
     assert len(sorted_inputs) == 2
     np.testing.assert_array_equal(sorted_inputs[0], destination, strict=True)
@@ -214,7 +211,7 @@ def test_biological_policy_preserves_identity_and_rejects_invalid_retained_resid
     )
     selected = load_selected_biological_structure(StructureInput(source=source, chain_id="A", model_index=0))
 
-    with pytest.raises(GearNetPreprocessingError, match="missing CA.*A:5::SER"):
+    with pytest.raises(GearNetPreprocessingError, match=r"missing CA.*A:5::SER"):
         select_gearnet_transport_records(selected)
 
     source.write_text(
@@ -242,9 +239,10 @@ def test_native_dependency_boundary_and_current_cache_identity(monkeypatch):
     assert GEARNET_EDGE_ENCODER_VERSION == "3"
     assert GEARNET_EDGE_IMPLEMENTATION.endswith("GearNetEdgeBackend")
 
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name, package=None: None)
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, package=None: None)  # noqa: ARG005
     unavailable = dependencies.probe_gearnet_availability()
     assert unavailable.available is False
+    assert unavailable.reason is not None
     assert "torch" in unavailable.reason
     assert "erislib[gearnet]" in unavailable.reason
 
