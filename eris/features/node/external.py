@@ -434,7 +434,7 @@ def strict_align_external_payload(
     chain_ids: Sequence[str],
     model_index: int,
 ) -> np.ndarray:
-    """Return payload rows ordered to match ``target_residue_ids``, requiring identical ID sets."""
+    """Return payload rows in ``target_residue_ids`` order; chains, model and ID sets must match exactly."""
     selected_chain_ids = tuple(chain_ids)
     if payload.chain_ids != selected_chain_ids:
         raise ExternalFeatureError(

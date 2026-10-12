@@ -150,3 +150,16 @@ if "torch" not in status.reason:
     raise SystemExit("GearNet unavailable status must identify the missing dependency")
 """
     )
+
+
+def test_import_eris_does_not_load_gearnet_backend() -> None:
+    script = """
+import sys
+
+import eris
+
+loaded = sorted(m for m in sys.modules if m.startswith("eris.core.learned.backends"))
+if loaded:
+    raise SystemExit(f"GearNet backend loaded by import eris: {loaded}")
+"""
+    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603

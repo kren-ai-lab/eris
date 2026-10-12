@@ -135,7 +135,6 @@ class StructureArtifact:
             self.meta = canonical_meta
 
     def validate(self, strict: bool = False) -> None:  # noqa: ARG002, FBT001, FBT002
-        # Validation is always strict; `strict` is kept for existing callers.
         """Validate ``meta`` against ``data``; ``strict`` is accepted for compatibility and ignored."""
         _validate_artifact(self.meta, self.data)
 
@@ -161,8 +160,7 @@ class StructureArtifact:
 
     @staticmethod
     def load(indir: Path, *, strict: bool = False) -> StructureArtifact:  # noqa: ARG004
-        # Loading always validates strictly; `strict` is kept for existing callers.
-        """Read and strictly validate an artifact directory."""
+        """Read and strictly validate an artifact directory; ``strict`` is ignored."""
         if not indir.exists():
             raise ArtifactValidationError(f"Artifact directory does not exist: {indir}")
         if not indir.is_dir():

@@ -7,8 +7,6 @@ import types
 from dataclasses import MISSING, fields
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
-from eris.core.learned.backends.gearnet import dependencies
-from eris.core.learned.registry import learned_registry
 from eris.core.registry import RepresentationInfo, get_encoder_info, list_encoders
 from eris.exceptions import RepresentationNotFoundError
 
@@ -113,11 +111,16 @@ def get_representation_info(name: str) -> dict[str, Any]:
 
 def list_embedders() -> list[str]:
     """Return registered learned representation names without probing availability."""
+    from eris.core.learned.registry import learned_registry  # noqa: PLC0415
+
     return learned_registry.names()
 
 
 def get_embedder_info(name: str) -> dict[str, Any]:
     """Return JSON-safe public metadata and lazy availability for one embedder."""
+    from eris.core.learned.backends.gearnet import dependencies  # noqa: PLC0415
+    from eris.core.learned.registry import learned_registry  # noqa: PLC0415
+
     try:
         info = learned_registry.get_info(name)
     except KeyError as error:

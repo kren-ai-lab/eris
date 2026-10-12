@@ -15,14 +15,8 @@ from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import parser_hint_from_source, parser_hint_matches_format
 from eris.core.hashing import sha256_file
 from eris.core.io import resolve_structure_input
-from eris.core.learned.execution import (
-    StructuralExecutionConfig,
-    execution_request_cache_identity,
-)
-from eris.core.learned.registry import learned_registry
-from eris.core.learned.runner import _cached_execution_matches, _cached_model_identity
 from eris.core.registry import get_encoder, get_encoder_info, resolve_representation_config
-from eris.core.types import StructureInput
+from eris.core.types import StructureInput, _chain_ids
 from eris.exceptions import ConfigError, ExecutionError
 from eris.pipelines.manifest import (
     BatchResultRow,
@@ -56,8 +50,8 @@ class _ResumeIdentity:
     execution: dict[str, str] | None = None
 
 
-def _coerce_bool(value: bool, name: str) -> bool:  # noqa: FBT001
-    if type(value) is not bool:
+def _coerce_bool(value: object, name: str) -> bool:
+    if not isinstance(value, bool):
         raise ConfigError(f"{name} must be a bool")
     return value
 
@@ -175,6 +169,12 @@ def _learned_resume_identity(
     precision: str,
     chain_ids: tuple[str, ...],
 ) -> _ResumeIdentity:
+    from eris.core.learned.execution import (  # noqa: PLC0415
+        StructuralExecutionConfig,
+        execution_request_cache_identity,
+    )
+    from eris.core.learned.registry import learned_registry  # noqa: PLC0415
+
     info = eris.get_embedder_info(representation)
     registry_info = learned_registry.get_info(representation)
     config = registry_info.config_type(
@@ -204,11 +204,6 @@ def _target_dir(artifact_root: Path, row: StructureManifestRow, representation: 
 
 def _resolved_row_input(row: StructureManifestRow) -> StructureInput:
     return resolve_structure_input(StructureInput(source=row.path, chain_id=row.chain, model_index=row.model))
-
-
-def _resolved_chain_ids(row: StructureManifestRow) -> tuple[str, ...]:
-    # resolve_structure_input always returns a tuple of selected chains.
-    return cast("tuple[str, ...]", _resolved_row_input(row).chain_id)
 
 
 def _staging_dir(target: Path) -> Path:
@@ -309,8 +304,11 @@ def _artifact_matches_request(
     )
     if not matches:
         return False
-    if identity.model is not None and _cached_model_identity(meta.get("model")) != identity.model:
-        return False
+    if identity.model is not None:
+        from eris.core.learned.runner import _cached_model_identity  # noqa: PLC0415
+
+        if _cached_model_identity(meta.get("model")) != identity.model:
+            return False
     if identity.model is None and "model" in meta:
         return False
     if (
@@ -322,6 +320,8 @@ def _artifact_matches_request(
         return False
     if identity.execution is None:
         return True
+    from eris.core.learned.runner import _cached_execution_matches  # noqa: PLC0415
+
     return _cached_execution_matches(
         meta.get("provenance"), requested_precision=identity.execution["precision"]
     )
@@ -500,7 +500,7 @@ def batch_encode(
         identity_factory=lambda row: _explicit_resume_identity(
             representation_name,
             explicit_configs_by_id[row.id],
-            _resolved_chain_ids(row),
+            _chain_ids(_resolved_row_input(row)),
         ),
         execute=lambda row: eris.encode(
             row.path,
@@ -552,7 +552,7 @@ def batch_embed(
             output_mode=output_mode,
             device=device,
             precision=precision,
-            chain_ids=_resolved_chain_ids(row),
+            chain_ids=_chain_ids(_resolved_row_input(row)),
         ),
         execute=lambda row: eris.embed(
             row.path,

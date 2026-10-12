@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
 import typer
 
@@ -14,8 +15,8 @@ app = typer.Typer(add_completion=False, help="Exports artifacts to torch or PyG.
 
 @app.command("to-torch")
 def to_torch(
-    artifact_dir: Path = typer.Option(..., "--artifact-dir", exists=True, readable=True),  # noqa: B008
-    out_path: Path | None = typer.Option(None, "--out", help="Output .pt file"),  # noqa: B008
+    artifact_dir: Annotated[Path, typer.Option("--artifact-dir", exists=True, readable=True)],
+    out_path: Annotated[Path | None, typer.Option("--out", help="Output .pt file")] = None,
     device: str | None = typer.Option(None, "--device"),
     matrix_as_channel: bool = typer.Option(True, "--matrix-as-channel"),
     overwrite: bool = typer.Option(False, "--overwrite"),
@@ -39,8 +40,8 @@ def to_torch(
 
 @app.command("to-pyg")
 def to_pyg(
-    artifact_dir: Path = typer.Option(..., "--artifact-dir", exists=True, readable=True),  # noqa: B008
-    out_path: Path | None = typer.Option(None, "--out", help="Output .pt file"),  # noqa: B008
+    artifact_dir: Annotated[Path, typer.Option("--artifact-dir", exists=True, readable=True)],
+    out_path: Annotated[Path | None, typer.Option("--out", help="Output .pt file")] = None,
     device: str | None = typer.Option(None, "--device"),
     overwrite: bool = typer.Option(False, "--overwrite"),
 ) -> None:

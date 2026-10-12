@@ -1,4 +1,4 @@
-"""Command that packs artifacts into one dataset."""
+"""Command that writes a metadata-only index over artifact directories."""
 
 from __future__ import annotations
 

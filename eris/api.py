@@ -6,8 +6,6 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from eris.core.learned import StructuralEmbedderRunner, StructuralExecutionConfig
-from eris.core.learned.registry import learned_registry
 from eris.core.registry import (
     get_encoder,
     resolve_representation_config,
@@ -163,6 +161,9 @@ def embed(
     use_cache: bool = True,
 ) -> StructureArtifact:
     """Embed one structure with a registered learned representation."""
+    from eris.core.learned import StructuralEmbedderRunner, StructuralExecutionConfig  # noqa: PLC0415
+    from eris.core.learned.registry import learned_registry  # noqa: PLC0415
+
     try:
         info = learned_registry.get_info(representation)
     except KeyError as error:

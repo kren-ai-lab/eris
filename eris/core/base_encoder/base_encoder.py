@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
@@ -27,6 +27,7 @@ from eris.core.cache import (
 )
 from eris.core.hashing import sha256_file
 from eris.core.io import load_structure, resolve_structure_input
+from eris.core.types import _chain_ids
 
 if TYPE_CHECKING:
     from eris.core.config import CanonicalRepresentationConfig, _CommonGeometryConfig
@@ -35,11 +36,6 @@ if TYPE_CHECKING:
     from eris.core.types import StructureInput
 
 logger = logging.getLogger(__name__)
-
-
-def _chain_ids(inp: StructureInput) -> tuple[str, ...]:
-    """Return the chain selection of an input whose selection is already normalized."""
-    return cast("tuple[str, ...]", inp.chain_id)
 
 
 def _check_output_values(data: dict[str, np.ndarray]) -> None:

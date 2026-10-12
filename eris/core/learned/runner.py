@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from eris.core.artifact_schema import build_input_metadata, compute_config_fingerprint
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
@@ -34,7 +34,7 @@ from eris.core.learned.registry import EmbedderInfo, learned_registry
 from eris.core.learned.types import (
     validate_embedding_result,
 )
-from eris.core.types import StructureInput
+from eris.core.types import StructureInput, _chain_ids
 from eris.exceptions import ConfigError, ExecutionError
 
 _GRANULARITY_BY_MODE = {
@@ -54,11 +54,6 @@ _OUTPUT_ORDERS = {
         ("node_embedding", "global_embedding", "node_ids", "chain_id", "valid_mask"),
     ),
 }
-
-
-def _chain_ids(structure_input: StructureInput) -> tuple[str, ...]:
-    # StructureInput normalizes a selected chain to a tuple; callers pass resolved inputs.
-    return cast("tuple[str, ...]", structure_input.chain_id)
 
 
 def _cached_model_identity(model_metadata: object) -> dict[str, object] | None:

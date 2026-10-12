@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import cast
 
 
 @dataclass(frozen=True)
@@ -16,7 +17,7 @@ class StructureInput:
     model_index: int = 0
 
     def __post_init__(self) -> None:
-        """Validate the input and normalize the chain selection to a tuple."""
+        """Validate the input, coerce ``source`` to str and the chain selection to a tuple."""
         source = os.fspath(self.source)
         if not isinstance(source, str) or not source:
             raise TypeError("source must be a non-empty path string")
@@ -40,3 +41,8 @@ class StructureInput:
         if len(normalized) != len(set(normalized)):
             raise ValueError("chain_id sequence must not contain duplicates")
         object.__setattr__(self, "chain_id", normalized)
+
+
+def _chain_ids(inp: StructureInput) -> tuple[str, ...]:
+    """Return the chain selection of an input already resolved to explicit chains."""
+    return cast("tuple[str, ...]", inp.chain_id)

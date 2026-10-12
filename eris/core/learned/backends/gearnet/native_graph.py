@@ -78,6 +78,14 @@ class _KdNode:
     right: _KdNode | None = None
 
 
+def _children_near_first(node: _KdNode, query: np.ndarray) -> tuple[_KdNode, _KdNode]:
+    assert node.axis is not None and node.cut is not None  # noqa: S101, PT018
+    assert node.left is not None and node.right is not None  # noqa: S101, PT018
+    if np.float32(2.0) * (query[node.axis] - node.cut) < 0:
+        return node.left, node.right
+    return node.right, node.left
+
+
 class _ReferenceKdTree:
     """Minimal CPU radius / kNN traversal matching frozen reference search order."""
 
@@ -157,13 +165,7 @@ class _ReferenceKdTree:
                     if distance < radius_squared:
                         result.append(int(index))
                 return
-            assert node.axis is not None and node.cut is not None  # noqa: S101, PT018
-            value = query[node.axis]
-            if np.float32(2.0) * (value - node.cut) < 0:
-                first, second = node.left, node.right
-            else:
-                first, second = node.right, node.left
-            assert first is not None and second is not None  # noqa: S101, PT018
+            first, second = _children_near_first(node, query)
             visit(first)
             visit(second)
 
@@ -187,13 +189,7 @@ class _ReferenceKdTree:
                         if len(found) > count:
                             found.pop()
                 return
-            assert node.axis is not None and node.cut is not None  # noqa: S101, PT018
-            value = query[node.axis]
-            if np.float32(2.0) * (value - node.cut) < 0:
-                first, second = node.left, node.right
-            else:
-                first, second = node.right, node.left
-            assert first is not None and second is not None  # noqa: S101, PT018
+            first, second = _children_near_first(node, query)
             visit(first)
             visit(second)
 

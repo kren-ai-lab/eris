@@ -47,7 +47,7 @@ class BiologicalIdentityTable:
     records: tuple[BiologicalResidueIdentity, ...]
 
     def __post_init__(self) -> None:
-        """Validate that identity indexes are contiguous and ordered."""
+        """Validate contiguous ordered indexes and unique non-empty node IDs."""
         if any(type(record.index) is not int or record.index < 0 for record in self.records):
             raise GearNetPreprocessingError("biological identity indexes must be non-negative integers")
         indexes = [record.index for record in self.records]

@@ -1,4 +1,4 @@
-"""Packing of artifacts into a single indexed dataset."""
+"""Metadata-only indexing of artifact directories into a packed dataset index."""
 
 from __future__ import annotations
 

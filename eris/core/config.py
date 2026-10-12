@@ -605,7 +605,7 @@ class ResiduePointCloudConfig(_ResidueNodeFeatureConfig):
     granularity: ClassVar[Literal["residue"]] = "residue"
 
     def __post_init__(self) -> None:
-        """Validate and normalize the configuration fields."""
+        """Reject the residue-graph-only ``interface`` node feature."""
         super().__post_init__()
         if any(token.name == "interface" for token in self.node_attr_mode.tokens):
             raise ValueError("interface characterization is supported only by residue graphs")

@@ -200,7 +200,7 @@ def _vector_to_torch(artifact: StructureArtifact) -> dict[str, Any]:
     return out
 
 
-def _as_flat_python_list(value: Any, *, key: str) -> list[Any]:  # noqa: ARG001
+def _as_flat_python_list(value: Any) -> list[Any]:
     array = np.asarray(value)
     if array.ndim == 0:
         return [array.item()]
@@ -238,12 +238,12 @@ def _learned_to_torch(artifact: StructureArtifact) -> dict[str, Any]:
             raise TorchExportError(
                 f"Learned node_embedding must have shape (N, D), got {tuple(node_embedding.shape)}"
             )
-        node_ids = _as_flat_python_list(_require_array(data, "node_ids"), key="node_ids")
+        node_ids = _as_flat_python_list(_require_array(data, "node_ids"))
         if len(node_ids) != int(node_embedding.shape[0]):
             raise TorchExportError("Learned node_ids length must match node_embedding row count.")
         out["node_embedding"] = node_embedding
         out["node_ids"] = node_ids
-        chain_ids = _as_flat_python_list(_require_array(data, "chain_id"), key="chain_id")
+        chain_ids = _as_flat_python_list(_require_array(data, "chain_id"))
         if len(chain_ids) != int(node_embedding.shape[0]):
             raise TorchExportError("Learned chain_id length must match node_embedding row count.")
         out["chain_id"] = chain_ids

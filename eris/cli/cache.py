@@ -107,7 +107,7 @@ def clear_cache(
         help="Confirm cache deletion without an interactive prompt.",
     ),
 ) -> None:
-    """Clear one known Eris cache namespace."""
+    """Clear the artifact cache, the checkpoint cache, or both."""
     cache_root = default_cache_root()
     if not yes and not typer.confirm(
         f"Clear Eris {target.value} cache? This cannot be undone.",

@@ -77,7 +77,7 @@ def safe_float(x: np.ndarray, *, missing: str = "zero") -> np.ndarray:
 
 
 def normalize_scalar_params(label: str, params: dict[str, Any]) -> dict[str, Any]:
-    """Validate the ``normalization`` parameter of a scalar feature."""
+    """Validate and normalize the ``normalization`` parameter of a scalar feature."""
     unknown = sorted(set(params) - {"normalization"})
     if unknown:
         raise ValueError(f"Unknown {label} parameters: {unknown}")
