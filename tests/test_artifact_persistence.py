@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 
 import eris.core.artifacts as artifacts_module
-from eris.core.artifact_schema_v2 import (
-    ArtifactSchemaV2ValidationError,
+from eris.core.artifact_schema import (
+    ArtifactValidationError,
     build_artifact_metadata,
     build_feature_keys,
     build_input_metadata,
@@ -74,7 +74,7 @@ def _explicit_artifact() -> StructureArtifact:
         ],
         feature_keys=build_feature_keys(node_attr_keys=["mass", "charge"]),
         counts={"n_nodes": 2, "n_edges": 2, "n_self_loops": 0},
-        extensions={"tests.schema_v2": {"reviewed": True}},
+        extensions={"tests.schema": {"reviewed": True}},
     )
     return StructureArtifact(data=data, meta=meta)
 
@@ -298,7 +298,7 @@ def test_residue_pool_rejects_incompatible_granularity_and_malformed_source():
         pool(empty)
 
 
-def test_explicit_v2_finalize_is_idempotent_and_save_preserves_contract(tmp_path):
+def test_explicit_finalize_is_idempotent_and_save_preserves_contract(tmp_path):
     artifact = _explicit_artifact()
     meta_before = deepcopy(artifact.meta)
     data_before = {name: array.copy() for name, array in artifact.data.items()}
@@ -339,7 +339,7 @@ def test_explicit_v2_finalize_is_idempotent_and_save_preserves_contract(tmp_path
             np.testing.assert_array_equal(stored_data[name], artifact.data[name])
 
 
-def test_learned_v2_validate_finalize_and_save(tmp_path):
+def test_learned_validate_finalize_and_save(tmp_path):
     artifact = _learned_artifact()
     data_before = {name: array.copy() for name, array in artifact.data.items()}
 
@@ -348,7 +348,7 @@ def test_learned_v2_validate_finalize_and_save(tmp_path):
     artifact.save(tmp_path / "learned")
 
     stored_meta = json.loads((tmp_path / "learned" / "meta.json").read_text(encoding="utf-8"))
-    assert stored_meta["schema_version"] == 2
+    assert stored_meta["schema_version"] == 1
     assert stored_meta["representation_family"] == "learned"
     assert stored_meta["representation_type"] == "embedding"
     assert stored_meta["coordinate_source"] == "model_specific"
@@ -363,22 +363,22 @@ def test_learned_v2_validate_finalize_and_save(tmp_path):
     _assert_data_unchanged(artifact, data_before)
 
 
-def test_valid_v2_finalize_canonicalizes_only_after_validation():
+def test_valid_finalize_canonicalizes_only_after_validation():
     artifact = _explicit_artifact()
-    artifact.meta["extensions"]["tests.schema_v2"]["labels"] = ("first", "second")
+    artifact.meta["extensions"]["tests.schema"]["labels"] = ("first", "second")
     original_meta = artifact.meta
     data_before = {name: array.copy() for name, array in artifact.data.items()}
 
     artifact.validate()
     assert artifact.meta is original_meta
-    assert artifact.meta["extensions"]["tests.schema_v2"]["labels"] == (
+    assert artifact.meta["extensions"]["tests.schema"]["labels"] == (
         "first",
         "second",
     )
 
     artifact.finalize()
     assert artifact.meta is not original_meta
-    assert artifact.meta["extensions"]["tests.schema_v2"]["labels"] == [
+    assert artifact.meta["extensions"]["tests.schema"]["labels"] == [
         "first",
         "second",
     ]
@@ -396,7 +396,7 @@ def test_valid_v2_finalize_canonicalizes_only_after_validation():
     ],
     ids=["object", "complex"],
 )
-def test_unsafe_v2_payload_fails_before_filesystem_mutation(tmp_path, unsafe):
+def test_unsafe_payload_fails_before_filesystem_mutation(tmp_path, unsafe):
     artifact = _explicit_artifact()
     artifact.data["node_attr"] = unsafe
     meta_before = deepcopy(artifact.meta)
@@ -405,16 +405,15 @@ def test_unsafe_v2_payload_fails_before_filesystem_mutation(tmp_path, unsafe):
     with pytest.raises(ArtifactValidationError) as raised:
         artifact.save(target)
 
-    assert isinstance(raised.value.__cause__, ArtifactSchemaV2ValidationError)
     assert artifact.meta == meta_before
     assert artifact.data["node_attr"] is unsafe
     assert not target.exists()
 
 
 @pytest.mark.parametrize("bad_value", [float("nan")], ids=["nan"])
-def test_non_finite_v2_metadata_fails_without_mutation(tmp_path, bad_value):
+def test_non_finite_metadata_fails_without_mutation(tmp_path, bad_value):
     artifact = _explicit_artifact()
-    artifact.meta["extensions"]["tests.schema_v2"]["non_finite"] = bad_value
+    artifact.meta["extensions"]["tests.schema"]["non_finite"] = bad_value
     original_meta = artifact.meta
     data_before = {name: array.copy() for name, array in artifact.data.items()}
     target = tmp_path / "non-finite"
@@ -422,33 +421,32 @@ def test_non_finite_v2_metadata_fails_without_mutation(tmp_path, bad_value):
     with pytest.raises(ArtifactValidationError) as raised:
         artifact.save(target)
 
-    assert isinstance(raised.value.__cause__, ArtifactSchemaV2ValidationError)
     assert artifact.meta is original_meta
-    assert artifact.meta["extensions"]["tests.schema_v2"]["non_finite"] is bad_value
+    assert artifact.meta["extensions"]["tests.schema"]["non_finite"] is bad_value
     _assert_data_unchanged(artifact, data_before)
     assert not target.exists()
 
 
-def test_v2_save_validate_false_cannot_bypass_strict_validation(tmp_path):
+def test_save_enforces_strict_validation(tmp_path):
     artifact = _explicit_artifact()
     artifact.meta["counts"]["n_nodes"] = 99
     meta_before = deepcopy(artifact.meta)
     target = tmp_path / "invalid-counts"
 
     with pytest.raises(ArtifactValidationError, match="n_nodes"):
-        artifact.save(target, validate=False)
+        artifact.save(target)
 
     assert artifact.meta == meta_before
     assert not target.exists()
 
 
 @pytest.mark.parametrize("operation", ["finalize"])
-def test_invalid_v2_operations_do_not_mutate_artifact(tmp_path, operation):
+def test_invalid_operations_do_not_mutate_artifact(tmp_path, operation):
     artifact = _explicit_artifact()
     artifact.meta["counts"]["n_nodes"] = 99
     meta_before = deepcopy(artifact.meta)
     data_before = {name: array.copy() for name, array in artifact.data.items()}
-    target = tmp_path / "invalid-v2"
+    target = tmp_path / "invalid"
 
     with pytest.raises(ArtifactValidationError, match="n_nodes"):
         if operation == "validate":
@@ -489,28 +487,14 @@ def test_invalid_schema_versions_reject_without_mutation(
     assert not target.exists()
 
 
-def test_versionless_metadata_is_rejected_by_the_schema_v2_boundary():
+def test_versionless_metadata_is_rejected_by_the_schema_boundary():
     artifact = StructureArtifact(
         data={},
         meta={"encoder_name": "legacy", "representation_name": "mixed_identity"},
     )
 
-    with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
+    with pytest.raises(ArtifactValidationError, match="missing required fields"):
         artifact.finalize()
-
-
-def test_v1_save_validate_false_cannot_bypass_hard_cut(tmp_path):
-    artifact = StructureArtifact(
-        data={"value": np.array([1], dtype=np.float32)},
-        meta={"schema_version": 1},
-    )
-
-    target = tmp_path / "v1-unvalidated"
-    with pytest.raises(ArtifactValidationError, match="Schema v1 is no longer supported"):
-        artifact.save(target, validate=False)
-
-    assert artifact.meta["schema_version"] == 1
-    assert not target.exists()
 
 
 def test_staging_failure_preserves_existing_artifact_and_cleans_temps(
@@ -539,7 +523,7 @@ def test_staging_failure_preserves_existing_artifact_and_cleans_temps(
     assert not [path for path in target.iterdir() if path.name.startswith(".eris-")]
 
 
-def test_v2_save_replaces_canonical_files_and_leaves_unrelated_files(tmp_path):
+def test_save_replaces_canonical_files_and_leaves_unrelated_files(tmp_path):
     target = tmp_path / "existing"
     target.mkdir()
     (target / "data.npz").write_bytes(b"old data")
@@ -549,15 +533,15 @@ def test_v2_save_replaces_canonical_files_and_leaves_unrelated_files(tmp_path):
     artifact = _explicit_artifact()
     artifact.save(target)
 
-    assert json.loads((target / "meta.json").read_text(encoding="utf-8"))["schema_version"] == 2
+    assert json.loads((target / "meta.json").read_text(encoding="utf-8"))["schema_version"] == 1
     with np.load(target / "data.npz", allow_pickle=False) as stored_data:
         assert stored_data.files == [output["name"] for output in artifact.meta["outputs"]]
     assert (target / "unrelated.txt").read_text(encoding="utf-8") == "keep"
     assert not [path for path in target.iterdir() if path.name.startswith(".eris-")]
 
 
-def test_v2_load_uses_persisted_contract(tmp_path):
-    target = tmp_path / "v2"
+def test_load_uses_persisted_contract(tmp_path):
+    target = tmp_path / "artifacts"
     artifact = _explicit_artifact()
     artifact.save(target)
 

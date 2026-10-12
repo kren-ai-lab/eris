@@ -6,9 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from eris.core.artifact_schema_v2 import compute_config_fingerprint
+from eris.core.artifact_schema import compute_config_fingerprint
 from eris.core.artifacts import StructureArtifact
-from eris.core.cache import DiskCache, compute_cache_key_v2
+from eris.core.cache import DiskCache, compute_cache_key
 from eris.core.config import ResiduePointCloudConfig
 from eris.core.hashing import sha256_file
 from eris.core.io import StructureLoadError
@@ -164,7 +164,7 @@ def test_old_residue_cache_key_cannot_satisfy_new_output_contract(tmp_path: Path
 
     encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
     parameters = encoder.config.to_dict()
-    old_key = compute_cache_key_v2(
+    old_key = compute_cache_key(
         representation_name=encoder.name,
         encoder_implementation=encoder.encoder_implementation,
         encoder_version="0.1.0",
@@ -176,7 +176,7 @@ def test_old_residue_cache_key_cannot_satisfy_new_output_contract(tmp_path: Path
         model_index=structure_input.model_index,
         chain_ids=structure_input.chain_id,
     )
-    current_key = compute_cache_key_v2(
+    current_key = compute_cache_key(
         representation_name=encoder.name,
         encoder_implementation=encoder.encoder_implementation,
         encoder_version=encoder.version,
@@ -188,11 +188,30 @@ def test_old_residue_cache_key_cannot_satisfy_new_output_contract(tmp_path: Path
         model_index=structure_input.model_index,
         chain_ids=structure_input.chain_id,
     )
-    cache.set_v2(old_key, stale)
+    cache.set(old_key, stale)
 
     assert encoder.version == "0.1.3"
     assert old_key != current_key
-    assert cache.get_v2(old_key) is not None
+    assert cache.get(old_key) is not None
     result = encoder.encode(structure_input)
     assert result.data["omitted_residue_ids"].tolist() == ["A:16::GLY"]
-    assert cache.get_v2(current_key) is not None
+    assert cache.get(current_key) is not None
+
+
+@pytest.mark.parametrize("representation", ["residue_point_cloud", "atom_point_cloud"])
+def test_encode_parses_the_structure_once_on_cache_miss(monkeypatch, representation):
+    import gemmi
+
+    import eris
+
+    calls = []
+    real_read = gemmi.read_structure
+
+    def counting_read(*args, **kwargs):
+        calls.append(args[0])
+        return real_read(*args, **kwargs)
+
+    monkeypatch.setattr(gemmi, "read_structure", counting_read)
+    eris.encode("tests/data/1AQ2.pdb", representation=representation, use_cache=False)
+
+    assert len(calls) == 1

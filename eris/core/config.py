@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
@@ -15,7 +14,7 @@ from eris.features.feature_registry import (
     RESIDUE_NODE_REGISTRY,
 )
 from eris.features.interface import resolve_interface_cutoff
-from eris.features.utils import parse_mode
+from eris.features.utils import normalize_choice, parse_mode
 
 
 def _metadata(
@@ -78,16 +77,6 @@ def _require_optional_positive_float(name: str, value: Any) -> float | None:
     if value is None:
         return None
     return _require_float(name, value, minimum=0.0)
-
-
-def _normalize_choice(name: str, value: Any, choices: tuple[str, ...]) -> str:
-    if not isinstance(value, str):
-        raise TypeError(f"{name} must be a string")
-    normalized = value.strip().lower()
-    if normalized not in choices:
-        allowed = ", ".join(choices)
-        raise ValueError(f"{name} must be one of: {allowed}")
-    return normalized
 
 
 def _normalize_altloc(value: Any) -> str:
@@ -291,15 +280,6 @@ class CanonicalRepresentationConfig:
         """Return canonical scientific parameters used for config/cache identity."""
         return self.to_dict()
 
-    def to_json(self) -> str:
-        return json.dumps(
-            self.to_dict(),
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-            allow_nan=False,
-        )
-
 
 @dataclass(frozen=True, kw_only=True)
 class _CommonGeometryConfig(CanonicalRepresentationConfig):
@@ -397,7 +377,7 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
         object.__setattr__(
             self,
             "residue_center",
-            _normalize_choice("residue_center", self.residue_center, ("ca", "mean", "com")),
+            normalize_choice("residue_center", self.residue_center, ("ca", "mean", "com")),
         )
         amino_acids_only = _require_bool("amino_acids_only", self.amino_acids_only)
         if not amino_acids_only:
@@ -406,12 +386,12 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
         object.__setattr__(
             self,
             "altloc",
-            _normalize_choice("altloc", self.altloc, ("max_occupancy",)),
+            normalize_choice("altloc", self.altloc, ("max_occupancy",)),
         )
         object.__setattr__(
             self,
             "missing_residue_center",
-            _normalize_choice(
+            normalize_choice(
                 "missing_residue_center",
                 self.missing_residue_center,
                 ("skip", "error"),
@@ -420,7 +400,7 @@ class _ResidueSelectionConfig(_CommonGeometryConfig):
         object.__setattr__(
             self,
             "plddt_source",
-            _normalize_choice("plddt_source", self.plddt_source, ("none", "bfactor")),
+            normalize_choice("plddt_source", self.plddt_source, ("none", "bfactor")),
         )
 
 
@@ -674,7 +654,7 @@ class ResidueKNNGraphConfig(_ResidueGraphFeatureConfig):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        knn_mode = _normalize_choice("knn_mode", self.knn_mode, ("local", "global"))
+        knn_mode = normalize_choice("knn_mode", self.knn_mode, ("local", "global"))
         object.__setattr__(self, "knn_mode", knn_mode)
         object.__setattr__(
             self,
@@ -735,7 +715,7 @@ class ResidueDistogramConfig(_ResidueSelectionConfig):
 
 
 def _normalize_binned_dtype(value: Any) -> str:
-    return _normalize_choice("dtype", value, ("uint8", "uint16", "int16"))
+    return normalize_choice("dtype", value, ("uint8", "uint16", "int16"))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -790,7 +770,7 @@ class ResidueContactMapConfig(_ResidueSelectionConfig):
         object.__setattr__(
             self,
             "dtype",
-            _normalize_choice("dtype", self.dtype, ("uint8", "bool")),
+            normalize_choice("dtype", self.dtype, ("uint8", "bool")),
         )
 
 
@@ -887,13 +867,13 @@ class ResidueVoxelGridConfig(_ResidueSelectionConfig):
         object.__setattr__(
             self,
             "pool",
-            _normalize_choice("pool", self.pool, ("max", "sum", "mean")),
+            normalize_choice("pool", self.pool, ("max", "sum", "mean")),
         )
         object.__setattr__(self, "clamp", _require_bool("clamp", self.clamp))
         object.__setattr__(
             self,
             "dtype",
-            _normalize_choice("dtype", self.dtype, ("float32", "float16")),
+            normalize_choice("dtype", self.dtype, ("float32", "float16")),
         )
 
 

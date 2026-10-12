@@ -58,7 +58,7 @@ artifact = eris.encode(
     representation="residue_contact_map",
     use_cache=False,
 )
-if artifact.meta["schema_version"] != 2:
+if artifact.meta["schema_version"] != 1:
     raise SystemExit("core explicit encoding failed without Biotite")
 if "biotite" in sys.modules:
     raise SystemExit("unrelated explicit encoding imported Biotite")
@@ -107,7 +107,7 @@ artifact = eris.encode({str(PDB)!r}, representation="residue_contact_map", use_c
 target = Path({output})
 artifact.save(target)
 loaded_artifact = StructureArtifact.load(target, strict=True)
-assert loaded_artifact.meta["schema_version"] == 2
+assert loaded_artifact.meta["schema_version"] == 1
 
 runner = CliRunner()
 for args in (("--help",), ("representations", "list"), ("embedders", "list")):
@@ -134,7 +134,7 @@ import sys
 import eris
 import eris.core.learned
 from eris.core.learned.backends.gearnet import dependencies
-from importlib.metadata import PackageNotFoundError
+import importlib.util
 
 blocked = {"torch", "torch_geometric", "torchdrug", "torch_scatter", "torch_cluster", "rdkit"}
 loaded = sorted(blocked.intersection(sys.modules))
@@ -142,7 +142,7 @@ if loaded:
     raise SystemExit(f"optional frameworks loaded during learned metadata import: {loaded}")
 
 assert eris.get_embedder_info("gearnet_edge")["name"] == "gearnet_edge"
-dependencies._distribution_version = lambda name: (_ for _ in ()).throw(PackageNotFoundError(name))
+importlib.util.find_spec = lambda name, package=None: None
 status = dependencies.probe_gearnet_availability()
 if status.available:
     raise SystemExit("GearNet cannot be available while its frameworks are blocked")

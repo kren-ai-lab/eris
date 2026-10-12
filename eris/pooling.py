@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from eris.core.artifact_schema_v2 import (
+from eris.core.artifact_schema import (
     build_artifact_metadata,
     build_feature_keys,
     build_provenance,
@@ -15,18 +15,10 @@ from eris.core.artifact_schema_v2 import (
 )
 from eris.core.artifacts import StructureArtifact
 from eris.exceptions import ConfigError
+from eris.features.utils import normalize_choice
 
 _POOLING_MODES = {"mean", "sum", "max", "mean_std"}
 _NAN_POLICIES = {"omit", "propagate", "error"}
-
-
-def _normalize_choice(name: str, value: Any, choices: set[str]) -> str:
-    if not isinstance(value, str):
-        raise TypeError(f"{name} must be a string")
-    normalized = value.strip().lower()
-    if normalized not in choices:
-        raise ConfigError(f"{name} must be one of: {', '.join(sorted(choices))}")
-    return normalized
 
 
 def _canonical_array_sha256(array: np.ndarray) -> str:
@@ -190,8 +182,10 @@ def pool(
     if output is not None and not isinstance(output, (str, Path)):
         raise TypeError("output must be a string, pathlib.Path, or None")
 
-    mode = _normalize_choice("mode", mode, _POOLING_MODES)
-    nan_policy = _normalize_choice("nan_policy", nan_policy, _NAN_POLICIES)
+    mode = normalize_choice("mode", mode, sorted(_POOLING_MODES), error=ConfigError)
+    nan_policy = normalize_choice(
+        "nan_policy", nan_policy, sorted(_NAN_POLICIES), error=ConfigError
+    )
     values, source_keys = _source_values_and_keys(source_artifact, source)
     pooled_values = _reduce(values, mode, nan_policy)
     pooled_keys = _pooled_keys(mode, source_keys)

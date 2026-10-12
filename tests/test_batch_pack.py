@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 import eris
-from eris.core.artifact_schema_v2 import build_input_metadata
+from eris.core.artifact_schema import build_input_metadata
 from eris.core.artifacts import StructureArtifact
 from eris.core.hashing import sha256_file
 from eris.core.learned.artifacts import build_learned_artifact
@@ -121,7 +121,7 @@ def _learned_artifact(
     )
 
 
-def test_batch_encode_success_preserves_order_layout_and_strict_v2(tmp_path: Path) -> None:
+def test_batch_encode_success_preserves_order_layout_and_strict(tmp_path: Path) -> None:
     rows = [
         StructureManifestRow(id="first", path=str(PDB)),
         StructureManifestRow(id="second", path=str(PDB)),
@@ -404,7 +404,7 @@ def test_resume_regenerates_invalid_artifact_without_deleting_first(tmp_path, mo
 
     assert len(calls) == 1
     assert results[0].status == "success"
-    assert StructureArtifact.load(target, strict=True).meta["schema_version"] == 2
+    assert StructureArtifact.load(target, strict=True).meta["schema_version"] == 1
 
 
 @pytest.mark.parametrize(

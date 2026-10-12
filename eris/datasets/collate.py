@@ -333,11 +333,6 @@ def collate_graph(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def collate_graph_strict(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Compatibility wrapper for the canonical strict graph collate."""
-    return collate_graph(batch)
-
-
 def collate_cloud(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Canonical point-cloud collate using concatenation plus sample boundaries."""
     samples = _batch_list(batch)
@@ -612,129 +607,10 @@ def collate_learned(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def collate_grid_pad(
-    batch: Sequence[Mapping[str, Any]],
-    *,
-    pad_value: float = 0.0,
-    return_mask: bool = False,
-) -> dict[str, Any]:
-    """
-    Explicit opt-in padding utility for voxel grids.
-
-    This helper is intentionally not the canonical grid collate. It remains available for
-    callers that knowingly request padded grid tensors and masks.
-    """
-    samples = _batch_list(batch)
-    xs = [_require_tensor(sample, index, "x", ndim=4) for index, sample in enumerate(samples)]
-    device = xs[0].device
-    dtype = xs[0].dtype
-
-    cs = [int(x.shape[0]) for x in xs]
-    gs = [int(x.shape[-1]) for x in xs]
-
-    cmax = max(cs)
-    gmax = max(gs)
-
-    out_x = torch.full(
-        (len(samples), cmax, gmax, gmax, gmax), pad_value, dtype=dtype, device=device
-    )
-
-    for index, x in enumerate(xs):
-        channels, grid = cs[index], gs[index]
-        out_x[index, :channels, :grid, :grid, :grid] = x
-
-    out: dict[str, Any] = {"x": out_x, "c": cs, "g": gs}
-
-    if "id" in samples[0]:
-        out["id"] = [sample.get("id") for sample in samples]
-    if "channels" in samples[0]:
-        out["channels"] = [sample.get("channels") for sample in samples]
-
-    for key in ("voxel_size", "origin", "centroid"):
-        if key in samples[0]:
-            out[key] = [sample.get(key) for sample in samples]
-
-    if return_mask:
-        mask = torch.zeros((len(samples), 1, gmax, gmax, gmax), dtype=torch.bool, device=device)
-        for index, grid in enumerate(gs):
-            mask[index, 0, :grid, :grid, :grid] = True
-        out["mask"] = mask
-
-    return out
-
-
-def collate_cloud_pad(
-    batch: Sequence[Mapping[str, Any]],
-    *,
-    pad_value_pos: float = 0.0,
-    pad_value_x: float = 0.0,
-    return_mask: bool = True,
-) -> dict[str, Any]:
-    """
-    Explicit opt-in padding utility for point clouds.
-
-    Canonical cloud batching is handled by ``collate_cloud`` using concatenation.
-    """
-    samples = _batch_list(batch)
-    positions = [
-        _require_tensor(sample, index, "pos", ndim=2) for index, sample in enumerate(samples)
-    ]
-    device = positions[0].device
-    dtype_pos = positions[0].dtype
-
-    ns = [int(pos.shape[0]) for pos in positions]
-    nmax = max(ns)
-
-    out_pos = torch.full(
-        (len(samples), nmax, 3),
-        pad_value_pos,
-        dtype=dtype_pos,
-        device=device,
-    )
-
-    has_x = ("x" in samples[0]) and (samples[0]["x"] is not None)
-    out_x = None
-    if has_x:
-        xs = [_require_tensor(sample, index, "x", ndim=2) for index, sample in enumerate(samples)]
-        feature_width = int(xs[0].shape[1])
-        dtype_x = xs[0].dtype
-        out_x = torch.full(
-            (len(samples), nmax, feature_width),
-            pad_value_x,
-            dtype=dtype_x,
-            device=device,
-        )
-
-    for index, sample in enumerate(samples):
-        count = ns[index]
-        out_pos[index, :count, :] = positions[index]
-        if has_x and out_x is not None:
-            out_x[index, :count, :] = _require_tensor(sample, index, "x", ndim=2)
-
-    out: dict[str, Any] = {"pos": out_pos, "n": ns}
-
-    if has_x and out_x is not None:
-        out["x"] = out_x
-
-    if return_mask:
-        mask = torch.zeros((len(samples), nmax), dtype=torch.bool, device=device)
-        for index, count in enumerate(ns):
-            mask[index, :count] = True
-        out["mask"] = mask
-
-    if "id" in samples[0]:
-        out["id"] = [sample.get("id") for sample in samples]
-
-    return out
-
-
 __all__ = [
     "collate_cloud",
-    "collate_cloud_pad",
     "collate_graph",
-    "collate_graph_strict",
     "collate_grid",
-    "collate_grid_pad",
     "collate_learned",
     "collate_matrix",
 ]

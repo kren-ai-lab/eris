@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from eris.core.artifact_schema_v2 import (
+from eris.core.artifact_schema import (
     EncoderMetadata,
     InputMetadata,
     build_artifact_metadata,
@@ -89,7 +89,7 @@ def build_learned_artifact(
     encoder_metadata: EncoderMetadata,
     provenance_environment: Mapping[str, Any] | None = None,
 ) -> StructureArtifact:
-    """Translate framework-independent learned outputs into a strict Schema v2 artifact."""
+    """Translate framework-independent learned outputs into a strict artifact schema artifact."""
 
     if not isinstance(config, StructuralEmbedderConfig):
         raise TypeError("config must be a StructuralEmbedderConfig")

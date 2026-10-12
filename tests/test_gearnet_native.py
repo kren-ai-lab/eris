@@ -6,7 +6,6 @@ import hashlib
 import importlib.util
 import json
 import os
-from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 
 import numpy as np
@@ -248,18 +247,14 @@ def test_biological_policy_preserves_identity_and_rejects_invalid_retained_resid
 
 
 def test_native_dependency_boundary_and_current_cache_identity(monkeypatch):
-    assert [item.distribution for item in dependencies.GEARNET_DEPENDENCY_REQUIREMENTS] == ["torch"]
     assert GEARNET_EDGE_ENCODER_VERSION == "3"
     assert GEARNET_EDGE_IMPLEMENTATION.endswith("GearNetEdgeBackend")
 
-    monkeypatch.setattr(
-        dependencies,
-        "_distribution_version",
-        lambda name: (_ for _ in ()).throw(PackageNotFoundError(name)),
-    )
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, package=None: None)
     unavailable = dependencies.probe_gearnet_availability()
     assert unavailable.available is False
     assert "torch" in unavailable.reason
+    assert "erislib[gearnet]" in unavailable.reason
 
 
 @requires_torch

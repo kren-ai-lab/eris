@@ -2,19 +2,14 @@ from typing import Any, ClassVar
 
 import numpy as np
 
-from eris.core.artifact_schema_v2 import build_counts, build_feature_keys
+from eris.core.artifact_schema import build_counts, build_feature_keys
 from eris.core.base_encoder import EncodingContext
-from eris.core.contracts.graph_contract import GraphContract
-from eris.core.representations.base_rep import BaseRepresentation
 
 
-class GraphRepresentation(BaseRepresentation):
+class GraphRepresentation:
     representation_type: ClassVar[str] = "graph"
 
-    def contracts(self):
-        return [GraphContract()]
-
-    def feature_keys_v2(
+    def feature_keys(
         self,
         data: dict[str, Any],
         ctx: EncodingContext,
@@ -25,7 +20,7 @@ class GraphRepresentation(BaseRepresentation):
             graph_attr_keys=ctx.runtime["graph_attr_keys"] if "graph_attr" in data else None,
         )
 
-    def counts_v2(self, data: dict[str, Any]) -> dict[str, int]:
+    def counts(self, data: dict[str, Any]) -> dict[str, int]:
         edge_index = data["edge_index"]
         counts = {
             "n_nodes": int(data["pos"].shape[0]),

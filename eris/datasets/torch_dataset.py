@@ -93,7 +93,6 @@ class ErisFolderDataset:
     """
 
     index_path: str | Path
-    prefer: str = "grid_or_graph"
     device: str | None = None
     transform: Callable[[dict[str, Any]], dict[str, Any]] | None = None
     matrix_as_channel: bool = True
@@ -122,7 +121,6 @@ class ErisFolderDataset:
             try:
                 sample = to_torch(
                     artifact,
-                    prefer=self.prefer,
                     device=self.device,
                     matrix_as_channel=self.matrix_as_channel,
                 )

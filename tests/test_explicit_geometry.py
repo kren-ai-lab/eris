@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from eris.core.artifact_schema_v2 import compute_config_fingerprint, validate_schema_v2
+from eris.core.artifact_schema import compute_config_fingerprint, validate_schema
 from eris.core.hashing import sha256_file
 from eris.core.io import load_and_extract_residue
 from eris.core.representations.output_declarations import (
@@ -394,7 +394,7 @@ def test_experimental_structure_validation_panel(source: Path, expected_chains: 
         use_cache=False,
     ).encode(StructureInput(source=str(source)))
 
-    assert artifact.meta["schema_version"] == 2
+    assert artifact.meta["schema_version"] == 1
     assert artifact.meta["input"]["chain_ids"] == expected_chains
     assert list(dict.fromkeys(artifact.data["chain_id"].tolist())) == expected_chains
     assert artifact.data["node_attr"].dtype == np.float32
@@ -413,13 +413,13 @@ def test_experimental_structure_validation_panel(source: Path, expected_chains: 
 
 
 @pytest.mark.parametrize("encoder_type", ENCODER_TYPES, ids=lambda value: value.name)
-def test_all_explicit_encoders_return_complete_schema_v2(encoder_type):
+def test_all_explicit_encoders_return_complete_schema(encoder_type):
     encoder = encoder_type(use_cache=False)
     artifact = encoder.encode(StructureInput(source=str(PDB)))
     metadata = artifact.meta
 
-    assert validate_schema_v2(metadata, artifact.data, strict=True) == metadata
-    assert metadata["schema_version"] == 2
+    assert validate_schema(metadata, artifact.data, strict=True) == metadata
+    assert metadata["schema_version"] == 1
     assert metadata["representation_name"] == encoder.name
     assert metadata["representation_family"] == "explicit"
     assert metadata["representation_type"] == encoder.representation.representation_type
@@ -471,3 +471,33 @@ def test_all_explicit_encoders_return_complete_schema_v2(encoder_type):
         "grid_key",
         "grid_layout",
     }.isdisjoint(metadata)
+
+
+@pytest.mark.parametrize("representation", ["residue_distogram_bins", "residue_contact_map_bins"])
+@pytest.mark.parametrize(
+    ("num_bins", "add_no_contact_class", "fits"),
+    [(256, False, True), (255, True, True), (257, False, False), (256, True, False)],
+)
+def test_binned_class_ids_must_fit_the_output_dtype(
+    representation, num_bins, add_no_contact_class, fits
+):
+    import eris
+
+    params = {
+        "num_bins": num_bins,
+        "dmin": 0.0,
+        "dmax": 20.0,
+        "dtype": "uint8",
+        "add_no_contact_class": add_no_contact_class,
+    }
+    if fits:
+        artifact = eris.encode(
+            "tests/data/1AQ2.pdb", representation=representation, use_cache=False, **params
+        )
+        key = {"residue_distogram_bins": "dist_bins", "residue_contact_map_bins": "contact_bins"}
+        assert artifact.data[key[representation]].dtype == np.uint8
+    else:
+        with pytest.raises(ValueError, match="cannot represent"):
+            eris.encode(
+                "tests/data/1AQ2.pdb", representation=representation, use_cache=False, **params
+            )

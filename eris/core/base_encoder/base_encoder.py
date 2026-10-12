@@ -5,11 +5,10 @@ from copy import deepcopy
 
 logger = logging.getLogger(__name__)
 
-import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Tuple
 
 import numpy as np
 
@@ -17,29 +16,34 @@ from eris import exceptions as exc
 from eris.core.artifacts import StructureArtifact
 from eris.core.cache import (
     DiskCache,
-    compute_cache_key_v2,
+    compute_cache_key,
     parser_hint_from_source,
     parser_hint_matches_format,
 )
-from eris.core.contracts import UniversalContract
 from eris.core.types import StructureInput
 
 if TYPE_CHECKING:
-    from eris.core.cache import DiskCache
-    from eris.core.contracts.granularity import GranularityContract
-    from eris.core.representations.base_rep import BaseRepresentation
+    from eris.core.config import CanonicalRepresentationConfig
+
+
+def _check_output_values(data: Dict[str, np.ndarray]) -> None:
+    """Reject values that come from the input rather than our code; schema validation checks the shapes."""
+    if len(data["residue_ids"]) == 0:
+        raise exc.ExecutionError("Encoder output contains no atoms/residues")
+    for key in ("pos", "centroid", "grid"):
+        if key in data and not np.isfinite(data[key]).all():
+            raise ValueError(f"Encoder output {key!r} contains non-finite values")
+    if "edge_attr" in data and np.isinf(data["edge_attr"]).any():
+        raise ValueError("Encoder output 'edge_attr' contains infinite values")
+    edge_index = data.get("edge_index")
+    if edge_index is not None and edge_index.size > 0:
+        if edge_index.min() < 0 or edge_index.max() >= len(data["pos"]):
+            raise ValueError("Encoder output 'edge_index' contains out-of-range node indices")
 
 
 def _structure_validation(ctx: EncodingContext):
     strc = ctx.raw_structure
     n = int(strc["pos"].shape[0])
-
-    if n < 1:
-        logger.error(
-            f"Structure: {ctx.inp.source} does not contain residues/atoms.",
-            extra={"n_nodes": n, "input": ctx.inp.source},
-        )
-        raise exc.ExecutionError(f"Structure: {ctx.inp.source} does not contain residues/atoms.")
 
     if n < 20:
         logger.warning(
@@ -63,9 +67,9 @@ class EncodingContext:
     centroid: np.ndarray | None = None
     pos: np.ndarray | None = None
     runtime: dict[str, Any] = field(default_factory=dict)
+    structure: Any = None  # parsed gemmi.Structure, reused by _load_structure
 
 
-@dataclass
 class BaseEncoder(ABC):
     """
     Base class for all encoders.
@@ -76,49 +80,29 @@ class BaseEncoder(ABC):
     version: ClassVar[str] = "0.1.0"
     name: ClassVar[str]
     representation_family: ClassVar[str] = "explicit"
-    granularity_contract: ClassVar[GranularityContract]
-    representation: ClassVar[BaseRepresentation]
-    output_declarations_v2: ClassVar[Any]
+    granularity: ClassVar[str]
+    representation: ClassVar[Any]
+    output_declarations: ClassVar[Any]
+    config_type: ClassVar[type[CanonicalRepresentationConfig]]
 
-    # Instance attr
-    use_cache: bool = True
-    cache: Optional[DiskCache] = None
-    center: bool = True  # center coordinates around centroid
-    scale: Optional[float] = None  # if set, divide coords by this constant
-
-    def __post_init__(self):
-        mandatory = ["name", "granularity_contract", "representation"]
-        cls = type(self)
-
-        missing = [attr for attr in mandatory if not hasattr(cls, attr)]
-
-        if missing:
-            raise ValueError(f"Missing mandatory ClassVar in {cls.__name__}: {missing}")
-
-    def contracts(self):
-        return [UniversalContract(), self.granularity_contract] + self.representation.contracts()
-
-    # Add to exclude granularity_contract and representation?
-    def get_params(self) -> Dict[str, Any]:
-        EXCLUDE = {"cache", "use_cache", "granularity_contract", "representation"}
-
-        return {
-            k: v for k, v in self.__dict__.items() if k not in EXCLUDE and not k.startswith("_")
-        }
-
-    def fingerprint(self) -> str:
-        from eris.core.hashing import sha256_text
-
-        payload = {
-            "name": self.name,
-            "version": self.version,
-            "representation": self.representation.representation_type,
-            "level": self.granularity_contract.level,
-            "params": self.get_params(),
-        }
-
-        text = json.dumps(payload, sort_keys=True)
-        return sha256_text(text)
+    def __init__(
+        self,
+        *,
+        config: CanonicalRepresentationConfig | None = None,
+        use_cache: bool = True,
+        cache: DiskCache | None = None,
+        **representation_kwargs: Any,
+    ) -> None:
+        if config is None:
+            config = self.config_type(**representation_kwargs)
+        elif not isinstance(config, self.config_type):
+            raise TypeError(f"config must be of type {self.config_type.__name__}")
+        elif representation_kwargs:
+            names = ", ".join(sorted(representation_kwargs))
+            raise TypeError(f"config cannot be combined with representation kwargs: {names}")
+        self.config = config
+        self.use_cache = use_cache
+        self.cache = cache
 
     @property
     def encoder_implementation(self) -> str:
@@ -131,30 +115,21 @@ class BaseEncoder(ABC):
 
         pos_out = pos.astype(np.float32)
 
-        if self.center and n > 0:
+        if self.config.center:
             centroid = pos_out.mean(axis=0, keepdims=True).astype(np.float32)
             pos_out = pos_out - centroid
         else:
             centroid = np.zeros((1, 3), dtype=np.float32)
 
-        if self.scale is not None:
-            s = float(self.scale)
-            if s <= 0:
-                raise ValueError("scale must be > 0")
-            pos_out = (pos_out / s).astype(np.float32)
+        if self.config.scale is not None:
+            pos_out = (pos_out / float(self.config.scale)).astype(np.float32)
 
         return centroid, pos_out
 
-    def _feature_keys_v2(self, data: dict[str, Any], ctx: EncodingContext):
-        return self.representation.feature_keys_v2(data, ctx)
+    def _output_declarations(self, data: dict[str, np.ndarray]):
+        return self.output_declarations
 
-    def _counts_v2(self, data: dict[str, Any]):
-        return self.representation.counts_v2(data)
-
-    def _output_declarations_v2(self, data: dict[str, np.ndarray]):
-        return self.output_declarations_v2
-
-    def _build_metadata_v2(
+    def _build_metadata(
         self,
         ctx: EncodingContext,
         data: dict[str, np.ndarray],
@@ -162,30 +137,20 @@ class BaseEncoder(ABC):
         parameters: dict[str, Any],
         extensions: dict[str, dict[str, Any]] | None = None,
     ):
-        """Build prospective strict-valid v2 metadata without activating it in encode()."""
-        from eris.core.artifact_schema_v2 import (
+        """Build prospective strict-valid metadata without activating it in encode()."""
+        from eris.core.artifact_schema import (
             build_artifact_metadata,
             build_input_metadata,
             build_provenance,
         )
 
         if ctx.source_sha256 is None:
-            raise ValueError("prospective Schema v2 metadata requires ctx.source_sha256")
+            raise ValueError("prospective artifact metadata requires ctx.source_sha256")
         if ctx.input_format is None:
-            raise ValueError("prospective Schema v2 metadata requires ctx.input_format")
+            raise ValueError("prospective artifact metadata requires ctx.input_format")
 
         representation_name = self.config.representation_name
-        if representation_name != self.name:
-            raise ValueError(
-                "config representation_name does not match encoder name: "
-                f"{representation_name!r} != {self.name!r}"
-            )
         granularity = self.config.granularity
-        if granularity != self.granularity_contract.level:
-            raise ValueError(
-                "config granularity does not match encoder contract: "
-                f"{granularity!r} != {self.granularity_contract.level!r}"
-            )
 
         return build_artifact_metadata(
             data=data,
@@ -211,13 +176,13 @@ class BaseEncoder(ABC):
                 parameters=parameters,
                 chain_ids=ctx.inp.chain_id,
             ),
-            output_declarations=self._output_declarations_v2(data),
-            feature_keys=self._feature_keys_v2(data, ctx),
-            counts=self._counts_v2(data),
+            output_declarations=self._output_declarations(data),
+            feature_keys=self.representation.feature_keys(data, ctx),
+            counts=self.representation.counts(data),
             extensions=extensions,
         )
 
-    def _matches_cache_identity_v2(
+    def _matches_cache_identity(
         self,
         artifact: StructureArtifact,
         *,
@@ -238,9 +203,7 @@ class BaseEncoder(ABC):
         if not isinstance(input_meta, dict):
             return False
         return (
-            type(meta.get("schema_version")) is int
-            and meta["schema_version"] == 2
-            and meta.get("representation_name") == self.config.representation_name
+            meta.get("representation_name") == self.config.representation_name
             and meta.get("representation_family") == self.representation_family
             and meta.get("representation_type") == self.representation.representation_type
             and meta.get("granularity") == self.config.granularity
@@ -257,7 +220,7 @@ class BaseEncoder(ABC):
             and "model" not in meta
         )
 
-    def _refresh_cache_hit_source_v2(
+    def _refresh_cache_hit_source(
         self,
         artifact: StructureArtifact,
         *,
@@ -265,7 +228,7 @@ class BaseEncoder(ABC):
         source_sha256: str,
         extensions: dict[str, dict[str, Any]] | None,
     ) -> StructureArtifact:
-        from eris.core.artifact_schema_v2 import build_input_metadata
+        from eris.core.artifact_schema import build_input_metadata
 
         meta = deepcopy(artifact.meta)
         meta["input"] = build_input_metadata(
@@ -294,11 +257,12 @@ class BaseEncoder(ABC):
         return None
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
-        from eris.core.artifact_schema_v2 import compute_config_fingerprint
+        from eris.core.artifact_schema import compute_config_fingerprint
         from eris.core.hashing import sha256_file
-        from eris.core.io import resolve_structure_input
+        from eris.core.io import load_structure, resolve_structure_input
 
-        inp = resolve_structure_input(inp)
+        structure = load_structure(Path(inp.source))
+        inp = resolve_structure_input(inp, structure)
 
         source_sha256 = sha256_file(Path(inp.source))
         invocation_parameters = self.config.to_dict()
@@ -315,7 +279,7 @@ class BaseEncoder(ABC):
         if self.use_cache:
             cache = self.cache or DiskCache()
             parser_hint = parser_hint_from_source(inp.source)
-            key = compute_cache_key_v2(
+            key = compute_cache_key(
                 representation_name=self.config.representation_name,
                 encoder_implementation=self.encoder_implementation,
                 encoder_version=self.version,
@@ -326,8 +290,8 @@ class BaseEncoder(ABC):
                 chain_ids=inp.chain_id,
                 model=None,
             )
-            artifact = cache.get_v2(key)
-            if artifact is not None and self._matches_cache_identity_v2(
+            artifact = cache.get(key)
+            if artifact is not None and self._matches_cache_identity(
                 artifact,
                 inp=inp,
                 source_sha256=source_sha256,
@@ -335,24 +299,22 @@ class BaseEncoder(ABC):
                 parameters=parameters,
                 config_fingerprint=config_fingerprint,
             ):
-                self._validate_runtime_config_dependencies(invocation_parameters)
-                return self._refresh_cache_hit_source_v2(
+                return self._refresh_cache_hit_source(
                     artifact,
                     inp=inp,
                     source_sha256=source_sha256,
                     extensions=extensions,
                 )
 
-        ctx = EncodingContext(inp=inp, source_sha256=source_sha256)
+        ctx = EncodingContext(inp=inp, source_sha256=source_sha256, structure=structure)
         self._prepare_data(ctx=ctx)
         _structure_validation(ctx=ctx)
 
         data = self._create_data(ctx=ctx)
 
-        for contract in self.contracts():
-            contract.validate(data)
+        _check_output_values(data)
 
-        meta = self._build_metadata_v2(
+        meta = self._build_metadata(
             ctx,
             data,
             parameters=parameters,
@@ -364,7 +326,7 @@ class BaseEncoder(ABC):
         artifact.validate(strict=True)
 
         if cache is not None and key is not None:
-            cache.set_v2(key, artifact)
+            cache.set(key, artifact)
 
         return artifact
 
@@ -373,7 +335,7 @@ class BaseEncoder(ABC):
             "Loading structure",
             extra={
                 "source": str(ctx.inp.source),
-                "granularity": self.granularity_contract.level,
+                "granularity": self.granularity,
             },
         )
 

@@ -70,7 +70,7 @@ class CheckpointDescriptor:
             _require_https_url(self.download_url, "download_url")
 
     def to_dict(self) -> dict[str, str]:
-        """Return deterministic Artifact Schema v2 checkpoint metadata."""
+        """Return deterministic artifact schema checkpoint metadata."""
 
         metadata = {
             "identifier": self.identifier,
@@ -96,7 +96,7 @@ class StructuralModelDescriptor:
             raise ConfigError("checkpoint must be a CheckpointDescriptor")
 
     def to_dict(self) -> dict[str, object]:
-        """Return complete Artifact Schema v2 model metadata."""
+        """Return complete artifact schema model metadata."""
 
         return {
             "architecture": self.architecture,

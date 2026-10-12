@@ -5,6 +5,23 @@ from typing import Any, Dict, List, Sequence, Tuple
 import numpy as np
 
 
+def normalize_choice(
+    name: str,
+    value: Any,
+    choices: Sequence[str],
+    *,
+    error: type[Exception] = ValueError,
+) -> str:
+    """Return the stripped, lower-cased choice or raise ``error`` naming the allowed values."""
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string")
+    normalized = value.strip().lower()
+    if normalized not in choices:
+        allowed = ", ".join(choices)
+        raise error(f"{name} must be one of: {allowed}")
+    return normalized
+
+
 def parse_mode(mode: Any) -> List[Tuple[str, Dict[str, Any]]]:
     if isinstance(mode, str):
         return [(t.strip(), {}) for t in mode.split("+") if t.strip()]
@@ -52,6 +69,19 @@ def safe_float(x: np.ndarray, *, missing: str = "zero") -> np.ndarray:
     if missing == "nan":
         return y.astype(np.float32)
     raise ValueError("missing must be 'zero' or 'nan'")
+
+
+def normalize_scalar_params(label: str, params: dict[str, Any]) -> dict[str, Any]:
+    unknown = sorted(set(params) - {"normalization"})
+    if unknown:
+        raise ValueError(f"Unknown {label} parameters: {unknown}")
+    normalization = params.get("normalization", "none")
+    if not isinstance(normalization, str):
+        raise TypeError(f"{label} parameter 'normalization' must be a string")
+    normalization = normalization.strip().lower()
+    if normalization not in {"none", "unit_interval"}:
+        raise ValueError(f"{label} parameter 'normalization' must be one of: none, unit_interval")
+    return {"normalization": normalization}
 
 
 def onehot(index: np.ndarray, num_classes: int) -> np.ndarray:

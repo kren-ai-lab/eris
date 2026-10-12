@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 
 import eris
 from eris.cli.main import app
-from eris.core.artifact_schema_v2 import build_input_metadata
+from eris.core.artifact_schema import build_input_metadata
 from eris.core.artifacts import StructureArtifact
 from eris.core.hashing import sha256_file
 from eris.core.learned import (
@@ -178,7 +178,7 @@ def test_explicit_tensor_and_pyg_workflow(tmp_path: Path, monkeypatch: pytest.Mo
     index_path = tmp_path / "index.csv"
     eris.pack(artifact_root, index_path)
 
-    dataset = ErisFolderDataset(index_path, prefer="graph")
+    dataset = ErisFolderDataset(index_path)
     samples = [dataset[index] for index in range(len(dataset))]
     assert [sample["id"] for sample in samples] == ["sample"]
     assert collate_graph(samples)["id"] == ["sample"]
@@ -186,9 +186,9 @@ def test_explicit_tensor_and_pyg_workflow(tmp_path: Path, monkeypatch: pytest.Mo
     artifact = StructureArtifact.load(
         artifact_root / "sample" / "residue_contact_graph", strict=True
     )
-    assert eris.to_torch(artifact, prefer="graph")["representation_name"] == "residue_contact_graph"
+    assert eris.to_torch(artifact)["representation_name"] == "residue_contact_graph"
     _install_fake_pyg(monkeypatch)
-    pyg_data = eris.to_pyg(artifact, prefer="graph")
+    pyg_data = eris.to_pyg(artifact)
     assert pyg_data.edge_index.shape[1] == artifact.data["edge_index"].shape[1]
 
 

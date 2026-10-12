@@ -3,12 +3,12 @@ from __future__ import annotations
 import csv
 import json
 import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
+from eris.pipelines.manifest import row_location, write_atomically
 
 PACKED_INDEX_FIELDS: tuple[str, ...] = (
     "id",
@@ -113,9 +113,7 @@ def _ensure_root(path: str | Path) -> Path:
 
 
 def _row_location(row_index: int | None) -> str:
-    if row_index is None:
-        return "packed index row"
-    return f"row {row_index}"
+    return row_location(row_index, "packed index row")
 
 
 def _required_index_string(value: Any, field: str, *, row_index: int | None) -> str:
@@ -345,22 +343,13 @@ def _csv_row(row: PackedIndexRow) -> dict[str, Any]:
 
 
 def _write_index_safely(path: Path, rows: list[PackedIndexRow]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, staging_name = tempfile.mkstemp(
-        prefix=f".{path.stem}.tmp-",
-        suffix=path.suffix,
-        dir=path.parent,
-    )
-    os.close(descriptor)
-    staging = Path(staging_name)
-    try:
+    def write(staging: Path) -> None:
         with staging.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=PACKED_INDEX_FIELDS)
             writer.writeheader()
             writer.writerows(_csv_row(row) for row in rows)
-        os.replace(staging, path)
-    finally:
-        staging.unlink(missing_ok=True)
+
+    write_atomically(path, write)
 
 
 def _validate_packed_index_header(fieldnames: list[str] | None) -> None:

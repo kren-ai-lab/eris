@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import types
 from collections.abc import Mapping
-from dataclasses import MISSING, Field, dataclass, fields
+from dataclasses import MISSING, dataclass, fields
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from eris.core.base_encoder.base_encoder import BaseEncoder
@@ -74,10 +74,6 @@ class RepresentationInfo:
         return self.config_type.representation_name
 
     @property
-    def family(self) -> str:
-        return "explicit"
-
-    @property
     def representation_type(self) -> str:
         return self.encoder_type.representation.representation_type
 
@@ -95,9 +91,6 @@ class RepresentationInfo:
     def defaults(self) -> dict[str, Any]:
         return self.default_config().to_dict()
 
-    def config_fields(self) -> tuple[Field, ...]:
-        return fields(self.config_type)
-
     def params_schema(self) -> list[dict[str, Any]]:
         """Describe config fields for help/introspection, not config validation.
 
@@ -108,7 +101,7 @@ class RepresentationInfo:
         type_hints = get_type_hints(self.config_type)
         schema: list[dict[str, Any]] = []
 
-        for config_field in self.config_fields():
+        for config_field in fields(self.config_type):
             annotation = type_hints[config_field.name]
             entry: dict[str, Any] = {
                 "name": config_field.name,
@@ -142,18 +135,11 @@ class RepresentationInfo:
 _REGISTRY: dict[str, RepresentationInfo] = {}
 
 
-def _require_callable(obj: Any, attr: str, name: str) -> None:
-    fn = getattr(obj, attr, None)
-    if fn is None or not callable(fn):
-        raise TypeError(f"Encoder '{name}' must implement {attr}().")
-
-
 def register_encoder(
     config_type: type[CanonicalRepresentationConfig],
     encoder_type: type[BaseEncoder],
     *,
     description: str = "",
-    allow_override: bool = False,
 ) -> None:
     """Register one canonical explicit representation."""
     if not isinstance(config_type, type) or not issubclass(
@@ -168,7 +154,7 @@ def register_encoder(
         raise TypeError("config_type.representation_name must be a non-empty str")
     if _CONFIG_TYPES_BY_REPRESENTATION.get(name) is not config_type:
         raise TypeError(f"config_type is not the canonical config registered for {name!r}")
-    if not allow_override and name in _REGISTRY:
+    if name in _REGISTRY:
         raise KeyError(f"Encoder already registered: {name}")
 
     info = RepresentationInfo(
@@ -183,25 +169,21 @@ def register_encoder(
             f"{default_config.representation_name!r} != {name!r}"
         )
 
+    if encoder_type.config_type is not config_type:
+        raise TypeError(f"Encoder config_type does not match canonical config for {name!r}")
     encoder = encoder_type()
-    _require_callable(encoder, "encode", name)
-    _require_callable(encoder, "fingerprint", name)
 
     if encoder.name != name:
         raise TypeError(f"Encoder name does not match canonical name: {encoder.name!r} != {name!r}")
-    if encoder.granularity_contract.level != info.granularity:
+    if encoder.granularity != info.granularity:
         raise TypeError(
             "Encoder granularity does not match canonical config: "
-            f"{encoder.granularity_contract.level!r} != {info.granularity!r}"
+            f"{encoder.granularity!r} != {info.granularity!r}"
         )
     if info.representation_type not in {"cloud", "graph", "matrix", "grid"}:
         raise TypeError(
             f"Unsupported representation type for '{name}': {info.representation_type!r}"
         )
-
-    fingerprint = encoder.fingerprint()
-    if not isinstance(fingerprint, str) or not fingerprint.strip():
-        raise TypeError(f"Encoder '{name}'.fingerprint() must return a non-empty str.")
 
     _REGISTRY[name] = info
 
@@ -263,7 +245,7 @@ def resolve_representation_config(
             params=requested,
         )
 
-    allowed = {config_field.name for config_field in info.config_fields()}
+    allowed = {config_field.name for config_field in fields(info.config_type)}
     unknown = sorted(set(requested) - allowed)
     if unknown:
         names = ", ".join(unknown)

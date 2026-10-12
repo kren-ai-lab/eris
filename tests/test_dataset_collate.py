@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -11,7 +10,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from eris.core.artifact_schema_v2 import (
+from eris.core.artifact_schema import (
     build_artifact_metadata,
     build_feature_keys,
     build_input_metadata,
@@ -266,7 +265,7 @@ def test_dataset_accepts_canonical_pack_index_and_preserves_len_order(tmp_path: 
     index = tmp_path / "index.csv"
     _pack(root, index)
 
-    dataset = ErisFolderDataset(index, prefer="cloud")
+    dataset = ErisFolderDataset(index)
 
     assert len(dataset) == 2
     assert [row.id for row in dataset.rows] == ["a", "b"]
@@ -368,7 +367,7 @@ def test_dataset_resolves_posix_locators_from_index_parent(
     index = index_factory(tmp_path, root)
     rows = _pack(root, index)
 
-    dataset = ErisFolderDataset(index, prefer="cloud")
+    dataset = ErisFolderDataset(index)
     item = dataset[0]
 
     assert rows[0]["artifact_dir"] == expected
@@ -382,38 +381,10 @@ def test_dataset_does_not_rescan_after_index_creation(tmp_path: Path) -> None:
     _pack(root, index)
     _save_learned_artifact(root / "not-indexed" / "synthetic_learned_embedding")
 
-    dataset = ErisFolderDataset(index, prefer="cloud")
+    dataset = ErisFolderDataset(index)
 
     assert len(dataset) == 1
     assert dataset[0]["id"] == "indexed"
-
-
-def test_dataset_strict_loads_artifact_and_rejects_schema_v1(tmp_path: Path) -> None:
-    artifact_dir = tmp_path / "artifacts" / "legacy" / "residue_point_cloud"
-    artifact_dir.mkdir(parents=True)
-    np.savez_compressed(artifact_dir / "data.npz", pos=np.zeros((1, 3), dtype=np.float32))
-    (artifact_dir / "meta.json").write_text(
-        json.dumps({"schema_version": 1, "encoder_name": "legacy"}),
-        encoding="utf-8",
-    )
-    row = {
-        "id": "legacy",
-        "artifact_dir": "artifacts/legacy/residue_point_cloud",
-        "meta_path": "artifacts/legacy/residue_point_cloud/meta.json",
-        "representation_name": "residue_point_cloud",
-        "representation_family": "explicit",
-        "representation_type": "cloud",
-        "granularity": "residue",
-        "n_nodes": "",
-        "n_edges": "",
-        "shape_summary": "{}",
-    }
-    index = tmp_path / "index.csv"
-    _write_index(index, [row])
-    dataset = ErisFolderDataset(index)
-
-    with pytest.raises(ArtifactValidationError, match="Schema v1"):
-        dataset[0]
 
 
 def test_dataset_rejects_missing_and_corrupt_artifacts(tmp_path: Path) -> None:
@@ -466,7 +437,7 @@ def test_dataset_rejects_stale_index_metadata(
     row = _pack(root, index)[0]
     row[field] = value
     _write_index(index, [row])
-    dataset = ErisFolderDataset(index, prefer="cloud")
+    dataset = ErisFolderDataset(index)
 
     with pytest.raises(DatasetIndexError, match=match):
         dataset[0]
@@ -479,25 +450,24 @@ def test_dataset_rejects_stale_n_edges_when_index_declares_it(tmp_path: Path) ->
     row = _pack(root, index)[0]
     row["n_edges"] = "999"
     _write_index(index, [row])
-    dataset = ErisFolderDataset(index, prefer="graph")
+    dataset = ErisFolderDataset(index)
 
     with pytest.raises(DatasetIndexError, match="n_edges"):
         dataset[0]
 
 
 @pytest.mark.parametrize(
-    ("representation", "prefer", "collate", "expected_shape"),
+    ("representation", "collate", "expected_shape"),
     [
-        ("graph", "graph", collate_graph, (4, 1)),
-        ("cloud", "cloud", collate_cloud, (2, 3)),
-        ("matrix", "matrix", collate_matrix, (2, 1, 1, 1)),
-        ("grid", "grid", collate_grid, (2, 1, 2, 2, 2)),
+        ("graph", collate_graph, (4, 1)),
+        ("cloud", collate_cloud, (2, 3)),
+        ("matrix", collate_matrix, (2, 1, 1, 1)),
+        ("grid", collate_grid, (2, 1, 2, 2, 2)),
     ],
 )
 def test_dataset_samples_feed_each_canonical_explicit_collate(
     tmp_path: Path,
     representation: str,
-    prefer: str,
     collate,
     expected_shape: tuple[int, ...],
 ) -> None:
@@ -515,7 +485,7 @@ def test_dataset_samples_feed_each_canonical_explicit_collate(
     index = tmp_path / "index.csv"
     _pack(root, index)
 
-    samples = list(ErisFolderDataset(index, prefer=prefer))
+    samples = list(ErisFolderDataset(index))
     out = collate(samples)
 
     assert out["id"] == ["first", "second"]
@@ -566,7 +536,7 @@ def test_dataset_batch_pack_dataset_gate(tmp_path: Path) -> None:
     index = tmp_path / "index.csv"
     pack_artifacts(root, index)
 
-    dataset = ErisFolderDataset(index, prefer="matrix")
+    dataset = ErisFolderDataset(index)
 
     assert len(dataset) == 1
     assert dataset.rows[0].id == "protein"

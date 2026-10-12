@@ -4,7 +4,7 @@ from typing import Tuple
 
 import numpy as np
 
-from eris.spatial.spatial_index import _NEIGHBOR_OFFSETS, build_cell_dict, cell_index
+from eris.spatial.spatial_index import iter_pairs_within
 
 
 def neighbor_search_edges(pos: np.ndarray, cutoff: float) -> Tuple[np.ndarray, np.ndarray]:
@@ -17,56 +17,10 @@ def neighbor_search_edges(pos: np.ndarray, cutoff: float) -> Tuple[np.ndarray, n
     if n == 0:
         return np.zeros((2, 0), dtype=np.int64), np.zeros((0,), dtype=np.float32)
 
-    r = float(cutoff)
-    r2 = r * r
-
-    cells = cell_index(pos, r)
-    cell_dict = build_cell_dict(cells)
-
-    # collect unique undirected pairs i<j
-    pairs_i: list[int] = []
-    pairs_j: list[int] = []
-    dists: list[float] = []
-
-    for cell_key, idxs in cell_dict.items():
-        cx, cy, cz = cell_key
-
-        # only generate pairs where (cell_key, neighbor_key) is ordered to avoid duplicates
-        for dx, dy, dz in _NEIGHBOR_OFFSETS:
-            nkey = (cx + dx, cy + dy, cz + dz)
-            if nkey not in cell_dict:
-                continue
-
-            # ordering to avoid double counting across cells
-            if nkey < cell_key:
-                continue
-
-            jdxs = cell_dict[nkey]
-
-            if nkey == cell_key:
-                # within same cell: compare i<j
-                for a in range(len(idxs)):
-                    i = idxs[a]
-                    pi = pos[i]
-                    for b in range(a + 1, len(idxs)):
-                        j = idxs[b]
-                        diff = pi - pos[j]
-                        dsq = float(diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2])
-                        if dsq <= r2:
-                            pairs_i.append(i)
-                            pairs_j.append(j)
-                            dists.append(np.sqrt(dsq))
-            else:
-                # across two different cells: full cross
-                for i in idxs:
-                    pi = pos[i]
-                    for j in jdxs:
-                        diff = pi - pos[j]
-                        dsq = float(diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2])
-                        if dsq <= r2:
-                            pairs_i.append(i)
-                            pairs_j.append(j)
-                            dists.append(np.sqrt(dsq))
+    pairs = list(iter_pairs_within(pos, cutoff))
+    pairs_i = [i for i, _, _ in pairs]
+    pairs_j = [j for _, j, _ in pairs]
+    dists = [d for _, _, d in pairs]
 
     if not pairs_i:
         return np.zeros((2, 0), dtype=np.int64), np.zeros((0,), dtype=np.float32)

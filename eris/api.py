@@ -12,7 +12,7 @@ from eris.core.registry import (
     validate_resolved_representation_config,
 )
 from eris.core.types import StructureInput
-from eris.exceptions import ConfigError, ExecutionError, RepresentationNotFoundError
+from eris.exceptions import ConfigError, RepresentationNotFoundError
 from eris.pooling import pool
 
 
@@ -176,16 +176,11 @@ def embed(
         chain_id=chain_id,
         model_index=model_index,
     )
-    config = learned_registry.create_config(
-        info.representation_name,
+    config = info.config_type(
+        representation_name=info.representation_name,
         output_mode=output_mode,
     )
     execution = StructuralExecutionConfig(device=device, precision=precision)
-
-    if info.model_descriptor is None:
-        raise ExecutionError(
-            f"Embedder '{representation}' has no registered structural model descriptor"
-        )
 
     artifact = StructuralEmbedderRunner().run(
         structure_input,

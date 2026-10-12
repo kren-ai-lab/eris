@@ -35,7 +35,6 @@ class BiologicalResidueIdentity:
     insertion_code: str
     residue_name: str
     node_id: str
-    model_coordinate: tuple[float, float, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)

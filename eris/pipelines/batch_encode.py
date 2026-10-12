@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import eris
-from eris.core.artifact_schema_v2 import compute_config_fingerprint
+from eris.core.artifact_schema import compute_config_fingerprint
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import parser_hint_from_source, parser_hint_matches_format
 from eris.core.config import CanonicalRepresentationConfig
@@ -22,6 +22,7 @@ from eris.pipelines.manifest import (
     BatchResultRow,
     StructureManifestRow,
     read_manifest,
+    write_atomically,
     write_manifest,
 )
 
@@ -175,10 +176,9 @@ def _learned_resume_identity(
 
     info = eris.get_embedder_info(representation)
     registry_info = learned_registry.get_info(representation)
-    if registry_info.model_descriptor is None:
-        raise ExecutionError(f"Embedder '{representation}' has no model descriptor")
-
-    config = learned_registry.create_config(representation, output_mode=output_mode)
+    config = registry_info.config_type(
+        representation_name=registry_info.representation_name, output_mode=output_mode
+    )
     execution = StructuralExecutionConfig(device=device, precision=precision)
     parameters = config.to_dict()
     return _ResumeIdentity(
@@ -251,19 +251,7 @@ def _save_artifact_safely(artifact: StructureArtifact, target: Path) -> None:
 
 
 def _write_results_safely(path: Path, rows: list[BatchResultRow]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, staging_name = tempfile.mkstemp(
-        prefix=f".{path.stem}.tmp-",
-        suffix=path.suffix,
-        dir=path.parent,
-    )
-    os.close(descriptor)
-    staging = Path(staging_name)
-    try:
-        write_manifest(staging, rows)
-        os.replace(staging, path)
-    finally:
-        staging.unlink(missing_ok=True)
+    write_atomically(path, lambda staging: write_manifest(staging, rows))
 
 
 def _input_matches(
@@ -286,31 +274,6 @@ def _input_matches(
     )
 
 
-def _execution_matches(
-    artifact: StructureArtifact,
-    expected: dict[str, str] | None,
-) -> bool:
-    if expected is None:
-        return True
-    provenance = artifact.meta.get("provenance")
-    if not isinstance(provenance, dict):
-        return False
-    environment = provenance.get("environment")
-    if not isinstance(environment, dict):
-        return False
-    execution = environment.get("execution")
-    if not isinstance(execution, dict):
-        return False
-    requested = execution.get("requested")
-    resolved = execution.get("resolved")
-    if not isinstance(requested, dict) or not isinstance(resolved, dict):
-        return False
-    return (
-        requested.get("precision") == expected["precision"]
-        and resolved.get("precision") == expected["precision"]
-    )
-
-
 def _artifact_matches_request(
     artifact: StructureArtifact,
     row: StructureManifestRow,
@@ -330,9 +293,7 @@ def _artifact_matches_request(
         return False
 
     matches = (
-        type(meta.get("schema_version")) is int
-        and meta["schema_version"] == 2
-        and meta.get("representation_name") == identity.representation_name
+        meta.get("representation_name") == identity.representation_name
         and meta.get("representation_family") == identity.representation_family
         and meta.get("representation_type") == identity.representation_type
         and meta.get("granularity") == identity.granularity
@@ -361,7 +322,13 @@ def _artifact_matches_request(
     if identity.encoder_version is not None:
         if encoder.get("version") != identity.encoder_version:
             return False
-    return _execution_matches(artifact, identity.execution)
+    if identity.execution is None:
+        return True
+    from eris.core.learned.runner import _cached_execution_matches
+
+    return _cached_execution_matches(
+        meta.get("provenance"), requested_precision=identity.execution["precision"]
+    )
 
 
 def _load_equivalent_artifact(

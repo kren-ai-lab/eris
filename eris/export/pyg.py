@@ -12,7 +12,7 @@ from eris.export.torch import to_torch
 
 
 class PyGExportError(ValueError):
-    """Raised when an Artifact Schema v2 artifact cannot be exported as a PyG graph."""
+    """Raised when an artifact cannot be exported as a PyG graph."""
 
 
 _METADATA_ATTRS = (
@@ -172,25 +172,19 @@ def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None):
 def to_pyg(
     artifact: StructureArtifact,
     *,
-    prefer: str = "grid_or_graph",
     device: str | None = None,
-    matrix_as_channel: bool = True,
 ):
     """
-    Export one explicit graph Artifact Schema v2 artifact to ``torch_geometric.data.Data``.
+    Export one explicit graph artifact schema artifact to ``torch_geometric.data.Data``.
 
     Non-graph artifacts are rejected because this exporter preserves public topology; it
     never invents edges from clouds, matrices, grids, or learned model internals.
     """
     if not isinstance(artifact, StructureArtifact):
         raise TypeError("to_pyg() expects a StructureArtifact instance.")
-    prefer = (prefer or "grid_or_graph").strip().lower()
-    if prefer not in {"grid_or_graph", "graph"}:
-        raise PyGExportError(f"Cannot export graph artifact with prefer={prefer!r}.")
-    del matrix_as_channel
     _ensure_graph_artifact(artifact)
 
-    torch_mapping = to_torch(artifact, prefer="graph")
+    torch_mapping = to_torch(artifact)
     node_id_name = _node_id_output_name(artifact.meta)
     if node_id_name is not None and node_id_name in artifact.data:
         torch_mapping["node_ids"] = _as_lossless_list(artifact.data[node_id_name])
@@ -203,14 +197,11 @@ def save_artifact_to_pyg(
     artifact_dir: str | Path,
     *,
     out_path: Path,
-    prefer: str = "grid_or_graph",
     device: str | None = None,
-    matrix_as_channel: bool = True,
 ) -> None:
-    del matrix_as_channel
     torch, _ = _pyg_dependencies()
     artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
-    pyg = to_pyg(artifact, prefer=prefer, device=device)
+    pyg = to_pyg(artifact, device=device)
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     torch.save(pyg, out_path)
 

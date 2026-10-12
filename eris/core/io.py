@@ -111,9 +111,12 @@ def select_chains(
     return tuple(chain for chain in model if chain.name in requested)
 
 
-def resolve_structure_input(inp: StructureInput) -> StructureInput:
+def resolve_structure_input(
+    inp: StructureInput, structure: gemmi.Structure | None = None
+) -> StructureInput:
     """Resolve a requested selection to an immutable tuple in model order."""
-    structure = load_structure(Path(inp.source))
+    if structure is None:
+        structure = load_structure(Path(inp.source))
     chains = select_chains(structure, inp.chain_id, inp.model_index)
     return StructureInput(
         source=inp.source,
@@ -577,9 +580,10 @@ def extract_residue_bundle(
 def load_select_and_extract(
     inp: StructureInput,
     extractor: Callable[[object], dict[str, np.ndarray]],
+    structure: gemmi.Structure | None = None,
 ) -> LoadedStructureData:
     try:
-        st = load_structure(Path(inp.source))
+        st = structure if structure is not None else load_structure(Path(inp.source))
         chains = select_chains(st, inp.chain_id, inp.model_index)
         bundles = [extractor(chain) for chain in chains]
         keys = bundles[0].keys()
@@ -623,6 +627,7 @@ def load_and_extract_residue(
     altloc: str = "max_occupancy",
     missing_ca: str = "skip",
     plddt_source: str = "none",
+    structure: gemmi.Structure | None = None,
 ) -> LoadedStructureData:
     def _extract(ch):
         return extract_residue_bundle(
@@ -634,7 +639,7 @@ def load_and_extract_residue(
             plddt_source=plddt_source,
         )
 
-    return load_select_and_extract(inp, _extract)
+    return load_select_and_extract(inp, _extract, structure)
 
 
 # -----------------------
@@ -853,6 +858,7 @@ def load_and_extract_atoms(
     keep_ions: bool = True,
     altloc: str = "max_occupancy",
     amino_acids_only: bool = False,
+    structure: gemmi.Structure | None = None,
 ) -> LoadedStructureData:
     """
     Atom-level extraction wrapper using StructureInput.
@@ -869,4 +875,4 @@ def load_and_extract_atoms(
             amino_acids_only=amino_acids_only,
         )
 
-    return load_select_and_extract(inp, _extract)
+    return load_select_and_extract(inp, _extract, structure)

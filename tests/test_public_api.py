@@ -46,12 +46,12 @@ def _assert_equivalent(left: StructureArtifact, right: StructureArtifact) -> Non
         np.testing.assert_array_equal(left.data[name], right.data[name])
 
 
-def test_all_discovered_explicit_representations_encode_strict_v2_artifacts():
+def test_all_discovered_explicit_representations_encode_strict_artifacts():
     for name in eris.list_representations():
         artifact = eris.encode(str(PDB), representation=name, use_cache=False)
 
         assert isinstance(artifact, StructureArtifact)
-        assert artifact.meta["schema_version"] == 2
+        assert artifact.meta["schema_version"] == 1
         assert artifact.meta["representation_name"] == name
         artifact.validate(strict=True)
 
@@ -200,7 +200,7 @@ def test_multichain_selection_is_canonical_and_excludes_nonprotein_chains(tmp_pa
     reordered = encoder.encode(StructureInput(source=str(source), chain_id=["B", "A"]))
     encoder.encode(StructureInput(source=str(source), chain_id="B"))
     np.testing.assert_array_equal(first.data["residue_ids"], reordered.data["residue_ids"])
-    assert len(list((cache.cache_dir / "v2").iterdir())) == 2
+    assert len(list((cache.cache_dir / "artifacts").iterdir())) == 2
 
 
 @pytest.mark.parametrize("chain_id", [[], ["A", "A"]])

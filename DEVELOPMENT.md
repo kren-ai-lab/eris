@@ -48,7 +48,7 @@ runtime is unavailable. A skip is not certification of that integration.
 `tests/test_packaging_boundaries.py` verifies the core lazy-import boundary.
 
 CI (`.github/workflows/tests.yml`) runs the suite on Python 3.11–3.14, once against the lowest
-declared direct dependencies, and smoke-tests the built wheel. Pushing a `v*` tag publishes to
+declared direct dependencies. Pushing a `v*` tag publishes to
 PyPI through `publish-pypi.yml`.
 
 ## Workflow
@@ -58,5 +58,4 @@ or modify history as part of ordinary changes. Before editing, inspect the branc
 worktree. Preserve unrelated tracked and untracked work.
 
 Read the relevant contract under `docs/`, make a focused change, run proportionate tests and
-checks, then review `git diff`, `git diff --check`, and `git status --short`. Local validation does
-not replace clean-install, built-distribution, CI-matrix, or release-environment certification.
+checks, then review `git diff`, `git diff --check`, and `git status --short`.

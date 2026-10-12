@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -11,12 +10,7 @@ from eris.core.representations import PointCloudRepresentation
 from eris.core.representations.output_declarations import ATOM_POINT_CLOUD_OUTPUTS
 from eris.features.node.atom import build_node_attr
 
-if TYPE_CHECKING:
-    from eris.core.cache import DiskCache
-    from eris.core.representations.base_rep import BaseRepresentation
 
-
-@dataclass(init=False)
 class AtomPointCloud(BaseAtomEncoder):
     """
     Atom-level point cloud.
@@ -40,72 +34,11 @@ class AtomPointCloud(BaseAtomEncoder):
     # Identity
     name: ClassVar[str] = "atom_point_cloud"
     version: ClassVar[str] = "0.1.2"
-    representation: ClassVar[BaseRepresentation] = PointCloudRepresentation()
-    output_declarations_v2: ClassVar = ATOM_POINT_CLOUD_OUTPUTS
+    representation: ClassVar = PointCloudRepresentation()
+    output_declarations: ClassVar = ATOM_POINT_CLOUD_OUTPUTS
 
-    config: AtomPointCloudConfig = field(init=False)
-
-    def __init__(
-        self,
-        *,
-        config: AtomPointCloudConfig | None = None,
-        use_cache: bool = True,
-        cache: DiskCache | None = None,
-        **representation_kwargs: Any,
-    ) -> None:
-        if config is not None:
-            if not isinstance(config, AtomPointCloudConfig):
-                raise TypeError("config must be an AtomPointCloudConfig")
-            if representation_kwargs:
-                names = ", ".join(sorted(representation_kwargs))
-                raise TypeError(f"config cannot be combined with representation kwargs: {names}")
-            resolved_config = config
-        else:
-            resolved_config = AtomPointCloudConfig(**representation_kwargs)
-
-        self.config = resolved_config
-        self.use_cache = use_cache
-        self.cache = cache
-        super().__post_init__()
-
-    @property
-    def center(self) -> bool:
-        return self.config.center
-
-    @property
-    def scale(self) -> float | None:
-        return self.config.scale
-
-    @property
-    def include_hetero(self) -> bool:
-        return self.config.include_hetero
-
-    @property
-    def include_h(self) -> bool:
-        return self.config.include_h
-
-    @property
-    def drop_water(self) -> bool:
-        return self.config.drop_water
-
-    @property
-    def keep_ions(self) -> bool:
-        return self.config.keep_ions
-
-    @property
-    def altloc(self) -> str:
-        return self.config.altloc
-
-    @property
-    def amino_acids_only(self) -> bool:
-        return self.config.amino_acids_only
-
-    @property
-    def node_attr_mode(self) -> str:
-        return "+".join(token.name for token in self.config.node_attr_mode.tokens)
-
-    def get_params(self) -> dict[str, Any]:
-        return self.config.to_dict()
+    config_type: ClassVar = AtomPointCloudConfig
+    config: AtomPointCloudConfig
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
         strc = ctx.raw_structure

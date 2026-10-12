@@ -7,18 +7,14 @@ import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, TypedDict, Union
+from typing import Any, TypedDict, Union
 
 import numpy as np
 
 from eris.exceptions import ErisError
 
-ARTIFACT_SCHEMA_V2_VERSION = 2
+ARTIFACT_SCHEMA_VERSION = 1
 
-RepresentationFamily = Literal["explicit", "learned"]
-RepresentationType = Literal["cloud", "graph", "matrix", "grid", "vector", "embedding"]
-Granularity = Literal["atom", "residue", "structure", "mixed"]
-CoordinateSource = Literal["atom", "ca", "residue_mean", "residue_com", "model_specific"]
 JSONValue = Union[  # noqa: UP007 - explicit Union keeps the recursive alias runtime-safe
     None, bool, int, float, str, list["JSONValue"], dict[str, "JSONValue"]
 ]
@@ -43,68 +39,8 @@ class InputMetadata(InputMetadataRequired, total=False):
     source_database: str
 
 
-class CheckpointMetadataRequired(TypedDict):
-    identifier: str
-
-
-class CheckpointMetadata(CheckpointMetadataRequired, total=False):
-    revision: str
-    source: str
-    sha256: str
-
-
-class ModelMetadata(TypedDict):
-    architecture: str
-    checkpoint: CheckpointMetadata
-
-
-class ProvenanceMetadataRequired(TypedDict):
-    eris_version: str
-    config_fingerprint: str
-
-
-class ProvenanceMetadata(ProvenanceMetadataRequired, total=False):
-    environment: dict[str, JSONValue]
-    created_at: str
-    invocation: JSONValue
-
-
-class OutputMetadataRequired(TypedDict):
-    name: str
-    role: str
-
-
-class OutputMetadata(OutputMetadataRequired, total=False):
-    granularity: Granularity
-    layout: str
-    description: str
-
-
-class ArtifactSchemaV2MetadataRequired(TypedDict):
-    schema_version: int
-    representation_name: str
-    representation_family: RepresentationFamily
-    representation_type: RepresentationType
-    granularity: Granularity
-    coordinate_source: CoordinateSource
-    encoder: EncoderMetadata
-    input: InputMetadata
-    parameters: dict[str, JSONValue]
-    provenance: ProvenanceMetadata
-    outputs: list[OutputMetadata]
-    feature_keys: dict[str, list[str]]
-    shapes: dict[str, list[int]]
-    dtypes: dict[str, str]
-    counts: dict[str, int]
-
-
-class ArtifactSchemaV2Metadata(ArtifactSchemaV2MetadataRequired, total=False):
-    model: ModelMetadata
-    extensions: dict[str, dict[str, JSONValue]]
-
-
-class ArtifactSchemaV2ValidationError(ErisError):
-    """Raised when metadata or array data violates Artifact Schema v2."""
+class ArtifactValidationError(ErisError):
+    """Raised when metadata or array data violates Artifact artifact schema."""
 
 
 _REQUIRED_TOP_LEVEL = {
@@ -143,11 +79,11 @@ _ALLOWED_DTYPE_KINDS = {"i", "u", "f", "b", "U"}
 
 
 def _fail(message: str) -> None:
-    raise ArtifactSchemaV2ValidationError(message)
+    raise ArtifactValidationError(message)
 
 
 def normalize_metadata(value: Any, *, _path: str = "metadata") -> JSONValue:
-    """Return a JSON-safe copy using the controlled Schema v2 normalization rules."""
+    """Return a JSON-safe copy using the controlled artifact schema normalization rules."""
     if isinstance(value, np.ndarray):
         _fail(f"{_path} must not contain numpy arrays")
     if isinstance(value, Path):
@@ -175,7 +111,7 @@ def normalize_metadata(value: Any, *, _path: str = "metadata") -> JSONValue:
 
 
 def canonical_json(value: Any) -> str:
-    """Serialize metadata with the canonical JSON form used by Schema v2 fingerprints."""
+    """Serialize metadata with the canonical JSON form used by artifact schema fingerprints."""
     normalized = normalize_metadata(value)
     return json.dumps(
         normalized,
@@ -296,7 +232,7 @@ def build_input_metadata(
     model_index: int,
     chain_ids: Sequence[str],
 ) -> InputMetadata:
-    """Build the canonical five-field Schema v2 input block."""
+    """Build the canonical five-field artifact schema input block."""
     if not isinstance(source, (str, Path)):
         _fail("source must be a string or pathlib.Path")
     input_meta: InputMetadata = {
@@ -345,11 +281,11 @@ def build_provenance(
     representation_name: str,
     parameters: Mapping[str, Any],
     chain_ids: Sequence[str],
-) -> ProvenanceMetadata:
+) -> dict[str, Any]:
     """Build deterministic required provenance without optional environment state."""
     from eris import __version__
 
-    provenance: ProvenanceMetadata = {
+    provenance: dict[str, Any] = {
         "eris_version": __version__,
         "config_fingerprint": compute_config_fingerprint(
             representation_name,
@@ -481,7 +417,7 @@ def build_outputs(
     *,
     data: Mapping[str, np.ndarray],
     declarations: Sequence[Mapping[str, Any]],
-) -> list[OutputMetadata]:
+) -> list[dict[str, Any]]:
     """Copy explicit ordered output declarations and verify complete payload coverage."""
     arrays = _validate_data(data)
     if not isinstance(declarations, Sequence) or isinstance(declarations, (str, bytes)):
@@ -578,10 +514,10 @@ def build_artifact_metadata(
     counts: Mapping[str, int],
     model: Mapping[str, Any] | None = None,
     extensions: Mapping[str, Mapping[str, Any]] | None = None,
-) -> ArtifactSchemaV2Metadata:
-    """Build and strictly validate complete Schema v2 metadata for any producer family."""
+) -> dict[str, Any]:
+    """Build and strictly validate complete artifact schema metadata for any producer family."""
     metadata: dict[str, Any] = {
-        "schema_version": ARTIFACT_SCHEMA_V2_VERSION,
+        "schema_version": ARTIFACT_SCHEMA_VERSION,
         "representation_name": representation_name,
         "representation_family": representation_family,
         "representation_type": representation_type,
@@ -604,7 +540,7 @@ def build_artifact_metadata(
             namespace: dict(content) for namespace, content in extensions.items()
         }
 
-    return validate_schema_v2(metadata, data, strict=True)
+    return validate_schema(metadata, data, strict=True)
 
 
 def _outputs_by_role(outputs: list[dict[str, Any]]) -> dict[str, list[str]]:
@@ -845,13 +781,13 @@ def _validate_strict_roles(
             _fail("meta.counts.n_nodes does not match node-oriented outputs")
 
 
-def validate_schema_v2(
+def validate_schema(
     meta: Mapping[str, Any],
     data: Mapping[str, np.ndarray],
     *,
     strict: bool = False,
-) -> ArtifactSchemaV2Metadata:
-    """Validate a synthetic/runtime Schema v2 mapping and return normalized metadata."""
+) -> dict[str, Any]:
+    """Validate a synthetic/runtime artifact schema mapping and return normalized metadata."""
     if not isinstance(meta, Mapping):
         _fail("meta must be a mapping")
     if "parameters" in meta:
@@ -866,8 +802,11 @@ def validate_schema_v2(
         optional=_OPTIONAL_TOP_LEVEL,
         path="meta",
     )
-    if type(normalized["schema_version"]) is not int or normalized["schema_version"] != 2:
-        _fail("meta.schema_version must equal exactly 2")
+    if (
+        type(normalized["schema_version"]) is not int
+        or normalized["schema_version"] != ARTIFACT_SCHEMA_VERSION
+    ):
+        _fail(f"meta.schema_version must equal exactly {ARTIFACT_SCHEMA_VERSION}")
     _require_non_empty_string(normalized["representation_name"], "meta.representation_name")
 
     family = normalized["representation_family"]
@@ -940,9 +879,8 @@ def validate_schema_v2(
 
 
 __all__ = [
-    "ARTIFACT_SCHEMA_V2_VERSION",
-    "ArtifactSchemaV2Metadata",
-    "ArtifactSchemaV2ValidationError",
+    "ARTIFACT_SCHEMA_VERSION",
+    "ArtifactValidationError",
     "build_artifact_metadata",
     "build_counts",
     "build_dtypes",
@@ -954,5 +892,5 @@ __all__ = [
     "canonical_json",
     "compute_config_fingerprint",
     "normalize_metadata",
-    "validate_schema_v2",
+    "validate_schema",
 ]

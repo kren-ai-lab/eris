@@ -15,7 +15,7 @@ requires_torch = pytest.mark.skipif(
 )
 
 import eris
-from eris.core.artifact_schema_v2 import build_input_metadata
+from eris.core.artifact_schema import build_input_metadata
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.learned import (
     CheckpointDescriptor,
@@ -24,7 +24,7 @@ from eris.core.learned import (
     StructuralModelDescriptor,
     build_learned_artifact,
 )
-from eris.export.torch import TorchExportError, save_artifact_to_torch, to_torch
+from eris.export.torch import save_artifact_to_torch, to_torch
 
 PDB = Path("tests/data/1AQ2.pdb")
 
@@ -114,33 +114,13 @@ if loaded:
     subprocess.run([sys.executable, "-c", script], check=True)
 
 
-def test_torch_export_rejects_schema_v1_boundary() -> None:
-    artifact = StructureArtifact(
-        data={"pos": np.zeros((1, 3), dtype=np.float32)},
-        meta={
-            "schema_version": 1,
-            "encoder_name": "legacy",
-            "encoder_version": "0",
-            "encoder_fingerprint": "legacy",
-            "type": "cloud",
-            "level": "residue",
-            "params": {},
-            "input": {},
-            "feature_keys": {},
-        },
-    )
-
-    with pytest.raises(ArtifactValidationError, match="Schema v1"):
-        to_torch(artifact)
-
-
 @requires_torch
 def test_torch_export_preserves_metadata_and_does_not_mutate_artifact() -> None:
     artifact = eris.encode(PDB, representation="residue_knn_graph", use_cache=False)
     data_before = {name: array.copy() for name, array in artifact.data.items()}
     meta_before = copy.deepcopy(artifact.meta)
 
-    out = to_torch(artifact, prefer="graph")
+    out = to_torch(artifact)
     out["x"][0, 0] = out["x"][0, 0] + 100
     out["feature_keys"]["node_attr_keys"].append("mutated")
 
@@ -159,7 +139,7 @@ def test_torch_export_preserves_metadata_and_does_not_mutate_artifact() -> None:
 def test_graph_export_maps_node_attr_to_x_without_reordering_or_padding() -> None:
     artifact = eris.encode(PDB, representation="residue_contact_graph", use_cache=False)
 
-    out = to_torch(artifact, prefer="graph")
+    out = to_torch(artifact)
 
     _assert_tensor_equal(out["x"], artifact.data["node_attr"])
     _assert_tensor_equal(out["edge_index"], artifact.data["edge_index"])
@@ -176,7 +156,7 @@ def test_graph_export_maps_node_attr_to_x_without_reordering_or_padding() -> Non
 def test_cloud_export_maps_positions_and_features_and_preserves_auxiliary_ids() -> None:
     artifact = eris.encode(PDB, representation="residue_point_cloud", use_cache=False)
 
-    out = to_torch(artifact, prefer="cloud")
+    out = to_torch(artifact)
 
     _assert_tensor_equal(out["pos"], artifact.data["pos"])
     _assert_tensor_equal(out["x"], artifact.data["node_attr"])
@@ -202,8 +182,8 @@ def test_matrix_export_preserves_main_matrix_and_historical_channel_option(
 ) -> None:
     artifact = eris.encode(PDB, representation=representation, use_cache=False)
 
-    default = to_torch(artifact, prefer="matrix")
-    native = to_torch(artifact, prefer="matrix", matrix_as_channel=False)
+    default = to_torch(artifact)
+    native = to_torch(artifact, matrix_as_channel=False)
 
     assert default["x"].shape == (1, *artifact.data[matrix_key].shape)
     _assert_tensor_equal(default["x"][0], artifact.data[matrix_key])
@@ -218,7 +198,7 @@ def test_matrix_export_preserves_main_matrix_and_historical_channel_option(
 def test_grid_export_preserves_grid_shape_and_spatial_metadata() -> None:
     artifact = eris.encode(PDB, representation="residue_voxel_grid", use_cache=False)
 
-    out = to_torch(artifact, prefer="grid")
+    out = to_torch(artifact)
 
     _assert_tensor_equal(out["x"], artifact.data["grid"])
     _assert_tensor_equal(out["grid_size"], artifact.data["grid_size"])
@@ -232,7 +212,7 @@ def test_pooled_vector_export_preserves_pooled_features() -> None:
     source = eris.encode(PDB, representation="residue_point_cloud", use_cache=False)
     artifact = eris.pool(source, mode="mean_std")
 
-    out = to_torch(artifact, prefer="vector")
+    out = to_torch(artifact)
 
     _assert_tensor_equal(out["pooled_attr"], artifact.data["pooled_attr"])
     assert out["representation_type"] == "vector"
@@ -250,7 +230,7 @@ def test_save_torch_strictly_loads_artifact_dir_and_writes_downstream_pt(tmp_pat
     )
 
     out_path = tmp_path / "export" / "data.pt"
-    save_artifact_to_torch(artifact_dir, out_path=out_path, prefer="matrix")
+    save_artifact_to_torch(artifact_dir, out_path=out_path)
     saved = torch.load(out_path, weights_only=False)
     assert saved["representation_name"] == "residue_contact_map"
     assert saved["x"].shape == (1, *artifact.data["contact"].shape)
@@ -321,10 +301,3 @@ def test_learned_export_rejects_malformed_programmatic_artifacts() -> None:
 
     with pytest.raises(ArtifactValidationError, match="node_ids"):
         to_torch(artifact)
-
-
-def test_torch_export_rejects_unsupported_preference() -> None:
-    artifact = eris.encode(PDB, representation="residue_point_cloud", use_cache=False)
-
-    with pytest.raises(TorchExportError, match="Cannot export cloud"):
-        to_torch(artifact, prefer="graph")

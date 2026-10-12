@@ -14,11 +14,7 @@ console = Console(width=240)
 
 
 def _model_names() -> list[str]:
-    return [
-        info.representation_name
-        for info in learned_registry.list_info()
-        if info.model_descriptor is not None
-    ]
+    return [info.representation_name for info in learned_registry.list_info()]
 
 
 def _model_info(name: str):
@@ -26,8 +22,6 @@ def _model_info(name: str):
         info = learned_registry.get_info(name)
     except KeyError as error:
         raise RepresentationNotFoundError(f"Unknown model/embedder {name!r}") from error
-    if info.model_descriptor is None:
-        raise RepresentationNotFoundError(f"Unknown model/embedder {name!r}")
     return info
 
 

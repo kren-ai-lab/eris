@@ -4,11 +4,11 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from eris.core.artifact_schema_v2 import build_input_metadata, compute_config_fingerprint
+from eris.core.artifact_schema import build_input_metadata, compute_config_fingerprint
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import (
     DiskCache,
-    compute_cache_key_v2,
+    compute_cache_key,
     parser_hint_from_source,
     parser_hint_matches_format,
 )
@@ -22,13 +22,11 @@ from eris.core.learned.execution import (
     ResolvedExecution,
     StructuralExecutionConfig,
     build_execution_provenance,
-    execution_cache_identity,
     execution_request_cache_identity,
     resolve_execution,
 )
-from eris.core.learned.registry import EmbedderInfo, EmbedderRegistry, learned_registry
+from eris.core.learned.registry import EmbedderInfo, learned_registry
 from eris.core.learned.types import (
-    StructuralPreprocessingResult,
     validate_embedding_result,
 )
 from eris.core.types import StructureInput
@@ -145,9 +143,7 @@ def _matches_cache_identity(
         else {}
     )
     return (
-        type(meta.get("schema_version")) is int
-        and meta["schema_version"] == 2
-        and meta.get("representation_name") == config.representation_name
+        meta.get("representation_name") == config.representation_name
         and meta.get("representation_family") == "learned"
         and meta.get("representation_type") == "embedding"
         and meta.get("granularity") == _GRANULARITY_BY_MODE[config.output_mode]
@@ -196,11 +192,9 @@ class StructuralEmbedderRunner:
     def __init__(
         self,
         *,
-        registry: EmbedderRegistry = learned_registry,
         artifact_cache: DiskCache | None = None,
         checkpoint_cache: CheckpointCache | None = None,
     ) -> None:
-        self.registry = registry
         self.artifact_cache = artifact_cache
         self.checkpoint_cache = checkpoint_cache
 
@@ -250,7 +244,7 @@ class StructuralEmbedderRunner:
         if type(use_artifact_cache) is not bool:
             raise TypeError("use_artifact_cache must be a bool")
 
-        info = self.registry.get_info(config.representation_name)
+        info = learned_registry.get_info(config.representation_name)
         if not isinstance(config, info.config_type):
             raise ConfigError(
                 f"Config for '{config.representation_name}' must be an {info.config_type.__name__}"
@@ -274,7 +268,7 @@ class StructuralEmbedderRunner:
         )
         parser_hint = parser_hint_from_source(structure_input.source)
         request_execution_identity = execution_request_cache_identity(execution_request)
-        cache_key = compute_cache_key_v2(
+        cache_key = compute_cache_key(
             representation_name=config.representation_name,
             encoder_implementation=info.implementation,
             encoder_version=info.encoder_version,
@@ -289,7 +283,7 @@ class StructuralEmbedderRunner:
 
         artifact_cache = self._artifact_cache() if use_artifact_cache else None
         if artifact_cache is not None:
-            cached = artifact_cache.get_v2(cache_key)
+            cached = artifact_cache.get(cache_key)
             if cached is not None and _matches_cache_identity(
                 cached,
                 structure_input=structure_input,
@@ -308,30 +302,31 @@ class StructuralEmbedderRunner:
                     source_sha256=source_sha256,
                 )
 
-        backend = self.registry.create(config.representation_name)
-        resolved_execution = resolve_execution(
-            execution_request,
-            backend.execution_capabilities(),
-        )
-        if execution_cache_identity(resolved_execution) != request_execution_identity:
+        from eris.core.learned.backends.gearnet.dependencies import probe_gearnet_availability
+
+        availability = probe_gearnet_availability()
+        if not availability.available:
             raise ExecutionError(
-                "Resolved execution precision does not match the artifact cache identity"
+                f"Embedder '{info.representation_name}' backend '{info.backend_id}' "
+                f"is unavailable: {availability.reason}"
             )
+        from eris.core.learned.backends.gearnet.backend import GearNetEdgeBackend
+
+        backend = GearNetEdgeBackend()
+        resolved_execution = resolve_execution(execution_request)
 
         verified_checkpoint = self._resolve_checkpoint(model, checkpoint_path)
-        preprocessed = backend.preprocess(structure_input, config=config)
-        if not isinstance(preprocessed, StructuralPreprocessingResult):
-            raise ExecutionError("Backend preprocess() must return StructuralPreprocessingResult")
-        if not parser_hint_matches_format(parser_hint, preprocessed.input_format):
+        prepared, input_format = backend.preprocess(structure_input, config=config)
+        if not parser_hint_matches_format(parser_hint, input_format):
             raise ExecutionError(
                 f"Parser hint {parser_hint!r} is incompatible with backend-confirmed "
-                f"input format {preprocessed.input_format!r}"
+                f"input format {input_format!r}"
             )
 
         input_metadata = build_input_metadata(
             source=structure_input.source,
             source_sha256=source_sha256,
-            input_format=preprocessed.input_format,
+            input_format=input_format,
             model_index=structure_input.model_index,
             chain_ids=structure_input.chain_id,
         )
@@ -341,7 +336,7 @@ class StructuralEmbedderRunner:
         )
         result = backend.infer(
             model_instance,
-            preprocessed.prepared,
+            prepared,
             config=config,
             execution=resolved_execution,
         )
@@ -365,7 +360,7 @@ class StructuralEmbedderRunner:
         artifact.validate(strict=True)
 
         if artifact_cache is not None:
-            artifact_cache.set_v2(cache_key, artifact)
+            artifact_cache.set(cache_key, artifact)
         return artifact
 
 

@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 
 import eris.core.cache as cache_module
-from eris.core.artifact_schema_v2 import (
-    ArtifactSchemaV2ValidationError,
+from eris.core.artifact_schema import (
+    ArtifactValidationError,
     build_artifact_metadata,
     build_feature_keys,
     build_input_metadata,
@@ -19,7 +19,7 @@ from eris.core.artifact_schema_v2 import (
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import (
     DiskCache,
-    compute_cache_key_v2,
+    compute_cache_key,
     parser_hint_from_source,
     parser_hint_matches_format,
 )
@@ -75,26 +75,6 @@ def _artifact() -> StructureArtifact:
     return StructureArtifact(data=data, meta=meta)
 
 
-def _legacy_artifact() -> StructureArtifact:
-    return StructureArtifact(
-        data={"pos": np.zeros((1, 3), dtype=np.float32)},
-        meta={
-            "schema_version": 1,
-            "encoder_name": "legacy",
-            "encoder_version": "0.1.0",
-            "encoder_fingerprint": "legacy-fingerprint",
-            "type": "cloud",
-            "level": "residue",
-            "params": {},
-            "input": "source=memory://legacy|chain=None|model=0",
-            "feature_keys": {},
-            "shapes": {"pos": [1, 3]},
-            "dtypes": {"pos": "float32"},
-            "counts": {"n_nodes": 1},
-        },
-    )
-
-
 def _identity(**overrides) -> dict:
     values = {
         "representation_name": "residue_point_cloud",
@@ -112,11 +92,11 @@ def _identity(**overrides) -> dict:
 
 
 def _key(**overrides) -> str:
-    return compute_cache_key_v2(**_identity(**overrides))
+    return compute_cache_key(**_identity(**overrides))
 
 
 def _entry(cache_root, key: str):
-    return cache_root / "v2" / key
+    return cache_root / "artifacts" / key
 
 
 def _write_entry(cache_root, key: str, *, meta: dict, data: dict[str, np.ndarray]) -> None:
@@ -126,14 +106,14 @@ def _write_entry(cache_root, key: str, *, meta: dict, data: dict[str, np.ndarray
     np.savez_compressed(entry / "data.npz", **data)
 
 
-def test_compute_cache_key_v2_is_deterministic_and_has_explicit_inputs():
+def test_compute_cache_key_is_deterministic_and_has_explicit_inputs():
     first = _key()
     second = _key()
-    parameters = inspect.signature(compute_cache_key_v2).parameters
+    parameters = inspect.signature(compute_cache_key).parameters
 
     assert first == second
     # Canonical collection-valued chain identity must affect the cache key.
-    assert first == "f8b4199d0e5e6b6c7ffb4055e5e9d08f1c9fdec2d90b3ace11b824c764fbbc9f"
+    assert first == "b20b7f57109471cad7e0663354f7071a55bae7d6d6a561103a10b5904e0f1619"
     assert len(first) == 64
     assert "source" not in parameters
     assert "source_locator" not in parameters
@@ -188,8 +168,8 @@ def test_cache_key_payload_contains_exact_namespaces_and_identity(monkeypatch):
     payload = json.loads(_key())
 
     assert payload == {
-        "cache_contract": 2,
-        "artifact_schema_version": 2,
+        "cache_contract": 1,
+        "artifact_schema_version": 1,
         "representation_name": "residue_point_cloud",
         "encoder": {
             "implementation": "eris.encoders.clouds.ResiduePointCloudCA",
@@ -211,7 +191,7 @@ def test_optional_execution_identity_is_canonical_and_precision_sensitive(monkey
     payload = json.loads(_key(execution={"precision": "fp32"}))
 
     assert payload["execution"] == {"precision": "fp32"}
-    assert payload["cache_contract"] == 2
+    assert payload["cache_contract"] == 1
 
 
 @pytest.mark.parametrize(
@@ -268,32 +248,32 @@ def test_parameter_mapping_order_is_abstracted_by_config_fingerprint():
         ("model_index", -1),
     ],
 )
-def test_compute_cache_key_v2_rejects_invalid_identity(field, value):
-    with pytest.raises((ValueError, ArtifactSchemaV2ValidationError)):
+def test_compute_cache_key_rejects_invalid_identity(field, value):
+    with pytest.raises((ValueError, ArtifactValidationError)):
         _key(**{field: value})
 
 
 @pytest.mark.parametrize("key", ["../" + "a" * 61])
-def test_v2_cache_rejects_unsafe_or_noncanonical_keys(tmp_path, key):
+def test_cache_rejects_unsafe_or_noncanonical_keys(tmp_path, key):
     cache = DiskCache(tmp_path)
 
     with pytest.raises(ValueError):
-        cache.get_v2(key)
+        cache.get(key)
     with pytest.raises(ValueError):
-        cache.set_v2(key, _artifact())
+        cache.set(key, _artifact())
 
 
-def test_v2_cache_round_trip_returns_strict_valid_artifact(tmp_path):
+def test_cache_round_trip_returns_strict_valid_artifact(tmp_path):
     cache = DiskCache(tmp_path)
     key = _key()
     artifact = _artifact()
 
-    cache.set_v2(key, artifact)
-    loaded = cache.get_v2(key)
+    cache.set(key, artifact)
+    loaded = cache.get(key)
 
     assert loaded is not None
     assert loaded.meta == artifact.meta
-    assert loaded.meta["schema_version"] == 2
+    assert loaded.meta["schema_version"] == 1
     np.testing.assert_array_equal(loaded.data["pos"], artifact.data["pos"])
     assert (_entry(tmp_path, key) / "data.npz").is_file()
     assert (_entry(tmp_path, key) / "meta.json").is_file()
@@ -302,70 +282,63 @@ def test_v2_cache_round_trip_returns_strict_valid_artifact(tmp_path):
 @pytest.mark.parametrize(
     "case",
     [
-        "v1",
         "bad-json",
         "shape",
         "object",
     ],
 )
-def test_stale_or_corrupt_v2_cache_entry_is_a_non_destructive_miss(tmp_path, case):
+def test_stale_or_corrupt_cache_entry_is_a_non_destructive_miss(tmp_path, case):
     cache = DiskCache(tmp_path)
     key = _key()
     artifact = _artifact()
     entry = _entry(tmp_path, key)
 
-    if case == "v1":
-        legacy = _legacy_artifact()
-        _write_entry(tmp_path, key, meta=legacy.meta, data=legacy.data)
-    else:
-        _write_entry(tmp_path, key, meta=artifact.meta, data=artifact.data)
-        if case == "bad-json":
-            (entry / "meta.json").write_text("{bad", encoding="utf-8")
-        elif case == "shape":
-            meta = json.loads((entry / "meta.json").read_text(encoding="utf-8"))
-            meta["shapes"]["pos"] = [3, 3]
-            (entry / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
-        elif case == "object":
-            np.savez_compressed(
-                entry / "data.npz",
-                pos=np.array([object()], dtype=object),
-            )
+    _write_entry(tmp_path, key, meta=artifact.meta, data=artifact.data)
+    if case == "bad-json":
+        (entry / "meta.json").write_text("{bad", encoding="utf-8")
+    elif case == "shape":
+        meta = json.loads((entry / "meta.json").read_text(encoding="utf-8"))
+        meta["shapes"]["pos"] = [3, 3]
+        (entry / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    elif case == "object":
+        np.savez_compressed(
+            entry / "data.npz",
+            pos=np.array([object()], dtype=object),
+        )
 
-    assert cache.get_v2(key) is None
+    assert cache.get(key) is None
     assert entry.exists()
 
 
-@pytest.mark.parametrize("case", ["v1", "unsafe-v2"])
-def test_invalid_v2_cache_write_raises_without_usable_entry(tmp_path, case):
+def test_invalid_cache_write_raises_without_usable_entry(tmp_path):
     cache = DiskCache(tmp_path)
     key = _key()
-    artifact = _legacy_artifact() if case == "v1" else _artifact()
-    if case == "unsafe-v2":
-        artifact.data["pos"] = np.array([object()], dtype=object)
+    artifact = _artifact()
+    artifact.data["pos"] = np.array([object()], dtype=object)
 
     with pytest.raises(ArtifactValidationError):
-        cache.set_v2(key, artifact)
+        cache.set(key, artifact)
 
-    assert cache.get_v2(key) is None
+    assert cache.get(key) is None
     assert not _entry(tmp_path, key).exists()
 
 
 class _RecordingDiskCache(DiskCache):
     def __init__(self, cache_dir) -> None:
         super().__init__(cache_dir)
-        self.v2_get_keys: list[str] = []
-        self.v2_set_keys: list[str] = []
+        self.get_keys: list[str] = []
+        self.set_keys: list[str] = []
 
-    def get_v2(self, key: str):
-        self.v2_get_keys.append(key)
-        return super().get_v2(key)
+    def get(self, key: str):
+        self.get_keys.append(key)
+        return super().get(key)
 
-    def set_v2(self, key: str, artifact: StructureArtifact) -> None:
-        self.v2_set_keys.append(key)
-        super().set_v2(key, artifact)
+    def set(self, key: str, artifact: StructureArtifact) -> None:
+        self.set_keys.append(key)
+        super().set(key, artifact)
 
 
-def test_active_encoder_cache_miss_then_hit_uses_only_v2_api(
+def test_active_encoder_cache_miss_then_hit_uses_only_api(
     tmp_path,
     monkeypatch,
 ):
@@ -376,15 +349,15 @@ def test_active_encoder_cache_miss_then_hit_uses_only_v2_api(
     second_encoder = ResidueKNNGraph(use_cache=True, cache=cache)
 
     def fail_recompute(ctx):
-        raise AssertionError("a valid v2 cache hit must not recompute arrays")
+        raise AssertionError("a valid cache hit must not recompute arrays")
 
     monkeypatch.setattr(second_encoder, "_create_data", fail_recompute)
     second = second_encoder.encode(inp)
 
-    assert first.meta["schema_version"] == second.meta["schema_version"] == 2
+    assert first.meta["schema_version"] == second.meta["schema_version"] == 1
     assert first.meta == second.meta
-    assert cache.v2_get_keys == [cache.v2_set_keys[0], cache.v2_set_keys[0]]
-    assert cache.v2_set_keys == [cache.v2_get_keys[0]]
+    assert cache.get_keys == [cache.set_keys[0], cache.set_keys[0]]
+    assert cache.set_keys == [cache.get_keys[0]]
     assert set(first.data) == set(second.data)
     for name, expected in first.data.items():
         np.testing.assert_array_equal(second.data[name], expected)
@@ -409,7 +382,7 @@ def test_cache_hit_refreshes_current_source_without_rewriting_cached_metadata(
     second_encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
 
     def fail_recompute(ctx):
-        raise AssertionError("same bytes and suffix must hit the v2 cache")
+        raise AssertionError("same bytes and suffix must hit the cache")
 
     monkeypatch.setattr(second_encoder, "_create_data", fail_recompute)
     second = second_encoder.encode(StructureInput(source=str(source_b)))
@@ -417,9 +390,9 @@ def test_cache_hit_refreshes_current_source_without_rewriting_cached_metadata(
     assert first.meta["input"]["source"] == str(source_a)
     assert second.meta["input"]["source"] == str(source_b)
     assert second.meta["input"]["format"] == "pdb"
-    assert cache.v2_get_keys[0] == cache.v2_get_keys[1]
+    assert cache.get_keys[0] == cache.get_keys[1]
     cached_meta = json.loads(
-        (_entry(cache.cache_dir, cache.v2_get_keys[0]) / "meta.json").read_text(encoding="utf-8")
+        (_entry(cache.cache_dir, cache.get_keys[0]) / "meta.json").read_text(encoding="utf-8")
     )
     assert cached_meta["input"]["source"] == str(source_a)
     for name, expected in first.data.items():
@@ -442,8 +415,8 @@ def test_parser_hint_prevents_pdb_cache_from_satisfying_cif_parse(tmp_path):
 
     # Chain resolution parses the structure before cache lookup, so the mislabeled
     # coordinate file fails without consulting the PDB cache entry.
-    assert len(cache.v2_get_keys) == 1
-    assert len(list((cache.cache_dir / "v2").iterdir())) == 1
+    assert len(cache.get_keys) == 1
+    assert len(list((cache.cache_dir / "artifacts").iterdir())) == 1
 
 
 def test_strict_valid_cache_artifact_with_wrong_identity_is_a_miss(tmp_path):
@@ -451,7 +424,7 @@ def test_strict_valid_cache_artifact_with_wrong_identity_is_a_miss(tmp_path):
     inp = StructureInput(source=str(PDB))
     expected_encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
     parameters = expected_encoder.config.to_dict()
-    key = compute_cache_key_v2(
+    key = compute_cache_key(
         representation_name=expected_encoder.name,
         encoder_implementation=expected_encoder.encoder_implementation,
         encoder_version=expected_encoder.version,
@@ -464,15 +437,15 @@ def test_strict_valid_cache_artifact_with_wrong_identity_is_a_miss(tmp_path):
         chain_ids=["A"],
     )
     wrong = AtomPointCloud(use_cache=False).encode(inp)
-    cache.set_v2(key, wrong)
-    cache.v2_set_keys.clear()
+    cache.set(key, wrong)
+    cache.set_keys.clear()
 
     result = expected_encoder.encode(inp)
 
     assert result.meta["representation_name"] == "residue_point_cloud"
-    assert cache.v2_get_keys == [key]
-    assert cache.v2_set_keys == [key]
-    assert cache.get_v2(key).meta["representation_name"] == "residue_point_cloud"
+    assert cache.get_keys == [key]
+    assert cache.set_keys == [key]
+    assert cache.get(key).meta["representation_name"] == "residue_point_cloud"
 
 
 def test_use_cache_false_does_not_instantiate_or_compute_cache(monkeypatch):
@@ -488,10 +461,10 @@ def test_use_cache_false_does_not_instantiate_or_compute_cache(monkeypatch):
         fail_cache_construction,
     )
     monkeypatch.setattr(
-        "eris.core.base_encoder.base_encoder.compute_cache_key_v2",
+        "eris.core.base_encoder.base_encoder.compute_cache_key",
         fail_cache_key,
     )
 
     artifact = ResiduePointCloudCA(use_cache=False).encode(StructureInput(source=str(PDB)))
 
-    assert artifact.meta["schema_version"] == 2
+    assert artifact.meta["schema_version"] == 1

@@ -5,7 +5,7 @@ from importlib import metadata
 
 import pytest
 
-from eris.core.artifact_schema_v2 import compute_config_fingerprint
+from eris.core.artifact_schema import canonical_json, compute_config_fingerprint
 from eris.core.config import (
     _CONFIG_TYPES_BY_REPRESENTATION,
     AtomKNNGraphConfig,
@@ -13,24 +13,13 @@ from eris.core.config import (
     FeatureMode,
     FeatureToken,
     ResidueContactGraphConfig,
-    ResidueContactMapBinsConfig,
     ResidueContactMapConfig,
     ResidueDistogramBinsConfig,
-    ResidueDistogramConfig,
     ResidueKNNGraphConfig,
     ResiduePointCloudConfig,
     ResidueVoxelGridConfig,
 )
-from eris.encoders.clouds.atom_point_cloud import AtomPointCloud
-from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
-from eris.encoders.geometry.contact_map_bins_ca import ContactMapBinsCA
-from eris.encoders.geometry.contact_map_ca import ContactMapCA
-from eris.encoders.geometry.distogram_bins_ca import DistogramBinsCA
-from eris.encoders.geometry.distogram_ca import DistogramCA
 from eris.encoders.graphs.atom_knn_graph import AtomKNNGraph
-from eris.encoders.graphs.residue_contact_graph import ResidueContactGraph
-from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
-from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
 
 ATOM_SELECTION = {
     "include_hetero": False,
@@ -294,7 +283,7 @@ def test_nested_feature_parameter_order_is_canonical():
 
     assert first == second
     assert first.to_dict() == second.to_dict()
-    assert first.to_json() == second.to_json()
+    assert canonical_json(first.to_dict()) == canonical_json(second.to_dict())
 
 
 def test_parameterized_residue_features_are_canonical_and_provider_pinned():
@@ -601,7 +590,7 @@ def test_explicit_edges_override_generation_fields_canonically():
 
     assert with_ignored_generation == canonical
     assert with_ignored_generation.to_dict() == canonical.to_dict()
-    assert with_ignored_generation.to_json() == canonical.to_json()
+    assert canonical_json(with_ignored_generation.to_dict()) == canonical_json(canonical.to_dict())
     assert canonical.to_dict()["edges"] == [2.0, 4.0, 8.0]
     assert canonical.dmin is canonical.dmax is canonical.num_bins is None
 
@@ -644,155 +633,18 @@ def test_serialization_preserves_none_and_excludes_non_parameter_state():
 
     assert payload["scale"] is None
     assert payload["voxel_size"] is None
-    assert config.to_json() == config.to_json()
+    canonical_json(payload)
     for excluded in (
         "use_cache",
         "cache",
         "name",
         "representation",
-        "granularity_contract",
         "representation_name",
         "granularity",
         "coordinate_source",
         "voxel_size_effective",
     ):
         assert excluded not in payload
-
-
-def _plain_value(value):
-    if isinstance(value, FeatureMode):
-        return "+".join(token.name for token in value.tokens)
-    return value
-
-
-@pytest.mark.parametrize(
-    ("config", "encoder", "connected_fields"),
-    [
-        (
-            AtomPointCloudConfig(),
-            AtomPointCloud(),
-            (*GEOMETRY, *ATOM_SELECTION, "node_attr_mode"),
-        ),
-        (
-            ResiduePointCloudConfig(),
-            ResiduePointCloudCA(),
-            (*GEOMETRY, "residue_center", "node_attr_mode"),
-        ),
-        (
-            AtomKNNGraphConfig(),
-            AtomKNNGraph(),
-            (
-                *GEOMETRY,
-                *ATOM_SELECTION,
-                "node_attr_mode",
-                "edge_attr_mode",
-                "rbf_k",
-                "rbf_dmax",
-                "local_cutoff",
-                "k",
-                "cutoff",
-                "symmetric",
-            ),
-        ),
-        (
-            ResidueKNNGraphConfig(),
-            ResidueKNNGraph(),
-            (
-                *GEOMETRY,
-                "residue_center",
-                "node_attr_mode",
-                "edge_attr_mode",
-                "rbf_k",
-                "rbf_dmax",
-                "local_cutoff",
-                "knn_mode",
-                "k",
-                "cutoff",
-                "symmetric",
-                "include_self_loops",
-            ),
-        ),
-        (
-            ResidueContactGraphConfig(),
-            ResidueContactGraph(),
-            (
-                *GEOMETRY,
-                "residue_center",
-                "node_attr_mode",
-                "edge_attr_mode",
-                "rbf_k",
-                "rbf_dmax",
-                "local_cutoff",
-                "cutoff",
-                "include_self_loops",
-            ),
-        ),
-        (
-            ResidueDistogramConfig(),
-            DistogramCA(),
-            (*GEOMETRY, "residue_center", "include_self"),
-        ),
-        (
-            ResidueDistogramBinsConfig(),
-            DistogramBinsCA(),
-            (
-                *GEOMETRY,
-                "residue_center",
-                "edges",
-                "dmin",
-                "dmax",
-                "num_bins",
-                "add_no_contact_class",
-                "include_self",
-                "dtype",
-            ),
-        ),
-        (
-            ResidueContactMapConfig(),
-            ContactMapCA(),
-            (*GEOMETRY, "residue_center", "cutoff", "include_self", "dtype"),
-        ),
-        (
-            ResidueContactMapBinsConfig(),
-            ContactMapBinsCA(),
-            (
-                *GEOMETRY,
-                "residue_center",
-                "edges",
-                "dmin",
-                "dmax",
-                "num_bins",
-                "add_no_contact_class",
-                "include_self",
-                "dtype",
-            ),
-        ),
-        (
-            ResidueVoxelGridConfig(),
-            VoxelGridCA(),
-            (
-                *GEOMETRY,
-                "residue_center",
-                "grid_size",
-                "voxel_size",
-                "fit",
-                "margin",
-                "channels",
-                "sigma",
-                "pool",
-                "clamp",
-                "dtype",
-            ),
-        ),
-    ],
-)
-def test_config_defaults_match_current_connected_encoder_fields(
-    config,
-    encoder,
-    connected_fields,
-):
-    for field_name in connected_fields:
-        assert _plain_value(getattr(config, field_name)) == getattr(encoder, field_name)
 
 
 def test_config_does_not_copy_current_identity_field_leaks():
@@ -807,4 +659,4 @@ def test_atom_knn_edge_mode_is_canonical_config_despite_runtime_class_attribute(
 
     assert config.edge_attr_mode.to_list() == ["dist", "rbf", "seq", "local"]
     assert "edge_attr_mode" not in encoder.__dict__
-    assert encoder.edge_attr_mode == "dist+rbf+seq+local"
+    assert not hasattr(encoder, "edge_attr_mode")

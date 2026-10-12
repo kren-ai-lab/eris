@@ -101,7 +101,7 @@ All selected blocks become one contiguous `node_attr (N,F)` matrix and one order
 follows the validated `feature_keys` vector. There is no fixed external width, padding, or
 truncation.
 
-External features flow through residue point clouds and graphs, Artifact Schema v2, packing,
+External features flow through residue point clouds and graphs, the artifact schema, packing,
 datasets, Torch export, and graph-only PyG export. Once saved, an artifact is self-contained;
 loading and downstream operations do not reopen the source NPZ.
 
