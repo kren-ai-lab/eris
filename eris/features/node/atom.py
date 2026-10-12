@@ -1,3 +1,7 @@
+"""Atom-level node attribute builder."""
+
+from typing import Any
+
 import numpy as np
 
 from eris.features.feature_builders import build_from_registry, validate_feature_mode
@@ -10,11 +14,11 @@ def build_node_attr(
     atom_role: np.ndarray,
     bfactor: np.ndarray,
     occ: np.ndarray,
-    mode: str = "elem+role+bfactor+occ",
+    mode: str | list[str | dict[str, Any]] = "elem+role+bfactor+occ",
     return_keys: bool = False,
     missing: str = "zero",
-) -> np.ndarray:
-    """node_attr: [onehot(elem,17), onehot(role,6), bfactor(1), occ(1)] => (N,25)"""
+) -> np.ndarray | tuple[np.ndarray, list[str]]:
+    """Build atom node attributes, by default ``[onehot(elem,17), onehot(role,6), bfactor(1), occ(1)]``."""
     elem_index = np.asarray(elem_index, dtype=np.int64).reshape(-1)
     atom_role = np.asarray(atom_role, dtype=np.int64).reshape(-1)
     n = int(elem_index.shape[0])

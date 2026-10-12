@@ -1,18 +1,22 @@
+"""Loading, validation and strict alignment of external per-residue feature payloads."""
+
 from __future__ import annotations
 
 import hashlib
 import json
 import re
 import struct
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from zipfile import BadZipFile
 
 import numpy as np
 
 from eris.core.residue_identity import format_residue_id
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
 
 ALIGNMENT_POLICY = "strict_residue_id"
 _HASH_DOMAIN = b"eris.external-residue-features.v1\x00"
@@ -41,6 +45,8 @@ class ExternalFeatureError(ValueError):
 
 @dataclass(frozen=True)
 class ExternalResiduePayload:
+    """Validated external residue feature matrix with its identity metadata."""
+
     path: str
     values: np.ndarray
     residue_ids: tuple[str, ...]
@@ -54,9 +60,11 @@ class ExternalResiduePayload:
 
     @property
     def feature_dim(self) -> int:
+        """Number of feature columns."""
         return int(self.values.shape[1])
 
     def descriptor(self) -> dict[str, Any]:
+        """Return the canonical parameter descriptor of this payload."""
         return {
             "path": self.path,
             "content_sha256": self.content_sha256,
@@ -91,22 +99,22 @@ def _load_npz_arrays(path: Path) -> dict[str, np.ndarray]:
     try:
         archive = np.load(path, allow_pickle=False)
         if not isinstance(archive, np.lib.npyio.NpzFile):
-            raise ExternalFeatureError(f"External feature file is not an .npz archive: {path}")
+            raise ExternalFeatureError(f"External feature file is not an .npz archive: {path}")  # noqa: TRY301
 
         field_names = list(archive.files)
         duplicate_fields = sorted({name for name in field_names if field_names.count(name) > 1})
         if duplicate_fields:
-            raise ExternalFeatureError(
+            raise ExternalFeatureError(  # noqa: TRY301
                 f"External feature archive contains duplicate fields: {duplicate_fields}"
             )
 
         fields = set(field_names)
         missing = sorted(_REQUIRED_FIELDS - fields)
         if missing:
-            raise ExternalFeatureError(f"External feature archive is missing fields: {missing}")
+            raise ExternalFeatureError(f"External feature archive is missing fields: {missing}")  # noqa: TRY301
         unknown = sorted(fields - _ALLOWED_FIELDS)
         if unknown:
-            raise ExternalFeatureError(f"External feature archive has unknown fields: {unknown}")
+            raise ExternalFeatureError(f"External feature archive has unknown fields: {unknown}")  # noqa: TRY301
 
         try:
             return {name: np.asarray(archive[name]) for name in field_names}
@@ -123,7 +131,7 @@ def _load_npz_arrays(path: Path) -> dict[str, np.ndarray]:
             archive.close()
 
 
-def _decode_text(value: np.generic, *, field: str) -> str:
+def _decode_text(value: Any, *, field: str) -> str:
     if isinstance(value, (bytes, np.bytes_)):
         try:
             return bytes(value).decode("utf-8")
@@ -209,7 +217,7 @@ def _duplicates(values: Sequence[str]) -> list[str]:
     return sorted(duplicates)
 
 
-def _preview(values: Sequence[str]) -> str:
+def _preview(values: Iterable[str]) -> str:
     ordered = sorted(values)
     preview = ordered[:_PREVIEW_LIMIT]
     suffix = "" if len(ordered) <= _PREVIEW_LIMIT else ", ..."
@@ -277,6 +285,7 @@ def _content_sha256(
 
 
 def load_external_payload(path: str | Path) -> ExternalResiduePayload:
+    """Load and validate an external residue feature ``.npz`` file."""
     resolved_path = _resolved_npz_path(path)
     arrays = _load_npz_arrays(resolved_path)
 
@@ -293,9 +302,7 @@ def load_external_payload(path: str | Path) -> ExternalResiduePayload:
             f"External residue_ids contains {len(duplicate_ids)} duplicate IDs; "
             f"preview={_preview(duplicate_ids)}"
         )
-    residue_chains = []
-    for residue_id in residue_ids:
-        residue_chains.append(_canonical_residue_parts(residue_id)[0])
+    residue_chains = [_canonical_residue_parts(residue_id)[0] for residue_id in residue_ids]
 
     source_name = _validate_key_component(
         _text_scalar(arrays["source_name"], field="source_name"),
@@ -371,6 +378,7 @@ def load_external_payload(path: str | Path) -> ExternalResiduePayload:
 
 
 def normalize_external_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Resolve ``path`` to the canonical payload descriptor, rejecting conflicting parameters."""
     unknown = sorted(set(params) - _DESCRIPTOR_FIELDS)
     if unknown:
         raise ExternalFeatureError(f"Unknown external parameters: {unknown}")
@@ -399,6 +407,7 @@ def project_external_fingerprint_params(params: dict[str, Any]) -> dict[str, Any
 
 
 def verify_external_params(params: Mapping[str, Any]) -> ExternalResiduePayload:
+    """Reload the payload and require it to match the canonical descriptor."""
     if set(params) != _DESCRIPTOR_FIELDS:
         missing = sorted(_DESCRIPTOR_FIELDS - set(params))
         extra = sorted(set(params) - _DESCRIPTOR_FIELDS)
@@ -425,6 +434,7 @@ def strict_align_external_payload(
     chain_ids: Sequence[str],
     model_index: int,
 ) -> np.ndarray:
+    """Return payload rows ordered to match ``target_residue_ids``, requiring identical ID sets."""
     selected_chain_ids = tuple(chain_ids)
     if payload.chain_ids != selected_chain_ids:
         raise ExternalFeatureError(
@@ -470,6 +480,7 @@ def external_feature_values(
     ctx: dict[str, Any],
     params: dict[str, Any],
 ) -> np.ndarray:
+    """Return the aligned external feature matrix for the residue rows in ``data``."""
     payload = verify_external_params(params)
     return strict_align_external_payload(
         payload,
@@ -480,10 +491,11 @@ def external_feature_values(
 
 
 def external_feature_keys(
-    data: dict[str, Any],
-    ctx: dict[str, Any],
+    _data: dict[str, Any],
+    _ctx: dict[str, Any],
     params: dict[str, Any],
 ) -> list[str]:
+    """Return the ``external.<source>.<key>`` column keys."""
     return [f"external.{params['source_name']}.{feature_key}" for feature_key in params["feature_keys"]]
 
 

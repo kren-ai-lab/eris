@@ -1,3 +1,5 @@
+"""Voxel grid attribute builder."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -28,14 +30,11 @@ def build_grid_attr(
     pool: str,
     sigma: float,
     return_keys: bool = False,
-) -> tuple[np.ndarray, list[str], dict[str, np.ndarray]]:
-
+) -> tuple[np.ndarray, list[str], dict[str, float | np.ndarray]]:
+    """Voxelize atom positions and return the grid, channel keys and grid geometry."""
     G = int(grid_size)
 
     pos_in = pos.copy()
-
-    # if pos_in.shape[0] == 3 and pos_in.shape[1] != 3:
-    #     pos_in = pos_in.T
 
     if center:
         centroid = np.asarray(centroid).reshape(-1)
@@ -59,9 +58,6 @@ def build_grid_attr(
 
     # -------- voxel mapping --------
     ijk = np.floor((pos_in - origin[None, :]) / vs).astype(np.int64)
-
-    # if ijk.shape[0] == 3 and ijk.shape[1] != 3:
-    #     ijk = ijk.T
 
     valid = (
         (ijk[:, 0] >= 0)
@@ -96,7 +92,7 @@ def build_grid_attr(
         return_keys=return_keys,
     )
 
-    if return_keys:
+    if isinstance(result, tuple):
         grid, keys = result
     else:
         grid = result

@@ -1,3 +1,5 @@
+"""Voxel grid feature implementations and their registration."""
+
 from typing import Any
 
 import numpy as np
@@ -12,10 +14,12 @@ _AA_INDEX_KEY = ["aa_index"]
 
 
 def normalize_plddt_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Validate and normalize ``plddt`` parameters."""
     return normalize_scalar_params("plddt voxel", params)
 
 
 def normalize_bfactor_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Validate and normalize ``bfactor`` parameters."""
     return normalize_scalar_params("bfactor voxel", params)
 
 
@@ -31,6 +35,7 @@ def add_occupancy_fn(
     ctx: dict[str, Any],
     params: dict[str, Any],
 ) -> int:
+    """Fill the ``occupancy`` voxel channels and return the next channel index."""
     ijk = data["ijk"]
     pool = ctx["pool"]
 
@@ -45,10 +50,12 @@ def add_occupancy_fn(
 
 
 def occupancy_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
+    """Return the ``occupancy`` column keys."""
     return ["occupancy"]
 
 
 def occupancy_n_channels(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> int:
+    """Return the number of ``occupancy`` channels."""
     return 1
 
 
@@ -101,6 +108,7 @@ def add_density_fn(
     ctx: dict[str, Any],
     params: dict[str, Any],
 ) -> int:
+    """Fill the ``density`` voxel channels and return the next channel index."""
     ijk = data["ijk"]
     pool = ctx["pool"]
 
@@ -115,10 +123,12 @@ def add_density_fn(
 
 
 def density_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
+    """Return the ``density`` column keys."""
     return ["density"]
 
 
 def density_n_channels(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> int:
+    """Return the number of ``density`` channels."""
     return 1
 
 
@@ -145,19 +155,20 @@ def _accumulate_scalar(
     pool: str,
 ) -> None:
     """Accumulate scalar values into a single channel (in-place).
+
     - max: max pooling
     - sum: sum pooling
     - mean: sum pooling + counts (counts_ch required)
     """
     if pool == "max":
         maxima: dict[tuple[int, int, int], float] = {}
-        for (i, j, k), val in zip(ijk, values):
+        for (i, j, k), val in zip(ijk, values, strict=False):
             coordinate = (int(i), int(j), int(k))
             maxima[coordinate] = max(maxima.get(coordinate, float("-inf")), float(val))
         for (i, j, k), val in maxima.items():
             grid_ch[i, j, k] = val
     else:
-        for (i, j, k), val in zip(ijk, values):
+        for (i, j, k), val in zip(ijk, values, strict=False):
             grid_ch[i, j, k] += val
             if counts_ch is not None:
                 counts_ch[i, j, k] += 1.0
@@ -173,6 +184,7 @@ def add_scalar_pool(
     pool: str,
     normalize: tuple[float, float] | None = None,
 ) -> int:
+    """Accumulate scalar values into one channel with the given pooling and return the next channel index."""
     v = values.copy()
 
     if normalize is not None:
@@ -196,7 +208,7 @@ def add_plddt_fn(
     ctx: dict[str, Any],
     params: dict[str, Any],
 ) -> int:
-
+    """Fill the ``plddt`` voxel channels and return the next channel index."""
     return add_scalar_pool(
         grid=grid,
         counts=counts,
@@ -209,10 +221,12 @@ def add_plddt_fn(
 
 
 def plddt_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
+    """Return the ``plddt`` column keys."""
     return ["plddt"]
 
 
 def plddt_n_channels(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> int:
+    """Return the number of ``plddt`` channels."""
     return 1
 
 
@@ -241,7 +255,7 @@ def add_bfactor_fn(
     ctx: dict[str, Any],
     params: dict[str, Any],
 ) -> int:
-
+    """Fill the ``bfactor`` voxel channels and return the next channel index."""
     return add_scalar_pool(
         grid=grid,
         counts=counts,
@@ -254,10 +268,12 @@ def add_bfactor_fn(
 
 
 def bfactor_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
+    """Return the ``bfactor`` column keys."""
     return ["bfactor"]
 
 
 def bfactor_n_channels(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> int:
+    """Return the number of ``bfactor`` channels."""
     return 1
 
 
@@ -286,17 +302,18 @@ def _accumulate_onehot(
     pool: str,
 ) -> None:
     """Accumulate AA onehot into channels base_ch..base_ch+20.
+
     - max: set presence (0/1)
     - sum/mean: add 1 per hit (mean divides by counts later)
     """
     if pool == "max":
-        for (i, j, k), a in zip(ijk, aa):
-            a = int(a)
+        for (i, j, k), a_raw in zip(ijk, aa, strict=False):
+            a = int(a_raw)
             if 0 <= a < 21:
                 grid[base_ch + a, i, j, k] = 1.0
     else:
-        for (i, j, k), a in zip(ijk, aa):
-            a = int(a)
+        for (i, j, k), a_raw in zip(ijk, aa, strict=False):
+            a = int(a_raw)
             if 0 <= a < 21:
                 grid[base_ch + a, i, j, k] += 1.0
                 if counts is not None:
@@ -312,6 +329,7 @@ def add_aa_onehot_fn(
     ctx: dict[str, Any],
     params: dict[str, Any],
 ) -> int:
+    """Fill the ``aa_onehot`` voxel channels and return the next channel index."""
     ijk = data["ijk"]
     aa_v = data["aa_index"]
     pool = ctx["pool"]
@@ -321,10 +339,12 @@ def add_aa_onehot_fn(
 
 
 def aa_onehot_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
+    """Return the ``aa_onehot`` column keys."""
     return _AA_ONEHOT_KEYS
 
 
 def aa_onehot_n_channels(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> int:
+    """Return the number of ``aa_onehot`` channels."""
     return params.get("num_classes", 21)
 
 

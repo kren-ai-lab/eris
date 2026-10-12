@@ -1,3 +1,5 @@
+"""Registry-driven feature assembly for node, edge and voxel features."""
+
 from typing import Any
 
 import numpy as np
@@ -12,7 +14,7 @@ def _select_features(
     *,
     kind: str,
     allow_unvalidated_params: bool,
-):
+) -> list[tuple[Any, dict[str, Any]]]:
     toks = parse_mode(mode)
     token_names = [token for token, _ in toks]
 
@@ -42,6 +44,7 @@ def _select_features(
 
 
 def validate_feature_mode(mode: Any, registry: dict[str, FeatureSpec]) -> None:
+    """Raise if ``mode`` names unknown, duplicate or invalid-parameter tokens."""
     _select_features(
         mode,
         registry,
@@ -58,11 +61,12 @@ def validate_feature_mode(mode: Any, registry: dict[str, FeatureSpec]) -> None:
 def build_from_registry(
     data: dict[str, Any],
     *,
-    mode: str,
+    mode: Any,
     registry: dict[str, FeatureSpec],
     feat_ctx: dict[str, Any] | None = None,
     return_keys: bool = False,
-):
+) -> np.ndarray | tuple[np.ndarray, list[str]]:
+    """Build a float32 ``(N, F)`` matrix from registered features, optionally with keys."""
     feat_ctx = feat_ctx or {}
 
     selected = _select_features(
@@ -87,7 +91,7 @@ def build_from_registry(
     # -------------------------
     # Validate requirements
     # -------------------------
-    for spec, params in selected:
+    for spec, _params in selected:
         missing = [k for k in spec.requires if k not in data and k not in feat_ctx]
         if missing:
             raise KeyError(f"Feature '{spec.token}' requires missing fields: {missing}")
@@ -160,7 +164,8 @@ def build_from_registry_voxel(
     grid_size: int,
     pool: str = "sum",
     return_keys: bool = False,
-):
+) -> np.ndarray | tuple[np.ndarray, list[str]]:
+    """Build a float32 ``(C, G, G, G)`` voxel grid from registered features, optionally with keys."""
     feat_ctx = dict(feat_ctx or {})
     pool_mode = _pool_mode(pool)
     feat_ctx["pool"] = pool_mode
@@ -228,7 +233,7 @@ def build_from_registry_voxel(
         raise ValueError(f"Voxel channel/key mismatch: {C} channels for {len(keys)} keys")
 
     # -------- finalize --------
-    if pool_mode == "mean":
+    if counts is not None:  # allocated above exactly when pool_mode == "mean"
         denom = np.maximum(counts, 1.0)
         grid /= denom
 

@@ -1,10 +1,12 @@
+"""Canonical vocabularies and per-residue chemistry tables."""
+
 from __future__ import annotations
 
 import numpy as np
 
 # Canonical AA vocab for Eris (matches typical AA_index conventions)
 # 20 standard + X for unknown
-AA_VOCAB: list[str] = list("ACDEFGHIKLMNPQRSTVWY") + ["X"]
+AA_VOCAB: list[str] = [*"ACDEFGHIKLMNPQRSTVWY", "X"]
 AA_TO_INDEX: dict[str, int] = {aa: i for i, aa in enumerate(AA_VOCAB)}
 UNKNOWN_AA = "X"
 UNKNOWN_INDEX = AA_TO_INDEX[UNKNOWN_AA]

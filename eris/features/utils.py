@@ -1,9 +1,13 @@
+"""Shared helpers for feature modes, parameters and array validation."""
+
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def normalize_choice(
@@ -24,6 +28,7 @@ def normalize_choice(
 
 
 def parse_mode(mode: Any) -> list[tuple[str, dict[str, Any]]]:
+    """Parse a mode string or list into ``(token, params)`` pairs."""
     if isinstance(mode, str):
         return [(t.strip(), {}) for t in mode.split("+") if t.strip()]
 
@@ -43,18 +48,18 @@ def parse_mode(mode: Any) -> list[tuple[str, dict[str, Any]]]:
                 token, params = next(iter(item.items()))
 
                 if not isinstance(token, str):
-                    raise ValueError(f"Feature token must be string: {item}")
+                    raise ValueError(f"Feature token must be string: {item}")  # noqa: TRY004
 
                 if params is None:
                     params = {}
 
                 if not isinstance(params, dict):
-                    raise ValueError(f"Params for '{token}' must be dict")
+                    raise ValueError(f"Params for '{token}' must be dict")  # noqa: TRY004
 
                 result.append((token.strip(), params))
 
             else:
-                raise ValueError(f"Invalid mode element: {item}")
+                raise ValueError(f"Invalid mode element: {item}")  # noqa: TRY004
 
         return result
 
@@ -62,6 +67,7 @@ def parse_mode(mode: Any) -> list[tuple[str, dict[str, Any]]]:
 
 
 def safe_float(x: np.ndarray, *, missing: str = "zero") -> np.ndarray:
+    """Cast to float32, replacing non-finite values with zero unless ``missing`` is ``"nan"``."""
     y = np.asarray(x, dtype=np.float32)
     if missing == "zero":
         return np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
@@ -71,6 +77,7 @@ def safe_float(x: np.ndarray, *, missing: str = "zero") -> np.ndarray:
 
 
 def normalize_scalar_params(label: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Validate the ``normalization`` parameter of a scalar feature."""
     unknown = sorted(set(params) - {"normalization"})
     if unknown:
         raise ValueError(f"Unknown {label} parameters: {unknown}")
@@ -84,6 +91,7 @@ def normalize_scalar_params(label: str, params: dict[str, Any]) -> dict[str, Any
 
 
 def onehot(index: np.ndarray, num_classes: int) -> np.ndarray:
+    """One-hot encode indices; out-of-range indices yield all-zero rows."""
     idx = np.asarray(index, dtype=np.int64).reshape(-1)
     n = idx.shape[0]
     out = np.zeros((n, num_classes), dtype=np.float32)
@@ -93,6 +101,7 @@ def onehot(index: np.ndarray, num_classes: int) -> np.ndarray:
 
 
 def ensure_1d(x: np.ndarray, n: int, name: str) -> np.ndarray:
+    """Return ``x`` as an array, requiring shape ``(n,)``."""
     a = np.asarray(x)
     if a.ndim != 1 or a.shape[0] != n:
         raise ValueError(f"{name} must be shape (N,), got {a.shape}")
@@ -100,6 +109,7 @@ def ensure_1d(x: np.ndarray, n: int, name: str) -> np.ndarray:
 
 
 def validate_bin_edges(edges: Sequence[float]) -> np.ndarray:
+    """Return float32 bin edges, requiring at least two finite, strictly increasing values."""
     arr = np.asarray(list(edges), dtype=np.float32).reshape(-1)
     if arr.size < 2:
         raise ValueError("edges must have at least 2 values (bin boundaries).")

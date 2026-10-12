@@ -1,3 +1,5 @@
+"""Interface-contact characterization for residue graphs."""
+
 from __future__ import annotations
 
 from numbers import Real
@@ -14,6 +16,7 @@ _DISTANCE_DEFINITION = "minimum_inter_residue_atom_distance"
 
 
 def normalize_interface_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Validate interface parameters and return them with the fixed definitions filled in."""
     fixed = {
         "atom_selection": _ATOM_SELECTION,
         "chain_relation": _CHAIN_RELATION,
@@ -39,6 +42,7 @@ def normalize_interface_params(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def resolve_interface_cutoff(node_mode: Any, edge_mode: Any) -> float | None:
+    """Return the shared interface cutoff, or None when neither mode requests the interface."""
     node = dict(parse_mode(node_mode)).get("interface")
     edge = dict(parse_mode(edge_mode)).get("interface_contact")
     if (node is None) != (edge is None):
@@ -46,7 +50,7 @@ def resolve_interface_cutoff(node_mode: Any, edge_mode: Any) -> float | None:
             "residue graph interface characterization requires both node token "
             "'interface' and edge token 'interface_contact'"
         )
-    if node is None:
+    if node is None or edge is None:
         return None
     if node["cutoff"] != edge["cutoff"]:
         raise ValueError("interface and interface_contact must use the same cutoff")
@@ -101,6 +105,7 @@ def compute_interface_contacts(
 
 
 def interface_edge_flags(edge_index: np.ndarray, contact_pairs: np.ndarray) -> np.ndarray:
+    """Return a boolean flag per edge marking whether its endpoints are in contact."""
     edges = np.asarray(edge_index, dtype=np.int64)
     if edges.ndim != 2 or edges.shape[0] != 2:
         raise ValueError("edge_index must have shape (2, E)")

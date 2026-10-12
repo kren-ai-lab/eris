@@ -1,4 +1,8 @@
+"""Edge attribute builder."""
+
 from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 
@@ -11,7 +15,7 @@ def build_edge_attr(
     edge_index: np.ndarray,
     edge_dist: np.ndarray,
     *,
-    mode: str = "dist+rbf+seq+local",
+    mode: str | list[str | dict[str, Any]] = "dist+rbf+seq+local",
     rbf_k: int = 16,
     rbf_dmax: float = 20.0,
     seq_pos: np.ndarray | None = None,
@@ -26,7 +30,8 @@ def build_edge_attr(
     local_cutoff: int = 4,
     return_keys: bool = False,
 ) -> np.ndarray | tuple[np.ndarray, list[str]]:
-    """Deterministic edge features with stable keys.
+    """Build deterministic edge features with stable keys.
+
     Tokens:
       - dist
       - rbf
@@ -60,6 +65,7 @@ def build_edge_attr(
     if needs_chain_relation and chains is None:
         raise ValueError("same_chain and inter_chain features require aligned chain_id")
 
+    seq_sep = None
     if needs_seq_sep:
         if seq_pos is None:
             seq_sep = np.zeros((E,), dtype=np.float32)
@@ -91,7 +97,7 @@ def build_edge_attr(
     }
     if needs_seq_sep:
         ctx["seq_sep"] = seq_sep
-    if needs_chain_relation:
+    if needs_chain_relation and chains is not None:  # chains is never None here (checked above)
         ctx["same_chain"] = chains[src] == chains[dst]
     if interface_contact is not None:
         interface_contact = np.asarray(interface_contact, dtype=bool).reshape(-1)

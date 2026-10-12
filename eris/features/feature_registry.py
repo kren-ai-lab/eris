@@ -1,10 +1,29 @@
+"""Feature specification dataclasses and the global feature registries."""
+
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
 ParamsFn = Callable[[dict[str, Any]], dict[str, Any]]
+
+
+class VoxelFillFn(Protocol):
+    """Voxel fill callback, called with keyword arguments."""
+
+    def __call__(
+        self,
+        *,
+        grid: np.ndarray,
+        counts: np.ndarray | None,
+        ch_start: int,
+        data: dict[str, Any],
+        ctx: dict[str, Any],
+        params: dict[str, Any],
+    ) -> int:
+        """Fill channels from ``ch_start`` and return the next channel index."""
+        ...
 
 
 def _normalize_feature_params(
@@ -29,6 +48,8 @@ def _normalize_feature_params(
 
 @dataclass(frozen=True)
 class FeatureSpec:
+    """Registered node or edge feature and its callbacks."""
+
     token: str
     order: int
     requires: set[str]
@@ -40,9 +61,11 @@ class FeatureSpec:
     fingerprint_params_fn: ParamsFn | None = None
 
     def normalize_params(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Validate and normalize user parameters."""
         return _normalize_feature_params(self.token, params, self.params_fn)
 
     def project_fingerprint_params(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Project normalized parameters onto the fields that affect cache identity."""
         if self.fingerprint_params_fn is None:
             return dict(params)
         projected = self.fingerprint_params_fn(dict(params))
@@ -53,22 +76,13 @@ class FeatureSpec:
 
 @dataclass(frozen=True)
 class VoxelFeatureSpec:
+    """Registered voxel-grid feature and its callbacks."""
+
     token: str
     order: int
     requires: set[str]
     n_channels_fn: Callable[[dict[str, Any], dict[str, Any], dict[str, Any]], int]
-    fill_fn: Callable[
-        [
-            np.ndarray,
-            np.ndarray | None,
-            int,
-            dict[str, Any],
-            dict[str, Any],
-            dict[str, Any],
-            str,
-        ],
-        int,
-    ]
+    fill_fn: VoxelFillFn
     keys_fn: Callable[[dict[str, Any], dict[str, Any], dict[str, Any]], list[str]]
     params_fn: ParamsFn | None = None
 
@@ -78,6 +92,7 @@ class VoxelFeatureSpec:
         *,
         allow_unvalidated: bool = False,
     ) -> dict[str, Any]:
+        """Validate and normalize user parameters."""
         return _normalize_feature_params(
             self.token,
             params,
@@ -92,24 +107,28 @@ GRAPH_EDGE_REGISTRY: dict[str, FeatureSpec] = {}
 GRID_VOXEL_REGISTRY: dict[str, VoxelFeatureSpec] = {}
 
 
-def _register(registry: dict[str, Any], spec: Any):
+def _register(registry: dict[str, Any], spec: Any) -> Any:
     if spec.token in registry:
         raise ValueError(f"Duplicate feature token: {spec.token}")
     registry[spec.token] = spec
     return spec
 
 
-def register_residue_node_feature(spec: FeatureSpec):
+def register_residue_node_feature(spec: FeatureSpec) -> FeatureSpec:
+    """Register a residue node feature."""
     return _register(RESIDUE_NODE_REGISTRY, spec)
 
 
-def register_atom_node_feature(spec: FeatureSpec):
+def register_atom_node_feature(spec: FeatureSpec) -> FeatureSpec:
+    """Register an atom node feature."""
     return _register(ATOM_NODE_REGISTRY, spec)
 
 
-def register_graph_edge_feature(spec: FeatureSpec):
+def register_graph_edge_feature(spec: FeatureSpec) -> FeatureSpec:
+    """Register a graph edge feature."""
     return _register(GRAPH_EDGE_REGISTRY, spec)
 
 
-def register_grid_voxel_feature(spec: VoxelFeatureSpec):
+def register_grid_voxel_feature(spec: VoxelFeatureSpec) -> VoxelFeatureSpec:
+    """Register a grid voxel feature."""
     return _register(GRID_VOXEL_REGISTRY, spec)
