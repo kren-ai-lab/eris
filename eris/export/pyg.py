@@ -1,3 +1,5 @@
+"""Export of artifacts to PyTorch Geometric data."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -35,10 +37,10 @@ _EDGE_INDEX_INTEGER_DTYPES = {
 }
 
 
-def _pyg_dependencies():
+def _pyg_dependencies() -> tuple[Any, Any]:
     try:
-        import torch
-        from torch_geometric.data import Data
+        import torch  # noqa: PLC0415
+        from torch_geometric.data import Data  # noqa: PLC0415
     except ImportError as error:  # pragma: no cover - environment dependent
         raise ImportError(
             "PyG export requires optional dependencies 'torch' and 'torch_geometric'. "
@@ -57,9 +59,7 @@ def _identity(artifact: StructureArtifact) -> tuple[str, str]:
     family = artifact.meta.get("representation_family")
     representation_type = artifact.meta.get("representation_type")
     if not isinstance(family, str) or not isinstance(representation_type, str):
-        raise PyGExportError(
-            "Artifact metadata must define representation_family and representation_type."
-        )
+        raise PyGExportError("Artifact metadata must define representation_family and representation_type.")
     return family, representation_type
 
 
@@ -113,9 +113,8 @@ def _attach_auxiliary_attrs(data: Any, torch_mapping: Mapping[str, Any]) -> None
         data.extra = deepcopy(dict(extra))
 
 
-def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None):
-    """
-    Convert a canonical graph Torch mapping into ``torch_geometric.data.Data``.
+def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None) -> Any:
+    """Convert a canonical graph Torch mapping into ``torch_geometric.data.Data``.
 
     This compatibility helper is graph-only. It does not infer topology for cloud,
     matrix, grid, or learned embedding mappings.
@@ -123,9 +122,7 @@ def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None):
     family = out.get("representation_family")
     representation_type = out.get("representation_type")
     if family is not None and family != "explicit":
-        raise PyGExportError(
-            "Only explicit graph Torch mappings are supported for PyG graph export."
-        )
+        raise PyGExportError("Only explicit graph Torch mappings are supported for PyG graph export.")
     if representation_type is not None and representation_type != "graph":
         raise PyGExportError("Only graph Torch mappings are supported for PyG graph export.")
     if "edge_index" not in out:
@@ -150,7 +147,7 @@ def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None):
         ("graph_attr", "graph_attr"),
         ("centroid", "centroid"),
     ):
-        value = out.get(source_key)
+        value: Any = out.get(source_key)
         if isinstance(value, torch.Tensor):
             setattr(pyg, target_key, value.clone())
 
@@ -173,9 +170,8 @@ def to_pyg(
     artifact: StructureArtifact,
     *,
     device: str | None = None,
-):
-    """
-    Export one explicit graph artifact schema artifact to ``torch_geometric.data.Data``.
+) -> Any:
+    """Export one explicit graph artifact schema artifact to ``torch_geometric.data.Data``.
 
     Non-graph artifacts are rejected because this exporter preserves public topology; it
     never invents edges from clouds, matrices, grids, or learned model internals.
@@ -199,6 +195,7 @@ def save_artifact_to_pyg(
     out_path: Path,
     device: str | None = None,
 ) -> None:
+    """Export one artifact directory to a PyG file."""
     torch, _ = _pyg_dependencies()
     artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
     pyg = to_pyg(artifact, device=device)

@@ -1,3 +1,5 @@
+"""Biotite-backed secondary-structure and solvent-accessibility annotations."""
+
 from __future__ import annotations
 
 from importlib import metadata
@@ -101,7 +103,7 @@ CANONICAL_REQUIRED_HEAVY_ATOMS = {
 
 
 def _load_biotite() -> Any:
-    import biotite.structure as structure
+    from biotite import structure  # noqa: PLC0415
 
     return structure
 
@@ -206,7 +208,7 @@ def solvent_accessibility(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute residue-aligned Shrake-Rupley SASA and Tien RSA."""
     structure = _load_biotite()
-    from biotite.structure.info import vdw_radius_protor
+    from biotite.structure.info import vdw_radius_protor  # noqa: PLC0415
 
     coordinates = np.asarray(coordinates, dtype=np.float32)
     residue_index = np.asarray(residue_index, dtype=np.int64).reshape(-1)
@@ -237,9 +239,7 @@ def solvent_accessibility(
                 f"ProtOr radius is unavailable for selected polymer atom {residue_name}:{name}"
             ) from error
         if radius is None or not np.isfinite(radius):
-            raise ValueError(
-                f"ProtOr radius is unavailable for selected polymer atom {residue_name}:{name}"
-            )
+            raise ValueError(f"ProtOr radius is unavailable for selected polymer atom {residue_name}:{name}")
 
     if n_atoms:
         atom_array = _biotite_atom_array(

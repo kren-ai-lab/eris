@@ -1,7 +1,9 @@
+"""Command that encodes one structure."""
+
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -13,7 +15,7 @@ from eris.exceptions import CacheError, ConfigError, RepresentationNotFoundError
 
 
 def encode(
-    input: Annotated[
+    input: Annotated[  # noqa: A002
         str,
         typer.Argument(..., metavar="INPUT", help="Structure file to encode."),
     ],
@@ -34,8 +36,7 @@ def encode(
     ] = None,
 ) -> None:
     """Encode one structure file into an Eris artifact."""
-
-    encode_kwargs = {
+    encode_kwargs: dict[str, Any] = {
         "input": input,
         "representation": representation,
         "output": out,

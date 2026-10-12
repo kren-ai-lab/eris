@@ -1,3 +1,5 @@
+"""Graph encoder registrations."""
+
 from eris.core.config import (
     AtomKNNGraphConfig,
     ResidueContactGraphConfig,

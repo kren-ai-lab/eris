@@ -1,3 +1,5 @@
+"""Metadata-only indexing of artifact directories into a packed dataset index."""
+
 from __future__ import annotations
 
 import csv
@@ -5,10 +7,13 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.pipelines.manifest import row_location, write_atomically
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 PACKED_INDEX_FIELDS: tuple[str, ...] = (
     "id",
@@ -30,6 +35,8 @@ class PackIndexError(ValueError):
 
 @dataclass(frozen=True)
 class PackedIndexRow:
+    """One row of a packed dataset index."""
+
     id: str
     artifact_dir: str
     meta_path: str
@@ -42,6 +49,7 @@ class PackedIndexRow:
     shape_summary: str
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the row as a mapping."""
         return {
             "id": self.id,
             "artifact_dir": self.artifact_dir,
@@ -62,6 +70,7 @@ class PackedIndexRow:
         *,
         row_index: int | None = None,
     ) -> PackedIndexRow:
+        """Build a row from an index mapping."""
         return cls(
             id=_required_index_string(row.get("id"), "id", row_index=row_index),
             artifact_dir=_required_locator(
@@ -134,9 +143,7 @@ def _required_locator(value: Any, field: str, *, row_index: int | None) -> str:
     if _is_absolute_locator(text):
         raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must be relative")
     if "\\" in text:
-        raise PackIndexError(
-            f"{_row_location(row_index)}: field {field!r} must use POSIX '/' separators"
-        )
+        raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must use POSIX '/' separators")
     return text
 
 
@@ -150,9 +157,7 @@ def _literal_index_value(
     text = _required_index_string(value, field, row_index=row_index)
     if text not in choices:
         expected = ", ".join(sorted(choices))
-        raise PackIndexError(
-            f"{_row_location(row_index)}: field {field!r} must be one of: {expected}"
-        )
+        raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must be one of: {expected}")
     return text
 
 
@@ -167,15 +172,14 @@ def _optional_index_count(value: Any, field: str, *, row_index: int | None) -> i
             return int(text)
     if type(value) is int and value >= 0:
         return value
-    raise PackIndexError(
-        f"{_row_location(row_index)}: field {field!r} must be empty or an integer >= 0"
-    )
+    raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must be empty or an integer >= 0")
 
 
 def parse_shape_summary(value: str) -> dict[str, Any]:
+    """Decode a shape summary string into a mapping."""
     parsed = json.loads(value)
     if not isinstance(parsed, dict):
-        raise ValueError("shape_summary must decode to an object")
+        raise ValueError("shape_summary must decode to an object")  # noqa: TRY004
     return parsed
 
 
@@ -206,6 +210,7 @@ def _posix_locator(path: Path, anchor: Path) -> str:
 
 
 def resolve_packed_locator(index_path: str | Path, locator: str) -> Path:
+    """Resolve a packed locator relative to the index file."""
     parts = PurePosixPath(locator).parts
     return Path(index_path).parent.joinpath(*parts)
 
@@ -231,6 +236,7 @@ def _artifact_id(
 
 
 def shape_summary_from_metadata(meta: dict[str, Any]) -> str:
+    """Encode the metadata shapes as a canonical JSON string."""
     shapes = meta.get("shapes")
     if not isinstance(shapes, dict):
         shapes = {}
@@ -267,8 +273,7 @@ def _candidate_artifact_dirs(root: Path) -> list[Path]:
         ordered_incomplete = sorted(incomplete, key=lambda item: item.as_posix())
         relative = ", ".join(_posix_relative(path, root) for path in ordered_incomplete)
         raise PackIndexError(
-            "Incomplete artifact directories found; each candidate needs meta.json "
-            f"and data.npz: {relative}"
+            f"Incomplete artifact directories found; each candidate needs meta.json and data.npz: {relative}"
         )
 
     return sorted(candidates, key=lambda item: _posix_relative(item, root))
@@ -322,24 +327,19 @@ def _validate_index_rows(rows: list[PackedIndexRow], root: Path) -> None:
         if resolved in seen_artifact_dirs:
             first = seen_artifact_dirs[resolved]
             raise PackIndexError(
-                f"row {index}: duplicate artifact_dir {row.artifact_dir!r} "
-                f"first seen at row {first}"
+                f"row {index}: duplicate artifact_dir {row.artifact_dir!r} first seen at row {first}"
             )
         seen_artifact_dirs[resolved] = index
 
 
 def validate_packed_index_rows(rows: list[PackedIndexRow], locator_root: Path) -> None:
     """Validate duplicate/ambiguity constraints for parsed packed index rows."""
-
     _validate_index_rows(rows, locator_root)
 
 
 def _csv_row(row: PackedIndexRow) -> dict[str, Any]:
     serialized = row.to_dict()
-    return {
-        field: "" if serialized[field] is None else serialized[field]
-        for field in PACKED_INDEX_FIELDS
-    }
+    return {field: "" if serialized[field] is None else serialized[field] for field in PACKED_INDEX_FIELDS}
 
 
 def _write_index_safely(path: Path, rows: list[PackedIndexRow]) -> None:
@@ -352,7 +352,7 @@ def _write_index_safely(path: Path, rows: list[PackedIndexRow]) -> None:
     write_atomically(path, write)
 
 
-def _validate_packed_index_header(fieldnames: list[str] | None) -> None:
+def _validate_packed_index_header(fieldnames: Sequence[str] | None) -> None:
     if fieldnames is None:
         raise PackIndexError("Packed index CSV is missing a header")
     missing = [field for field in PACKED_INDEX_FIELDS if field not in fieldnames]
@@ -363,12 +363,12 @@ def _validate_packed_index_header(fieldnames: list[str] | None) -> None:
         expected = ",".join(PACKED_INDEX_FIELDS)
         actual = ",".join(fieldnames)
         raise PackIndexError(
-            "Packed index CSV canonical columns must appear first in exact order: "
-            f"{expected}; got: {actual}"
+            f"Packed index CSV canonical columns must appear first in exact order: {expected}; got: {actual}"
         )
 
 
 def read_packed_index(path: str | Path) -> list[PackedIndexRow]:
+    """Read and validate a packed dataset index."""
     index_path = Path(path)
     if not index_path.exists():
         raise PackIndexError(f"Packed index does not exist: {index_path}")
@@ -379,8 +379,7 @@ def read_packed_index(path: str | Path) -> list[PackedIndexRow]:
         reader = csv.DictReader(handle)
         _validate_packed_index_header(reader.fieldnames)
         rows = [
-            PackedIndexRow.from_dict(dict(row), row_index=index)
-            for index, row in enumerate(reader, start=1)
+            PackedIndexRow.from_dict(dict(row), row_index=index) for index, row in enumerate(reader, start=1)
         ]
     validate_packed_index_rows(rows, index_path.parent)
     return rows
@@ -390,8 +389,7 @@ def pack_artifacts(
     artifact_root: str | Path,
     output_path: str | Path,
 ) -> list[PackedIndexRow]:
-    """
-    Build a canonical metadata-only packed index for strict-valid Artifact Schema directories.
+    """Build a canonical metadata-only packed index for strict-valid Artifact Schema directories.
 
     The function never rewrites artifact ``meta.json`` or ``data.npz`` files. ``output_path``
     is replaced atomically only after discovery, validation, duplicate checks, and full CSV

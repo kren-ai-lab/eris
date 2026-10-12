@@ -413,7 +413,7 @@ if loaded:
     raise SystemExit(f'optional frameworks loaded: {loaded}')
 """
 
-    subprocess.run([sys.executable, "-c", script], check=True)
+    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603
 
 
 def _assert_real_gearnet_artifact(

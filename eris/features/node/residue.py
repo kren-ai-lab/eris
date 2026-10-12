@@ -1,6 +1,8 @@
+"""Residue-level node attribute builder."""
+
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 
@@ -13,32 +15,32 @@ def build_node_attr(
     aa_index: np.ndarray,
     *,
     # new names (contract)
-    plddt_ca: Optional[np.ndarray] = None,
-    bfactor_ca: Optional[np.ndarray] = None,
-    has_ca: Optional[np.ndarray] = None,
-    residue_ids: Optional[np.ndarray] = None,
-    chain_id: Optional[np.ndarray] = None,
-    chain_ids: Optional[tuple[str, ...]] = None,
-    model_index: Optional[int] = None,
-    structural_residue_index: Optional[np.ndarray] = None,
-    backbone_n: Optional[np.ndarray] = None,
-    backbone_ca: Optional[np.ndarray] = None,
-    backbone_c: Optional[np.ndarray] = None,
-    backbone_n_mask: Optional[np.ndarray] = None,
-    backbone_ca_mask: Optional[np.ndarray] = None,
-    backbone_c_mask: Optional[np.ndarray] = None,
-    resname: Optional[np.ndarray] = None,
-    polymer_heavy_atom_coordinates: Optional[np.ndarray] = None,
-    polymer_heavy_atom_residue_index: Optional[np.ndarray] = None,
-    polymer_heavy_atom_name: Optional[np.ndarray] = None,
-    polymer_heavy_atom_element: Optional[np.ndarray] = None,
-    interface_flags: Optional[np.ndarray] = None,
+    plddt_ca: np.ndarray | None = None,
+    bfactor_ca: np.ndarray | None = None,
+    has_ca: np.ndarray | None = None,
+    residue_ids: np.ndarray | None = None,
+    chain_id: np.ndarray | None = None,
+    chain_ids: tuple[str, ...] | None = None,
+    model_index: int | None = None,
+    structural_residue_index: np.ndarray | None = None,
+    backbone_n: np.ndarray | None = None,
+    backbone_ca: np.ndarray | None = None,
+    backbone_c: np.ndarray | None = None,
+    backbone_n_mask: np.ndarray | None = None,
+    backbone_ca_mask: np.ndarray | None = None,
+    backbone_c_mask: np.ndarray | None = None,
+    resname: np.ndarray | None = None,
+    polymer_heavy_atom_coordinates: np.ndarray | None = None,
+    polymer_heavy_atom_residue_index: np.ndarray | None = None,
+    polymer_heavy_atom_name: np.ndarray | None = None,
+    polymer_heavy_atom_element: np.ndarray | None = None,
+    interface_flags: np.ndarray | None = None,
     # contract
-    mode: str = "onehot+physchem+bfactor_ca",
+    mode: str | list[str | dict[str, Any]] = "onehot+physchem+bfactor_ca",
     missing: str = "zero",
     return_keys: bool = False,
-) -> Union[np.ndarray, Tuple[np.ndarray, List[str]]]:
-
+) -> np.ndarray | tuple[np.ndarray, list[str]]:
+    """Build residue node attributes from the registered residue features in ``mode``."""
     aa_index = np.asarray(aa_index, dtype=np.int64).reshape(-1)
     n = int(aa_index.shape[0])
     if n == 0:
@@ -46,10 +48,7 @@ def build_node_attr(
         x = np.zeros((0, 0), dtype=np.float32)
         return (x, []) if return_keys else x
 
-    if has_ca is None:
-        has_ca = np.ones((n,), dtype=bool)
-    else:
-        has_ca = ensure_1d(has_ca, n, "has_ca").astype(bool)
+    has_ca = np.ones((n,), dtype=bool) if has_ca is None else ensure_1d(has_ca, n, "has_ca").astype(bool)
 
     data = {
         "aa_index": aa_index,
@@ -109,7 +108,7 @@ def build_node_attr(
             if value is not None:
                 data[name] = ensure_1d(value, atom_count, name).astype(dtype)
 
-    feat_ctx = {
+    feat_ctx: dict[str, Any] = {
         "missing": missing,
     }
     if chain_ids is not None:

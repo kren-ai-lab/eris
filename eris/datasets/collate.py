@@ -1,3 +1,5 @@
+"""Collation of packed samples into batches."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -72,8 +74,7 @@ def _validate_metadata(
 
     if metadata["representation_family"] != family:
         raise ValueError(
-            f"collate expected representation_family={family!r}, "
-            f"got {metadata['representation_family']!r}"
+            f"collate expected representation_family={family!r}, got {metadata['representation_family']!r}"
         )
     if metadata["representation_type"] != representation_type:
         raise ValueError(
@@ -86,9 +87,7 @@ def _validate_metadata(
         if any(present) and not all(present):
             raise ValueError(f"partial optional metadata presence for key {key!r}")
         if all(present):
-            metadata[key] = [
-                _require_key(sample, index, key) for index, sample in enumerate(samples)
-            ]
+            metadata[key] = [_require_key(sample, index, key) for index, sample in enumerate(samples)]
 
     for key in _COMMON_METADATA_KEYS:
         present = [key in sample and sample[key] is not None for sample in samples]
@@ -100,9 +99,7 @@ def _validate_metadata(
         for index, sample in enumerate(samples[1:], start=1):
             actual = _normalize_metadata(sample[key])
             if actual != expected:
-                raise ValueError(
-                    f"incompatible metadata for {key!r}: batch[0] does not match batch[{index}]"
-                )
+                raise ValueError(f"incompatible metadata for {key!r}: batch[0] does not match batch[{index}]")
         metadata[key] = first[key]
 
     return metadata
@@ -125,9 +122,7 @@ def _require_tensor(
 ) -> torch.Tensor:
     tensor = _tensor(_require_key(sample, index, key), key=key, index=index)
     if ndim is not None and tensor.ndim != ndim:
-        raise ValueError(
-            f"batch[{index}] key {key!r} must be {ndim}D, got shape {tuple(tensor.shape)}"
-        )
+        raise ValueError(f"batch[{index}] key {key!r} must be {ndim}D, got shape {tuple(tensor.shape)}")
     return tensor
 
 
@@ -154,8 +149,7 @@ def _validate_same_dtype_device(tensors: Sequence[torch.Tensor], key: str) -> No
             )
         if tensor.device != first.device:
             raise ValueError(
-                f"device mismatch for {key!r}: batch[0]={first.device}, "
-                f"batch[{index}]={tensor.device}"
+                f"device mismatch for {key!r}: batch[0]={first.device}, batch[{index}]={tensor.device}"
             )
 
 
@@ -164,9 +158,7 @@ def _validate_same_shape(tensors: Sequence[torch.Tensor], key: str) -> None:
     for index, tensor in enumerate(tensors[1:], start=1):
         shape = tuple(tensor.shape)
         if shape != first_shape:
-            raise ValueError(
-                f"shape mismatch for {key!r}: batch[0]={first_shape}, batch[{index}]={shape}"
-            )
+            raise ValueError(f"shape mismatch for {key!r}: batch[0]={first_shape}, batch[{index}]={shape}")
 
 
 def _validate_width(tensors: Sequence[torch.Tensor], key: str) -> int:
@@ -174,9 +166,7 @@ def _validate_width(tensors: Sequence[torch.Tensor], key: str) -> int:
     for index, tensor in enumerate(tensors[1:], start=1):
         actual = int(tensor.shape[1])
         if actual != width:
-            raise ValueError(
-                f"feature width mismatch for {key!r}: batch[0]={width}, batch[{index}]={actual}"
-            )
+            raise ValueError(f"feature width mismatch for {key!r}: batch[0]={width}, batch[{index}]={actual}")
     return width
 
 
@@ -238,14 +228,11 @@ def _validate_edge_index(edge_index: torch.Tensor, n_nodes: int, index: int) -> 
     min_index = int(edge_index.min().item())
     max_index = int(edge_index.max().item())
     if min_index < 0 or max_index >= n_nodes:
-        raise ValueError(
-            f"batch[{index}] key 'edge_index' contains node index outside [0, {n_nodes})"
-        )
+        raise ValueError(f"batch[{index}] key 'edge_index' contains node index outside [0, {n_nodes})")
 
 
 def collate_graph(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """
-    Canonical strict graph collate without PyG.
+    """Canonical strict graph collate without PyG.
 
     Compatible graph samples are concatenated in input order. Feature-width,
     dtype, optional-field, and representation incompatibilities raise
@@ -255,9 +242,7 @@ def collate_graph(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     metadata = _validate_metadata(samples, family="explicit", representation_type="graph")
 
     xs = [_require_tensor(sample, index, "x", ndim=2) for index, sample in enumerate(samples)]
-    edge_indices = [
-        _require_tensor(sample, index, "edge_index") for index, sample in enumerate(samples)
-    ]
+    edge_indices = [_require_tensor(sample, index, "edge_index") for index, sample in enumerate(samples)]
     node_counts = [int(x.shape[0]) for x in xs]
     edge_counts = [int(edge_index.shape[1]) for edge_index in edge_indices]
 
@@ -279,8 +264,7 @@ def collate_graph(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         for index, (edge_dist, expected) in enumerate(zip(edge_dists, edge_counts, strict=True)):
             if edge_dist.ndim not in {1, 2}:
                 raise ValueError(
-                    f"batch[{index}] key 'edge_dist' must be 1D or 2D, "
-                    f"got shape {tuple(edge_dist.shape)}"
+                    f"batch[{index}] key 'edge_dist' must be 1D or 2D, got shape {tuple(edge_dist.shape)}"
                 )
             if int(edge_dist.shape[0]) != expected:
                 raise ValueError(
@@ -294,8 +278,7 @@ def collate_graph(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         for index, (pos, expected) in enumerate(zip(positions, node_counts, strict=True)):
             if tuple(pos.shape) != (expected, 3):
                 raise ValueError(
-                    f"batch[{index}] key 'pos' must have shape ({expected}, 3), "
-                    f"got {tuple(pos.shape)}"
+                    f"batch[{index}] key 'pos' must have shape ({expected}, 3), got {tuple(pos.shape)}"
                 )
 
     graph_attrs = _optional_tensors(samples, "graph_attr")
@@ -338,16 +321,12 @@ def collate_cloud(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     samples = _batch_list(batch)
     metadata = _validate_metadata(samples, family="explicit", representation_type="cloud")
 
-    positions = [
-        _require_tensor(sample, index, "pos", ndim=2) for index, sample in enumerate(samples)
-    ]
+    positions = [_require_tensor(sample, index, "pos", ndim=2) for index, sample in enumerate(samples)]
     node_counts = [int(pos.shape[0]) for pos in positions]
     _validate_same_dtype_device(positions, "pos")
     for index, pos in enumerate(positions):
         if int(pos.shape[1]) != 3:
-            raise ValueError(
-                f"batch[{index}] key 'pos' must have shape (N, 3), got {tuple(pos.shape)}"
-            )
+            raise ValueError(f"batch[{index}] key 'pos' must have shape (N, 3), got {tuple(pos.shape)}")
 
     xs = _optional_tensors(samples, "x", ndim=2)
     if xs is not None:
@@ -388,9 +367,7 @@ def collate_matrix(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     matrices = [_require_tensor(sample, index, "x") for index, sample in enumerate(samples)]
     for index, matrix in enumerate(matrices):
         if matrix.ndim not in {2, 3}:
-            raise ValueError(
-                f"batch[{index}] key 'x' must be 2D or 3D, got shape {tuple(matrix.shape)}"
-            )
+            raise ValueError(f"batch[{index}] key 'x' must be 2D or 3D, got shape {tuple(matrix.shape)}")
     _validate_same_dtype_device(matrices, "x")
     _validate_same_shape(matrices, "x")
 
@@ -398,9 +375,7 @@ def collate_matrix(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     for index, sample in enumerate(samples[1:], start=1):
         actual = _require_key(sample, index, "matrix_key")
         if actual != matrix_key:
-            raise ValueError(
-                f"matrix_key mismatch: batch[0]={matrix_key!r}, batch[{index}]={actual!r}"
-            )
+            raise ValueError(f"matrix_key mismatch: batch[0]={matrix_key!r}, batch[{index}]={actual!r}")
 
     ns = [int(_require_key(sample, index, "n")) for index, sample in enumerate(samples)]
 
@@ -472,9 +447,9 @@ def _learned_output_names(sample: Mapping[str, Any]) -> set[str]:
     outputs = sample.get("outputs")
     if isinstance(outputs, Sequence) and not isinstance(outputs, (str, bytes)):
         names = {
-            item.get("name")
+            name
             for item in outputs
-            if isinstance(item, Mapping) and isinstance(item.get("name"), str)
+            if isinstance(item, Mapping) and isinstance((name := item.get("name")), str)
         }
         if names:
             return names
@@ -493,9 +468,7 @@ def _learned_layout(sample: Mapping[str, Any], index: int) -> str:
     has_valid_mask = "valid_mask" in names
 
     if has_node != has_node_ids:
-        raise ValueError(
-            f"batch[{index}] learned node output requires both 'node_embedding' and 'node_ids'"
-        )
+        raise ValueError(f"batch[{index}] learned node output requires both 'node_embedding' and 'node_ids'")
     if has_valid_mask and not has_node:
         raise ValueError(f"batch[{index}] key 'valid_mask' requires node embeddings")
     if has_node and has_global:
@@ -538,8 +511,7 @@ def collate_learned(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
     if layout in {"node", "both"}:
         embeddings = [
-            _require_tensor(sample, index, "node_embedding", ndim=2)
-            for index, sample in enumerate(samples)
+            _require_tensor(sample, index, "node_embedding", ndim=2) for index, sample in enumerate(samples)
         ]
         node_counts = [int(embedding.shape[0]) for embedding in embeddings]
         _validate_same_dtype_device(embeddings, "node_embedding")
@@ -567,9 +539,7 @@ def collate_learned(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             _validate_same_dtype_device(valid_masks, "valid_mask")
             for index, mask in enumerate(valid_masks):
                 if mask.dtype != torch.bool:
-                    raise ValueError(
-                        f"batch[{index}] key 'valid_mask' must use bool dtype, got {mask.dtype}"
-                    )
+                    raise ValueError(f"batch[{index}] key 'valid_mask' must use bool dtype, got {mask.dtype}")
             _validate_optional_rows(valid_masks, node_counts, "valid_mask")
 
         out.update(
@@ -597,8 +567,7 @@ def collate_learned(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
     if layout in {"global", "both"}:
         global_embeddings = [
-            _require_tensor(sample, index, "global_embedding", ndim=1)
-            for index, sample in enumerate(samples)
+            _require_tensor(sample, index, "global_embedding", ndim=1) for index, sample in enumerate(samples)
         ]
         _validate_same_dtype_device(global_embeddings, "global_embedding")
         _validate_same_shape(global_embeddings, "global_embedding")

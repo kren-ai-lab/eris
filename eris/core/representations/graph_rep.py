@@ -1,3 +1,5 @@
+"""Graph representation type."""
+
 from typing import Any, ClassVar
 
 import numpy as np
@@ -7,6 +9,8 @@ from eris.core.base_encoder import EncodingContext
 
 
 class GraphRepresentation:
+    """Graph with node, edge and graph attributes."""
+
     representation_type: ClassVar[str] = "graph"
 
     def feature_keys(
@@ -14,6 +18,7 @@ class GraphRepresentation:
         data: dict[str, Any],
         ctx: EncodingContext,
     ) -> dict[str, list[str]]:
+        """Return feature keys for the attribute arrays present in ``data``."""
         return build_feature_keys(
             node_attr_keys=ctx.runtime["node_attr_keys"] if "node_attr" in data else None,
             edge_attr_keys=ctx.runtime["edge_attr_keys"] if "edge_attr" in data else None,
@@ -21,6 +26,7 @@ class GraphRepresentation:
         )
 
     def counts(self, data: dict[str, Any]) -> dict[str, int]:
+        """Return node, edge and related counts."""
         edge_index = data["edge_index"]
         counts = {
             "n_nodes": int(data["pos"].shape[0]),

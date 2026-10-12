@@ -1,3 +1,5 @@
+"""Execution configuration and device resolution."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,10 +18,9 @@ class StructuralExecutionConfig:
     precision: Precision = "fp32"
 
     def __post_init__(self) -> None:
+        """Validate the requested device and precision."""
         if self.device not in ("auto", "cpu"):
-            raise ConfigError(
-                f"device must be one of: auto, cpu (CPU-only backend); got {self.device!r}"
-            )
+            raise ConfigError(f"device must be one of: auto, cpu (CPU-only backend); got {self.device!r}")
         if self.precision != "fp32":
             raise ConfigError(f"precision must be fp32 (fp32-only backend); got {self.precision!r}")
 
@@ -34,7 +35,6 @@ class ResolvedExecution:
 
 def resolve_execution(request: StructuralExecutionConfig) -> ResolvedExecution:
     """Resolve a validated request; ``auto`` means CPU."""
-
     return ResolvedExecution(device="cpu", precision=request.precision)
 
 
@@ -43,7 +43,6 @@ def build_execution_provenance(
     resolved: ResolvedExecution,
 ) -> dict[str, object]:
     """Build deterministic JSON-safe requested/resolved execution provenance."""
-
     return {
         "requested": {
             "device": request.device,
@@ -60,7 +59,6 @@ def execution_request_cache_identity(
     request: StructuralExecutionConfig,
 ) -> dict[str, str]:
     """Project a request onto precision-sensitive artifact cache identity."""
-
     return {"precision": request.precision}
 
 

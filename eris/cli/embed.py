@@ -1,7 +1,9 @@
+"""Command that embeds one structure."""
+
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -18,7 +20,7 @@ from eris.exceptions import (
 
 
 def embed(
-    input: Annotated[
+    input: Annotated[  # noqa: A002
         str,
         typer.Argument(..., metavar="INPUT", help="Structure file to embed."),
     ],
@@ -51,8 +53,7 @@ def embed(
     ] = False,
 ) -> None:
     """Embed one structure file into a learned Eris artifact."""
-
-    embed_kwargs = {
+    embed_kwargs: dict[str, Any] = {
         "input": input,
         "representation": representation,
         "output_mode": output_mode,

@@ -1,8 +1,11 @@
+"""Canonical typed configurations for explicit representations."""
+
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
+from itertools import pairwise
 from numbers import Real
 from types import MappingProxyType
 from typing import Any, ClassVar, Literal
@@ -110,9 +113,7 @@ def _freeze_json(value: Any) -> Any:
         keys = tuple(value)
         if any(not isinstance(key, str) for key in keys):
             raise TypeError("feature parameter mapping keys must be strings")
-        frozen_items: list[tuple[str, Any]] = []
-        for key in sorted(keys):
-            frozen_items.append((key, _freeze_json(value[key])))
+        frozen_items = [(key, _freeze_json(value[key])) for key in sorted(keys)]
         return _FrozenMapping(items=tuple(frozen_items))
     if isinstance(value, (list, tuple)):
         return tuple(_freeze_json(item) for item in value)
@@ -135,6 +136,7 @@ class FeatureToken:
     params: _FrozenMapping = field(default_factory=_FrozenMapping)
 
     def __post_init__(self) -> None:
+        """Validate the token name and freeze its parameters."""
         if not isinstance(self.name, str):
             raise TypeError("feature token name must be a string")
         name = self.name.strip()
@@ -147,6 +149,7 @@ class FeatureToken:
         object.__setattr__(self, "params", params)
 
     def to_value(self) -> str | dict[str, Any]:
+        """Return the bare name, or a one-entry mapping when parameters are present."""
         if not self.params.items:
             return self.name
         return {self.name: _thaw_json(self.params)}
@@ -171,6 +174,7 @@ class FeatureMode:
     tokens: tuple[FeatureToken, ...]
 
     def __post_init__(self) -> None:
+        """Validate that tokens are FeatureToken instances."""
         if not isinstance(self.tokens, (list, tuple)):
             raise TypeError("feature mode tokens must be a list or tuple")
         if any(not isinstance(token, FeatureToken) for token in self.tokens):
@@ -179,6 +183,7 @@ class FeatureMode:
 
     @classmethod
     def from_value(cls, value: Any, *, kind: _FeatureKind) -> FeatureMode:
+        """Parse and validate a user-provided mode against the registry for ``kind``."""
         if kind not in _FEATURE_REGISTRIES:
             raise ValueError(f"unknown feature mode kind: {kind}")
 
@@ -216,9 +221,11 @@ class FeatureMode:
         return cls(tokens=tuple(tokens))
 
     def to_list(self) -> list[Any]:
+        """Return the JSON-compatible token list."""
         return [token.to_value() for token in self.tokens]
 
     def to_fingerprint_list(self, *, kind: _FeatureKind) -> list[Any]:
+        """Return the token list projected onto identity-relevant parameters."""
         registry = _FEATURE_REGISTRIES[kind]
         projected: list[Any] = []
         for token in self.tokens:
@@ -268,9 +275,11 @@ class CanonicalRepresentationConfig:
 
     @property
     def coordinate_source(self) -> str:
+        """Coordinate source implied by this configuration."""
         raise NotImplementedError
 
     def to_dict(self) -> dict[str, Any]:
+        """Return all fields as JSON-compatible values."""
         return {
             config_field.name: _json_compatible(getattr(self, config_field.name))
             for config_field in fields(self)
@@ -489,9 +498,7 @@ class _AtomGraphFeatureConfig(_AtomNodeFeatureConfig):
             "relative_direction",
             "interface_contact",
         }
-        invalid = sorted(
-            token.name for token in self.edge_attr_mode.tokens if token.name in residue_only
-        )
+        invalid = sorted(token.name for token in self.edge_attr_mode.tokens if token.name in residue_only)
         if invalid:
             raise ValueError(f"atom graphs do not support residue-only edge features: {invalid}")
 
@@ -560,7 +567,7 @@ class _ResidueBinningConfig(_ResidueSelectionConfig):
             )
             if len(normalized) < 2:
                 raise ValueError("edges must contain at least two values")
-            if any(right <= left for left, right in zip(normalized, normalized[1:], strict=False)):
+            if any(right <= left for left, right in pairwise(normalized)):
                 raise ValueError("edges must be strictly increasing")
             object.__setattr__(self, "edges", normalized)
             object.__setattr__(self, "dmin", None)
@@ -584,16 +591,21 @@ class _ResidueBinningConfig(_ResidueSelectionConfig):
 
 @dataclass(frozen=True, kw_only=True)
 class AtomPointCloudConfig(_AtomNodeFeatureConfig):
+    """Canonical configuration of the atom point cloud."""
+
     representation_name: ClassVar[str] = "atom_point_cloud"
     granularity: ClassVar[Literal["atom"]] = "atom"
 
 
 @dataclass(frozen=True, kw_only=True)
 class ResiduePointCloudConfig(_ResidueNodeFeatureConfig):
+    """Canonical configuration of the residue point cloud."""
+
     representation_name: ClassVar[str] = "residue_point_cloud"
     granularity: ClassVar[Literal["residue"]] = "residue"
 
     def __post_init__(self) -> None:
+        """Reject the residue-graph-only ``interface`` node feature."""
         super().__post_init__()
         if any(token.name == "interface" for token in self.node_attr_mode.tokens):
             raise ValueError("interface characterization is supported only by residue graphs")
@@ -601,6 +613,8 @@ class ResiduePointCloudConfig(_ResidueNodeFeatureConfig):
 
 @dataclass(frozen=True, kw_only=True)
 class AtomKNNGraphConfig(_AtomGraphFeatureConfig):
+    """Canonical configuration of the atom k-nearest-neighbour graph."""
+
     representation_name: ClassVar[str] = "atom_knn_graph"
     granularity: ClassVar[Literal["atom"]] = "atom"
 
@@ -615,6 +629,7 @@ class AtomKNNGraphConfig(_AtomGraphFeatureConfig):
     )
 
     def __post_init__(self) -> None:
+        """Validate and normalize the configuration fields."""
         super().__post_init__()
         object.__setattr__(
             self,
@@ -631,6 +646,8 @@ class AtomKNNGraphConfig(_AtomGraphFeatureConfig):
 
 @dataclass(frozen=True, kw_only=True)
 class ResidueKNNGraphConfig(_ResidueGraphFeatureConfig):
+    """Canonical configuration of the residue k-nearest-neighbour graph."""
+
     representation_name: ClassVar[str] = "residue_knn_graph"
     granularity: ClassVar[Literal["residue"]] = "residue"
 
@@ -653,6 +670,7 @@ class ResidueKNNGraphConfig(_ResidueGraphFeatureConfig):
     )
 
     def __post_init__(self) -> None:
+        """Validate and normalize the configuration fields."""
         super().__post_init__()
         knn_mode = normalize_choice("knn_mode", self.knn_mode, ("local", "global"))
         object.__setattr__(self, "knn_mode", knn_mode)
@@ -673,6 +691,8 @@ class ResidueKNNGraphConfig(_ResidueGraphFeatureConfig):
 
 @dataclass(frozen=True, kw_only=True)
 class ResidueContactGraphConfig(_ResidueGraphFeatureConfig):
+    """Canonical configuration of the residue contact graph."""
+
     representation_name: ClassVar[str] = "residue_contact_graph"
     granularity: ClassVar[Literal["residue"]] = "residue"
 
@@ -686,6 +706,7 @@ class ResidueContactGraphConfig(_ResidueGraphFeatureConfig):
     )
 
     def __post_init__(self) -> None:
+        """Validate and normalize the configuration fields."""
         super().__post_init__()
         object.__setattr__(
             self,
@@ -701,6 +722,8 @@ class ResidueContactGraphConfig(_ResidueGraphFeatureConfig):
 
 @dataclass(frozen=True, kw_only=True)
 class ResidueDistogramConfig(_ResidueSelectionConfig):
+    """Canonical configuration of the residue distogram."""
+
     representation_name: ClassVar[str] = "residue_distogram"
     granularity: ClassVar[Literal["residue"]] = "residue"
 
@@ -710,6 +733,7 @@ class ResidueDistogramConfig(_ResidueSelectionConfig):
     )
 
     def __post_init__(self) -> None:
+        """Validate and normalize the configuration fields."""
         super().__post_init__()
         object.__setattr__(self, "include_self", _require_bool("include_self", self.include_self))
 
@@ -720,6 +744,8 @@ def _normalize_binned_dtype(value: Any) -> str:
 
 @dataclass(frozen=True, kw_only=True)
 class ResidueDistogramBinsConfig(_ResidueBinningConfig):
+    """Canonical configuration of the binned residue distogram."""
+
     representation_name: ClassVar[str] = "residue_distogram_bins"
     granularity: ClassVar[Literal["residue"]] = "residue"
 
@@ -736,6 +762,7 @@ class ResidueDistogramBinsConfig(_ResidueBinningConfig):
     )
 
     def __post_init__(self) -> None:
+        """Validate and normalize the configuration fields."""
         super().__post_init__()
         object.__setattr__(self, "include_self", _require_bool("include_self", self.include_self))
         object.__setattr__(self, "dtype", _normalize_binned_dtype(self.dtype))
@@ -743,6 +770,8 @@ class ResidueDistogramBinsConfig(_ResidueBinningConfig):
 
 @dataclass(frozen=True, kw_only=True)
 class ResidueContactMapConfig(_ResidueSelectionConfig):
+    """Canonical configuration of the residue contact map."""
+
     representation_name: ClassVar[str] = "residue_contact_map"
     granularity: ClassVar[Literal["residue"]] = "residue"
 
@@ -760,6 +789,7 @@ class ResidueContactMapConfig(_ResidueSelectionConfig):
     )
 
     def __post_init__(self) -> None:
+        """Validate and normalize the configuration fields."""
         super().__post_init__()
         object.__setattr__(
             self,
@@ -776,6 +806,8 @@ class ResidueContactMapConfig(_ResidueSelectionConfig):
 
 @dataclass(frozen=True, kw_only=True)
 class ResidueContactMapBinsConfig(_ResidueBinningConfig):
+    """Canonical configuration of the binned residue contact map."""
+
     representation_name: ClassVar[str] = "residue_contact_map_bins"
     granularity: ClassVar[Literal["residue"]] = "residue"
 
@@ -792,6 +824,7 @@ class ResidueContactMapBinsConfig(_ResidueBinningConfig):
     )
 
     def __post_init__(self) -> None:
+        """Validate and normalize the configuration fields."""
         super().__post_init__()
         object.__setattr__(self, "include_self", _require_bool("include_self", self.include_self))
         object.__setattr__(self, "dtype", _normalize_binned_dtype(self.dtype))
@@ -799,6 +832,8 @@ class ResidueContactMapBinsConfig(_ResidueBinningConfig):
 
 @dataclass(frozen=True, kw_only=True)
 class ResidueVoxelGridConfig(_ResidueSelectionConfig):
+    """Canonical configuration of the residue voxel grid."""
+
     representation_name: ClassVar[str] = "residue_voxel_grid"
     granularity: ClassVar[Literal["residue"]] = "residue"
 
@@ -837,6 +872,7 @@ class ResidueVoxelGridConfig(_ResidueSelectionConfig):
     )
 
     def __post_init__(self) -> None:
+        """Validate and normalize the configuration fields."""
         super().__post_init__()
         object.__setattr__(
             self,

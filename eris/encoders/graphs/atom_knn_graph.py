@@ -1,6 +1,8 @@
+"""Atom-level kNN graph encoder."""
+
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import numpy as np
 
@@ -8,6 +10,7 @@ from eris.core.base_encoder import BaseAtomEncoder, EncodingContext
 from eris.core.config import AtomKNNGraphConfig
 from eris.core.representations import GraphRepresentation
 from eris.core.representations.output_declarations import ATOM_GRAPH_OUTPUTS
+from eris.encoders._context import prepared_arrays
 from eris.features.edge.edge import build_edge_attr
 from eris.features.graph_stats import compute_graph_stats, pack_graph_stats
 from eris.features.node.atom import build_node_attr
@@ -15,8 +18,7 @@ from eris.spatial.knn import knn_edges
 
 
 class AtomKNNGraph(BaseAtomEncoder):
-    """
-    Atom-level kNN graph (CA-independent) with deterministic node/edge features baseline.
+    """Atom-level kNN graph (CA-independent) with deterministic node/edge features baseline.
 
     Outputs:
       - pos, edge_index, edge_dist
@@ -33,21 +35,19 @@ class AtomKNNGraph(BaseAtomEncoder):
     output_declarations: ClassVar = ATOM_GRAPH_OUTPUTS
 
     config_type: ClassVar = AtomKNNGraphConfig
-    config: AtomKNNGraphConfig
 
     def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
-        strc = ctx.raw_structure
-        centroid = ctx.centroid
-        pos_out = ctx.pos
+        config = cast("AtomKNNGraphConfig", self.config)
+        strc, centroid, pos_out = prepared_arrays(ctx)
 
         pos = pos_out.astype(np.float32)
         n = int(pos.shape[0])
 
         edge_index, edge_dist = knn_edges(
             pos=pos_out,
-            k=self.config.k,
-            cutoff=self.config.cutoff,
-            symmetric=self.config.symmetric,
+            k=config.k,
+            cutoff=config.cutoff,
+            symmetric=config.symmetric,
         )
 
         # deterministic baseline attributes
@@ -56,19 +56,19 @@ class AtomKNNGraph(BaseAtomEncoder):
             atom_role=strc["atom_role"],
             bfactor=strc["bfactor"],
             occ=strc["occ"],
-            mode=self.config.node_attr_mode.to_list(),
+            mode=config.node_attr_mode.to_list(),
             return_keys=True,
         )
 
         edge_attr, edge_attr_keys = build_edge_attr(
             edge_dist=edge_dist,
             edge_index=edge_index,
-            mode=self.config.edge_attr_mode.to_list(),
+            mode=config.edge_attr_mode.to_list(),
             seq_pos=strc["seq_pos_residue"],
             chain_id=strc["chain_id"],
-            rbf_k=self.config.rbf_k,
-            rbf_dmax=self.config.rbf_dmax,
-            local_cutoff=self.config.local_cutoff,
+            rbf_k=config.rbf_k,
+            rbf_dmax=config.rbf_dmax,
+            local_cutoff=config.local_cutoff,
             return_keys=True,
         )
 

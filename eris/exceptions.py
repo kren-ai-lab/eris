@@ -1,3 +1,6 @@
+"""Eris exception hierarchy."""
+
+
 class ErisError(Exception):
     """Base exception for Eris."""
 

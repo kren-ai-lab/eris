@@ -4,6 +4,7 @@ from copy import deepcopy
 from importlib import metadata
 from importlib.util import find_spec
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -257,7 +258,7 @@ def _rigid_transform_pdb(source: Path, target: Path) -> None:
                 dtype=np.float64,
             )
             x, y, z = coordinate @ rotation.T + translation
-            line = f"{line[:30]}{x:8.3f}{y:8.3f}{z:8.3f}{line[54:]}"
+            line = f"{line[:30]}{x:8.3f}{y:8.3f}{z:8.3f}{line[54:]}"  # noqa: PLW2901
         lines.append(line)
     target.write_text("\n".join([*lines, ""]), encoding="ascii")
 
@@ -267,7 +268,7 @@ def _aaindex_mode(
     *,
     unknown: str = "nan",
     missing: str = "nan",
-) -> list[dict[str, dict[str, object]]]:
+) -> list[dict[str, Any] | str]:
     return [
         {
             "aaindex": {
@@ -405,6 +406,7 @@ def test_plddt_requires_explicit_source_and_preserves_raw_bfactor(tmp_path: Path
     inp = _write_ca_structure(tmp_path / "predicted.pdb", [("ALA", 87.5)])
     config = ResiduePointCloudConfig(
         plddt_source="bfactor",
+        # pyrefly: ignore [bad-argument-type]
         node_attr_mode=["plddt_ca", "bfactor_ca"],
     )
 
@@ -412,13 +414,9 @@ def test_plddt_requires_explicit_source_and_preserves_raw_bfactor(tmp_path: Path
 
     np.testing.assert_array_equal(artifact.data["plddt"], np.asarray([87.5], dtype=np.float32))
     np.testing.assert_array_equal(artifact.data["bfactor_ca"], np.asarray([87.5], dtype=np.float32))
-    np.testing.assert_array_equal(
-        artifact.data["node_attr"], np.asarray([[87.5, 87.5]], dtype=np.float32)
-    )
+    np.testing.assert_array_equal(artifact.data["node_attr"], np.asarray([[87.5, 87.5]], dtype=np.float32))
     assert artifact.meta["parameters"]["plddt_source"] == "bfactor"
-    assert artifact.meta["parameters"]["node_attr_mode"][0] == {
-        "plddt_ca": {"normalization": "none"}
-    }
+    assert artifact.meta["parameters"]["node_attr_mode"][0] == {"plddt_ca": {"normalization": "none"}}
 
 
 def test_explicit_bfactor_plddt_source_rejects_out_of_range_value(tmp_path: Path) -> None:
@@ -447,6 +445,7 @@ def test_plddt_and_bfactor_feature_normalization_is_explicit() -> None:
         mode=[{"plddt_ca": {"normalization": "unit_interval"}}],
         missing="nan",
     )
+    assert isinstance(unit, np.ndarray)
 
     assert raw_keys == ["plddt_ca", "bfactor_ca"]
     np.testing.assert_equal(raw[:, 0], np.asarray([25.0, np.nan], dtype=np.float32))
@@ -799,9 +798,9 @@ def test_backbone_geometry_realistic_pdb_mmcif_hybrid_round_trip_and_identity(
         }
     }
     mode = [explicit, "onehot", "bfactor_ca"]
-    pdb = ResidueKNNGraph(
-        k=2, node_attr_mode=[explicit, "onehot", "bfactor_ca"], use_cache=False
-    ).encode(StructureInput(source=str(PDB), chain_id="A"))
+    pdb = ResidueKNNGraph(k=2, node_attr_mode=[explicit, "onehot", "bfactor_ca"], use_cache=False).encode(
+        StructureInput(source=str(PDB), chain_id="A")
+    )
     mmcif = ResidueKNNGraph(k=2, node_attr_mode=mode, use_cache=False).encode(
         StructureInput(source=str(MMCIF), chain_id="A")
     )
@@ -845,19 +844,13 @@ def test_backbone_geometry_realistic_pdb_mmcif_hybrid_round_trip_and_identity(
         "torsion_convention": "standard_signed_atan2[-pi,pi)",
         "units": "radians",
     }
-    assert (
-        pdb.meta["provenance"]["config_fingerprint"]
-        == mmcif.meta["provenance"]["config_fingerprint"]
-    )
+    assert pdb.meta["provenance"]["config_fingerprint"] == mmcif.meta["provenance"]["config_fingerprint"]
     raw_only = ResiduePointCloudCA(
         node_attr_mode=[{"backbone_geometry": {"mode": "raw"}}],
         use_cache=False,
     ).encode(StructureInput(source=str(PDB), chain_id="A"))
     assert raw_only.meta["feature_keys"]["node_attr_keys"] == raw_keys
-    assert (
-        pdb.meta["provenance"]["config_fingerprint"]
-        != raw_only.meta["provenance"]["config_fingerprint"]
-    )
+    assert pdb.meta["provenance"]["config_fingerprint"] != raw_only.meta["provenance"]["config_fingerprint"]
 
     artifact_dir = tmp_path / "backbone-artifact"
     pdb.save(artifact_dir)
@@ -881,6 +874,7 @@ def test_voxel_bfactor_is_raw_unless_normalization_is_requested(tmp_path: Path) 
             grid_size=3,
             fit=False,
             voxel_size=1.0,
+            # pyrefly: ignore [bad-argument-type]
             channels=["bfactor"],
         ),
         use_cache=False,
@@ -890,6 +884,7 @@ def test_voxel_bfactor_is_raw_unless_normalization_is_requested(tmp_path: Path) 
             grid_size=3,
             fit=False,
             voxel_size=1.0,
+            # pyrefly: ignore [bad-argument-type]
             channels=[{"bfactor": {"normalization": "unit_interval"}}],
         ),
         use_cache=False,
@@ -907,6 +902,7 @@ def test_voxel_plddt_normalization_is_explicit(tmp_path: Path) -> None:
             grid_size=3,
             fit=False,
             voxel_size=1.0,
+            # pyrefly: ignore [bad-argument-type]
             channels=["plddt"],
         ),
         use_cache=False,
@@ -917,6 +913,7 @@ def test_voxel_plddt_normalization_is_explicit(tmp_path: Path) -> None:
             grid_size=3,
             fit=False,
             voxel_size=1.0,
+            # pyrefly: ignore [bad-argument-type]
             channels=[{"plddt": {"normalization": "unit_interval"}}],
         ),
         use_cache=False,
@@ -960,6 +957,7 @@ def test_aaindex_unknown_residue_policy(policy: str, expected: float) -> None:
         _aa_indices("AX"),
         mode=_aaindex_mode(["KYTJ820101"], unknown=policy),
     )
+    assert isinstance(features, np.ndarray)
 
     if np.isnan(expected):
         assert np.isnan(features[1, 0])
@@ -984,6 +982,7 @@ def test_aaindex_missing_record_value_policy(policy: str, expected: float) -> No
         _aa_indices("AP"),
         mode=_aaindex_mode(["AVBF000101"], missing=policy),
     )
+    assert isinstance(features, np.ndarray)
 
     if np.isnan(expected):
         assert np.isnan(features[1, 0])
@@ -1006,6 +1005,7 @@ def test_aaindex_composes_and_feature_keys_round_trip(tmp_path: Path) -> None:
     )
     node_mode = ["onehot", "physchem", *_aaindex_mode(["KYTJ820101"]), "bfactor_ca"]
     artifact = ResiduePointCloudCA(
+        # pyrefly: ignore [bad-argument-type]
         config=ResiduePointCloudConfig(node_attr_mode=node_mode),
         use_cache=False,
     ).encode(inp)
@@ -1022,9 +1022,9 @@ def test_aaindex_composes_and_feature_keys_round_trip(tmp_path: Path) -> None:
     loaded = StructureArtifact.load(outdir, strict=True)
     assert loaded.meta["feature_keys"]["node_attr_keys"] == keys
     assert loaded.meta["parameters"]["node_attr_mode"][2]["aaindex"]["provider"] == "aaindex"
-    assert loaded.meta["parameters"]["node_attr_mode"][2]["aaindex"][
-        "provider_version"
-    ] == metadata.version("aaindex")
+    assert loaded.meta["parameters"]["node_attr_mode"][2]["aaindex"]["provider_version"] == metadata.version(
+        "aaindex"
+    )
 
 
 def test_external_features_align_by_exact_residue_id_and_compose(tmp_path: Path) -> None:
@@ -1130,16 +1130,11 @@ def test_external_rejects_wrong_model(tmp_path: Path) -> None:
 def test_external_features_align_across_canonical_multichain_selection(tmp_path: Path) -> None:
     structure = tmp_path / "multi.pdb"
     structure.write_text(
-        "\n".join(
-            [
-                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
-                "TER",
-                "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
-                "TER",
-                "END",
-                "",
-            ]
-        ),
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  \n"
+        "TER\n"
+        "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  \n"
+        "TER\n"
+        "END\n",
         encoding="ascii",
     )
     external = _write_external_features(
@@ -1171,7 +1166,8 @@ def test_external_legacy_scalar_chain_field_is_rejected(tmp_path: Path) -> None:
         model_index=np.asarray(0, dtype=np.int64),
     )
 
-    with pytest.raises(ExternalFeatureError, match="missing fields.*chain_ids"):
+    with pytest.raises(ExternalFeatureError, match=r"missing fields.*chain_ids"):
+        # pyrefly: ignore [bad-argument-type]
         ResiduePointCloudConfig(node_attr_mode=[{"external": {"path": str(path)}}])
 
 
@@ -1182,6 +1178,7 @@ def test_external_detects_source_mutation_after_config_resolution(tmp_path: Path
         values=[[1.0, 2.0], [3.0, 4.0]],
         residue_ids=["A:1::ALA", "A:2::GLY"],
     )
+    # pyrefly: ignore [bad-argument-type]
     config = ResiduePointCloudConfig(node_attr_mode=[{"external": {"path": str(external)}}])
     resolved = config.to_dict()["node_attr_mode"][0]["external"]
 
@@ -1221,17 +1218,14 @@ def test_external_path_relocation_preserves_scientific_identity(tmp_path: Path) 
     ).encode(inp)
 
     assert (
-        first.meta["provenance"]["config_fingerprint"]
-        == relocated.meta["provenance"]["config_fingerprint"]
+        first.meta["provenance"]["config_fingerprint"] == relocated.meta["provenance"]["config_fingerprint"]
     )
     assert (
         first.meta["parameters"]["node_attr_mode"][0]["external"]["content_sha256"]
         == relocated.meta["parameters"]["node_attr_mode"][0]["external"]["content_sha256"]
     )
     first_invocation = first.meta["extensions"]["org.eris.external_features"]["invocations"][0]
-    relocated_invocation = relocated.meta["extensions"]["org.eris.external_features"][
-        "invocations"
-    ][0]
+    relocated_invocation = relocated.meta["extensions"]["org.eris.external_features"]["invocations"][0]
     assert first_invocation["path"] != relocated_invocation["path"]
     np.testing.assert_array_equal(first.data["node_attr"], relocated.data["node_attr"])
 
@@ -1294,10 +1288,7 @@ def test_high_dimensional_external_hybrid_round_trip_and_identity(tmp_path: Path
     first_descriptor = loaded.meta["parameters"]["node_attr_mode"][2]["external"]
     second_descriptor = second.meta["parameters"]["node_attr_mode"][2]["external"]
     assert first_descriptor["content_sha256"] != second_descriptor["content_sha256"]
-    assert (
-        loaded.meta["provenance"]["config_fingerprint"]
-        != second.meta["provenance"]["config_fingerprint"]
-    )
+    assert loaded.meta["provenance"]["config_fingerprint"] != second.meta["provenance"]["config_fingerprint"]
     np.testing.assert_array_equal(second.data["node_attr"][:, -feature_dim:], changed_values)
     assert len(list((cache.cache_dir / "artifacts").iterdir())) == 2
 
@@ -1341,12 +1332,9 @@ def test_batch_external_params_by_id_preserve_resume_identity(
     second = StructureArtifact.load(artifact_root / "second" / "residue_point_cloud")
     np.testing.assert_array_equal(first.data["node_attr"], [[1.0, 2.0], [3.0, 4.0]])
     np.testing.assert_array_equal(second.data["node_attr"], [[5.0, 6.0], [7.0, 8.0]])
-    assert (
-        first.meta["provenance"]["config_fingerprint"]
-        != second.meta["provenance"]["config_fingerprint"]
-    )
+    assert first.meta["provenance"]["config_fingerprint"] != second.meta["provenance"]["config_fingerprint"]
 
-    def fail_encode(*args: object, **kwargs: object) -> StructureArtifact:
+    def fail_encode(*args: object, **kwargs: object) -> StructureArtifact:  # noqa: ARG001
         raise AssertionError("matching per-row external identities must resume without execution")
 
     monkeypatch.setattr(eris, "encode", fail_encode)
@@ -1496,9 +1484,7 @@ def test_sasa_rsa_selected_complex_context_and_tien_normalization(tmp_path: Path
     isolated = encoder.encode(StructureInput(source=inp.source, chain_id="A"))
     complex_artifact = encoder.encode(StructureInput(source=inp.source, chain_id=["B", "A"]))
     repeated = encoder.encode(StructureInput(source=inp.source, chain_id=["A", "B"]))
-    excluded = encoder.encode(
-        StructureInput(source=with_excluded_context.source, chain_id=["A", "B", "C"])
-    )
+    excluded = encoder.encode(StructureInput(source=with_excluded_context.source, chain_id=["A", "B", "C"]))
 
     assert isolated.meta["feature_keys"]["node_attr_keys"] == ["sasa", "rsa"]
     assert complex_artifact.data["node_attr"].shape == (2, 2)
@@ -1581,7 +1567,7 @@ def test_sasa_fails_for_unsupported_required_protor_radius(tmp_path: Path) -> No
         ],
     )
 
-    with pytest.raises(ValueError, match="ProtOr radius is unavailable.*MSE:QQ"):
+    with pytest.raises(ValueError, match=r"ProtOr radius is unavailable.*MSE:QQ"):
         ResiduePointCloudCA(node_attr_mode=["sasa"], use_cache=False).encode(inp)
 
 
@@ -1707,18 +1693,14 @@ def test_sidechain_symmetric_terminal_convention_uses_exact_frozen_atom() -> Non
 
 
 def test_sidechain_geometry_modes_have_fixed_width_keys_and_order() -> None:
-    coordinates, residue_index, atom_name, resname = _flatten_test_atoms(
-        [("SER", _chi_atoms("SER"))]
-    )
+    coordinates, residue_index, atom_name, resname = _flatten_test_atoms([("SER", _chi_atoms("SER"))])
     common = {
         "resname": resname,
         "polymer_heavy_atom_coordinates": coordinates,
         "polymer_heavy_atom_residue_index": residue_index,
         "polymer_heavy_atom_name": atom_name,
     }
-    periodic_keys = [
-        f"sidechain.chi{chi}_{component}" for chi in range(1, 5) for component in ("sin", "cos")
-    ]
+    periodic_keys = [f"sidechain.chi{chi}_{component}" for chi in range(1, 5) for component in ("sin", "cos")]
     raw_keys = [f"sidechain.chi{chi}" for chi in range(1, 5)]
 
     sincos, sincos_keys = build_node_attr(
@@ -1757,9 +1739,7 @@ def test_sidechain_geometry_modes_have_fixed_width_keys_and_order() -> None:
 
 
 def test_sidechain_torsions_are_translation_and_rotation_invariant() -> None:
-    coordinates, residue_index, atom_name, resname = _flatten_test_atoms(
-        [("LYS", _chi_atoms("LYS"))]
-    )
+    coordinates, residue_index, atom_name, resname = _flatten_test_atoms([("LYS", _chi_atoms("LYS"))])
     rotation = np.asarray(
         [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
         dtype=np.float32,
@@ -1899,10 +1879,7 @@ def test_sidechain_geometry_hybrid_composition_and_artifact_round_trip(tmp_path:
     ]
     np.testing.assert_array_equal(artifact.data["node_attr"], repeated.data["node_attr"])
     np.testing.assert_array_equal(loaded.data["node_attr"], artifact.data["node_attr"])
-    assert (
-        loaded.meta["feature_keys"]["node_attr_keys"]
-        == artifact.meta["feature_keys"]["node_attr_keys"]
-    )
+    assert loaded.meta["feature_keys"]["node_attr_keys"] == artifact.meta["feature_keys"]["node_attr_keys"]
     sidechain_params = next(
         token["sidechain_geometry"]
         for token in artifact.meta["parameters"]["node_attr_mode"]
@@ -2052,8 +2029,7 @@ def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
         transformed.data["node_attr"][:, rsa_index]
     )
     rsa_delta = np.abs(
-        original.data["node_attr"][valid_rsa, rsa_index]
-        - transformed.data["node_attr"][valid_rsa, rsa_index]
+        original.data["node_attr"][valid_rsa, rsa_index] - transformed.data["node_attr"][valid_rsa, rsa_index]
     )
     assert np.mean(rsa_delta) < 0.003
     np.testing.assert_array_equal(original.data["edge_index"], transformed.data["edge_index"])

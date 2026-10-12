@@ -5,10 +5,11 @@ This internal numerical implementation is the frozen production runtime.
 
 from __future__ import annotations
 
-import numpy as np
+from typing import TYPE_CHECKING, cast
+
 import torch
 from torch import nn
-from torch.nn import functional as functional
+from torch.nn import functional
 
 from eris.core.learned.backends.gearnet.loading import (
     _deserialize_state_dict,
@@ -23,8 +24,12 @@ from eris.core.learned.backends.gearnet.metadata import (
     GEARNET_EDGE_NUM_RELATION,
 )
 from eris.core.learned.backends.gearnet.native_graph import NativeGearNetGraph
-from eris.core.learned.checkpoints import VerifiedCheckpoint
 from eris.exceptions import ExecutionError
+
+if TYPE_CHECKING:
+    import numpy as np
+
+    from eris.core.learned.checkpoints import VerifiedCheckpoint
 
 
 class NativeGearNetModelError(ExecutionError):
@@ -53,7 +58,7 @@ class _GeometricRelationalGraphConv(nn.Module):
         source: torch.Tensor,
         destination: torch.Tensor,
         relation: torch.Tensor,
-        input: torch.Tensor,
+        input: torch.Tensor,  # noqa: A002
     ) -> torch.Tensor:
         if input.ndim != 2 or input.shape[1] != self.input_dim:
             raise NativeGearNetModelError("native GearNet layer input has an invalid shape")
@@ -67,6 +72,7 @@ class NativeGearNetEdgeModel(nn.Module):
     """Six-layer CPU/fp32 GearNet-Edge for the frozen upstream checkpoint."""
 
     def __init__(self) -> None:
+        """Build the GearNet-Edge layers from the fixed architecture constants."""
         super().__init__()
         self.input_dim = GEARNET_EDGE_NODE_INPUT_DIM
         self.dims = [self.input_dim, *GEARNET_EDGE_HIDDEN_DIMS]
@@ -75,11 +81,11 @@ class NativeGearNetEdgeModel(nn.Module):
         self.num_angle_bin = GEARNET_EDGE_NUM_ANGLE_BIN
         self.layers = nn.ModuleList(
             _GeometricRelationalGraphConv(input_dim, output_dim, self.num_relation)
-            for input_dim, output_dim in zip(self.dims, self.dims[1:])
+            for input_dim, output_dim in zip(self.dims, self.dims[1:], strict=False)
         )
         self.edge_layers = nn.ModuleList(
             _GeometricRelationalGraphConv(input_dim, output_dim, self.num_angle_bin)
-            for input_dim, output_dim in zip(self.edge_dims, self.edge_dims[1:])
+            for input_dim, output_dim in zip(self.edge_dims, self.edge_dims[1:], strict=False)
         )
         self.batch_norms = nn.ModuleList(nn.BatchNorm1d(dim) for dim in self.dims[1:])
 
@@ -107,7 +113,6 @@ class NativeGearNetEdgeModel(nn.Module):
 
     def forward(self, graph: NativeGearNetGraph) -> dict[str, torch.Tensor]:
         """Return canonical node and single-graph sum embeddings for one native graph."""
-
         self._validate_graph(graph)
         source = self._tensor(graph.edge_source, dtype=torch.int64)
         destination = self._tensor(graph.edge_destination, dtype=torch.int64)
@@ -119,7 +124,8 @@ class NativeGearNetEdgeModel(nn.Module):
         edge_input = self._tensor(graph.edge_feature, dtype=torch.float32)
 
         hiddens: list[torch.Tensor] = []
-        for index, layer in enumerate(self.layers):
+        for index, module in enumerate(self.layers):
+            layer = cast("_GeometricRelationalGraphConv", module)
             hidden = layer(source, destination, relation, layer_input)
             if hidden.shape == layer_input.shape:
                 hidden = hidden + layer_input
@@ -151,13 +157,11 @@ class NativeGearNetEdgeModel(nn.Module):
 
 def construct_native_gearnet_edge_model() -> NativeGearNetEdgeModel:
     """Construct the frozen native GearNet-Edge architecture on CPU/fp32."""
-
     return NativeGearNetEdgeModel()
 
 
 def load_native_gearnet_edge_model(checkpoint: VerifiedCheckpoint) -> NativeGearNetEdgeModel:
     """Load the original verified GearNet checkpoint through strict key and shape matching."""
-
     _validate_checkpoint_identity(checkpoint)
     model = construct_native_gearnet_edge_model()
     state_dict = _deserialize_state_dict(checkpoint, torch)

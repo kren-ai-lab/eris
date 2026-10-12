@@ -1,3 +1,5 @@
+"""Eris public API."""
+
 from __future__ import annotations
 
 from eris._version import __version__
@@ -32,4 +34,4 @@ __all__ = [
 ]
 
 # register built-in encoders
-from eris import encoders as _encoders  # noqa: E402, F401
+from eris import encoders as _encoders  # noqa: F401

@@ -1,11 +1,16 @@
+"""Result types for structural embeddings."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from eris.core.learned.config import OutputMode
 from eris.exceptions import ExecutionError
+
+if TYPE_CHECKING:
+    from eris.core.learned.config import OutputMode
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -79,21 +84,16 @@ def validate_embedding_result(
     output_mode: OutputMode,
 ) -> None:
     """Validate backend output shape, dtype, alignment, and requested output mode."""
-
     if not isinstance(result, StructuralEmbeddingResult):
         raise ExecutionError("result must be a StructuralEmbeddingResult")
     if not isinstance(output_mode, str) or output_mode not in {"node", "global", "both"}:
         raise ExecutionError("output_mode must be one of: both, global, node")
 
     node_embedding = (
-        _validate_node_embedding(result.node_embedding)
-        if result.node_embedding is not None
-        else None
+        _validate_node_embedding(result.node_embedding) if result.node_embedding is not None else None
     )
     global_embedding = (
-        _validate_global_embedding(result.global_embedding)
-        if result.global_embedding is not None
-        else None
+        _validate_global_embedding(result.global_embedding) if result.global_embedding is not None else None
     )
     node_ids = _validate_node_ids(result.node_ids) if result.node_ids is not None else None
     valid_mask = _validate_valid_mask(result.valid_mask) if result.valid_mask is not None else None
@@ -122,8 +122,5 @@ def validate_embedding_result(
             raise ExecutionError("output_mode='global' requires global_embedding")
         if node_embedding is not None:
             raise ExecutionError("output_mode='global' forbids node_embedding")
-    else:
-        if node_embedding is None or global_embedding is None:
-            raise ExecutionError(
-                "output_mode='both' requires node_embedding, node_ids, and global_embedding"
-            )
+    elif node_embedding is None or global_embedding is None:
+        raise ExecutionError("output_mode='both' requires node_embedding, node_ids, and global_embedding")

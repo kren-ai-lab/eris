@@ -1,3 +1,5 @@
+"""Pooling of node features into global features."""
+
 from __future__ import annotations
 
 import hashlib
@@ -94,9 +96,7 @@ def _source_values_and_keys(
 
     keys = artifact.meta["feature_keys"].get("node_attr_keys")
     if not isinstance(keys, list) or len(keys) != values.shape[1]:
-        raise ConfigError(
-            f"pooling source {source!r} requires exactly one ordered key per feature column"
-        )
+        raise ConfigError(f"pooling source {source!r} requires exactly one ordered key per feature column")
     return values, list(keys)
 
 
@@ -143,9 +143,7 @@ def _reduce(values: np.ndarray, mode: str, nan_policy: str) -> np.ndarray:
         }
         primary = np.asarray(reducers[mode](numeric, axis=0), dtype=np.float64)
         secondary = (
-            np.asarray(np.std(numeric, axis=0, ddof=0), dtype=np.float64)
-            if mode == "mean_std"
-            else None
+            np.asarray(np.std(numeric, axis=0, ddof=0), dtype=np.float64) if mode == "mean_std" else None
         )
     if secondary is not None:
         return np.concatenate([primary, secondary]).astype(np.float64)
@@ -183,9 +181,7 @@ def pool(
         raise TypeError("output must be a string, pathlib.Path, or None")
 
     mode = normalize_choice("mode", mode, sorted(_POOLING_MODES), error=ConfigError)
-    nan_policy = normalize_choice(
-        "nan_policy", nan_policy, sorted(_NAN_POLICIES), error=ConfigError
-    )
+    nan_policy = normalize_choice("nan_policy", nan_policy, sorted(_NAN_POLICIES), error=ConfigError)
     values, source_keys = _source_values_and_keys(source_artifact, source)
     pooled_values = _reduce(values, mode, nan_policy)
     pooled_keys = _pooled_keys(mode, source_keys)

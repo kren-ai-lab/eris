@@ -1,3 +1,5 @@
+"""Torch dataset over packed artifacts."""
+
 from __future__ import annotations
 
 import json
@@ -5,7 +7,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from eris.core.artifacts import StructureArtifact
 from eris.export.torch import to_torch
@@ -84,8 +86,7 @@ def _learned_sample(artifact: StructureArtifact) -> dict[str, Any]:
 
 @dataclass
 class ErisFolderDataset:
-    """
-    Dataset consumer for canonical ``eris pack`` indexes.
+    """Dataset consumer for canonical ``eris pack`` indexes.
 
     The packed index is the collection snapshot. Artifact locators are POSIX-style paths
     relative to the index file parent. Individual artifacts are strict-loaded lazily in
@@ -98,6 +99,7 @@ class ErisFolderDataset:
     matrix_as_channel: bool = True
 
     def __post_init__(self) -> None:
+        """Read and validate the packed index."""
         self.index_path = Path(self.index_path)
         try:
             self.rows = read_packed_index(self.index_path)
@@ -107,11 +109,13 @@ class ErisFolderDataset:
             _validate_meta_locator(self.index_path, row)
 
     def __len__(self) -> int:
+        """Return the number of packed samples."""
         return len(self.rows)
 
     def __getitem__(self, idx: int) -> dict[str, Any]:
+        """Load and validate one sample from its artifact."""
         row = self.rows[idx]
-        artifact_dir = _resolve_row_path(self.index_path, row.artifact_dir)
+        artifact_dir = _resolve_row_path(cast("Path", self.index_path), row.artifact_dir)
         artifact = StructureArtifact.load(artifact_dir, strict=True)
         _validate_artifact_consistency(row, artifact)
 
@@ -133,7 +137,7 @@ class ErisFolderDataset:
 
         sample["id"] = row.id
         sample["artifact_dir"] = str(artifact_dir)
-        sample["meta_path"] = str(_resolve_row_path(self.index_path, row.meta_path))
+        sample["meta_path"] = str(_resolve_row_path(cast("Path", self.index_path), row.meta_path))
         sample["representation_name"] = row.representation_name
         sample["representation_family"] = row.representation_family
         sample["representation_type"] = row.representation_type

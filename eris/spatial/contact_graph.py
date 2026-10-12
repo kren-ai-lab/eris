@@ -1,15 +1,15 @@
-from __future__ import annotations
+"""Contact graph construction."""
 
-from typing import Tuple
+from __future__ import annotations
 
 import numpy as np
 
 from eris.spatial.spatial_index import iter_pairs_within
 
 
-def neighbor_search_edges(pos: np.ndarray, cutoff: float) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Build residue-residue edges using spatial hashing (cell lists).
+def neighbor_search_edges(pos: np.ndarray, cutoff: float) -> tuple[np.ndarray, np.ndarray]:
+    """Build residue-residue edges using spatial hashing (cell lists).
+
     Returns (edge_index (2,E), edge_dist (E,))
     Undirected edges are returned as *both* directions (i->j and j->i).
     """

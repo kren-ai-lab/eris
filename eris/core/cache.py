@@ -1,8 +1,10 @@
+"""Disk cache keyed by canonical scientific identity."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from platformdirs import user_cache_dir
 
@@ -16,10 +18,8 @@ from eris.core.artifact_schema import (
     canonical_json,
     normalize_metadata,
 )
+from eris.core.artifacts import StructureArtifact
 from eris.core.hashing import sha256_text
-
-if TYPE_CHECKING:
-    from eris.core.artifacts import StructureArtifact
 
 
 def _validate_cache_key(key: str) -> str:
@@ -69,6 +69,7 @@ def compute_cache_key(
     model: Mapping[str, Any] | None = None,
     execution: Mapping[str, Any] | None = None,
 ) -> str:
+    """Return the SHA-256 cache key for one encoding identity."""
     try:
         _require_non_empty_string(representation_name, "representation_name")
         implementation = _require_non_empty_string(
@@ -115,21 +116,24 @@ def compute_cache_key(
 
 
 def default_cache_dir() -> Path:
+    """Return the per-user cache directory, creating it if needed."""
     p = Path(user_cache_dir("eris"))
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 
 class DiskCache:
+    """Artifact cache stored under a cache directory."""
+
     def __init__(self, cache_dir: Path | None = None) -> None:
+        """Use ``cache_dir`` or the per-user default directory."""
         self.cache_dir = cache_dir or default_cache_dir()
 
     def _entry_dir(self, key: str) -> Path:
         return self.cache_dir / "artifacts" / _validate_cache_key(key)
 
     def get(self, key: str) -> StructureArtifact | None:
-        from eris.core.artifacts import ArtifactValidationError, StructureArtifact
-
+        """Return the cached artifact for ``key``, or None when absent or unreadable."""
         entry_dir = self._entry_dir(key)
         if not entry_dir.is_dir():
             return None
@@ -139,4 +143,5 @@ class DiskCache:
             return None
 
     def set(self, key: str, artifact: StructureArtifact) -> None:
+        """Store ``artifact`` under ``key``."""
         artifact.save(self._entry_dir(key))

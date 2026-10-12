@@ -54,14 +54,13 @@ def test_shared_residue_config_exposes_only_skip_and_error() -> None:
     assert ResiduePointCloudConfig().missing_residue_center == "skip"
     assert ResiduePointCloudConfig(missing_residue_center="error").missing_residue_center == "error"
     with pytest.raises(ValueError, match="missing_residue_center"):
+        # pyrefly: ignore [bad-argument-type]
         ResiduePointCloudConfig(missing_residue_center="nan")
 
 
 def test_residue_encoder_traces_skipped_residues(tmp_path: Path) -> None:
     structure_input = _write_missing_ca_structure(tmp_path / "missing-ca.pdb")
-    artifact = ResiduePointCloudCA(missing_residue_center="skip", use_cache=False).encode(
-        structure_input
-    )
+    artifact = ResiduePointCloudCA(missing_residue_center="skip", use_cache=False).encode(structure_input)
 
     assert ResiduePointCloudCA.version == "0.1.3"
     assert artifact.meta["parameters"]["missing_residue_center"] == "skip"
@@ -101,9 +100,7 @@ def test_zero_omission_output_is_deterministic_and_round_trips(tmp_path: Path) -
     assert artifact.data["omitted_residue_ids"].shape == (0,)
     assert artifact.data["omitted_residue_ids"].dtype.kind == "U"
     assert artifact.meta["counts"]["n_omitted_residues"] == 0
-    np.testing.assert_array_equal(
-        loaded.data["omitted_residue_ids"], artifact.data["omitted_residue_ids"]
-    )
+    np.testing.assert_array_equal(loaded.data["omitted_residue_ids"], artifact.data["omitted_residue_ids"])
     assert loaded.meta["counts"]["n_omitted_residues"] == 0
 
 
@@ -147,6 +144,8 @@ def test_residue_voxel_metadata_reconstructs_the_existing_transform(tmp_path: Pa
 
 def test_old_residue_cache_key_cannot_satisfy_new_output_contract(tmp_path: Path) -> None:
     structure_input = _write_missing_ca_structure(tmp_path / "missing-ca.pdb")
+    chain_ids = structure_input.chain_id
+    assert isinstance(chain_ids, tuple)
     cache = DiskCache(tmp_path / "cache")
     current = ResiduePointCloudCA(use_cache=False).encode(structure_input)
     stale_meta = deepcopy(current.meta)
@@ -168,25 +167,21 @@ def test_old_residue_cache_key_cannot_satisfy_new_output_contract(tmp_path: Path
         representation_name=encoder.name,
         encoder_implementation=encoder.encoder_implementation,
         encoder_version="0.1.0",
-        config_fingerprint=compute_config_fingerprint(
-            encoder.name, parameters, chain_ids=structure_input.chain_id
-        ),
+        config_fingerprint=compute_config_fingerprint(encoder.name, parameters, chain_ids=chain_ids),
         source_sha256=sha256_file(Path(structure_input.source)),
         parser_hint=".pdb",
         model_index=structure_input.model_index,
-        chain_ids=structure_input.chain_id,
+        chain_ids=chain_ids,
     )
     current_key = compute_cache_key(
         representation_name=encoder.name,
         encoder_implementation=encoder.encoder_implementation,
         encoder_version=encoder.version,
-        config_fingerprint=compute_config_fingerprint(
-            encoder.name, parameters, chain_ids=structure_input.chain_id
-        ),
+        config_fingerprint=compute_config_fingerprint(encoder.name, parameters, chain_ids=chain_ids),
         source_sha256=sha256_file(Path(structure_input.source)),
         parser_hint=".pdb",
         model_index=structure_input.model_index,
-        chain_ids=structure_input.chain_id,
+        chain_ids=chain_ids,
     )
     cache.set(old_key, stale)
 

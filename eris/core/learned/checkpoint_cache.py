@@ -1,5 +1,8 @@
+"""On-disk cache for verified checkpoints."""
+
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import tempfile
@@ -23,6 +26,7 @@ class CheckpointCache:
     """Content-addressed cache for verified checkpoint bytes."""
 
     def __init__(self, cache_dir: str | Path | None = None) -> None:
+        """Use ``cache_dir``, or the user cache directory for Eris when omitted."""
         self.cache_dir = Path(cache_dir) if cache_dir is not None else Path(user_cache_dir("eris"))
 
     def _entry_dir(self, descriptor: CheckpointDescriptor) -> Path:
@@ -33,7 +37,6 @@ class CheckpointCache:
 
     def get(self, descriptor: CheckpointDescriptor) -> VerifiedCheckpoint | None:
         """Return a verified cached checkpoint, or a non-destructive cache miss."""
-
         canonical_path = self._canonical_path(descriptor)
         if not canonical_path.is_file():
             return None
@@ -44,8 +47,7 @@ class CheckpointCache:
             cause = error.__cause__
             if isinstance(cause, OSError):
                 raise CacheError(
-                    f"Unable to read cached checkpoint '{descriptor.identifier}' "
-                    f"at {canonical_path}: {cause}"
+                    f"Unable to read cached checkpoint '{descriptor.identifier}' at {canonical_path}: {cause}"
                 ) from cause
             return None
 
@@ -55,16 +57,13 @@ class CheckpointCache:
         descriptor: CheckpointDescriptor,
     ) -> VerifiedCheckpoint:
         """Safely insert verified candidate bytes and return the canonical cache entry."""
-
         existing = self.get(descriptor)
         if existing is not None:
             return existing
 
         candidate_path = Path(path)
         if not candidate_path.exists():
-            raise ExecutionError(
-                f"Checkpoint '{descriptor.identifier}' does not exist: {candidate_path}"
-            )
+            raise ExecutionError(f"Checkpoint '{descriptor.identifier}' does not exist: {candidate_path}")
         if not candidate_path.is_file():
             raise ExecutionError(
                 f"Checkpoint '{descriptor.identifier}' is not a regular file: {candidate_path}"
@@ -105,11 +104,10 @@ class CheckpointCache:
                 raise
 
             try:
-                os.replace(staged_path, canonical_path)
+                staged_path.replace(canonical_path)
             except OSError as error:
                 raise CacheError(
-                    f"Unable to install checkpoint '{descriptor.identifier}' "
-                    f"at {canonical_path}: {error}"
+                    f"Unable to install checkpoint '{descriptor.identifier}' at {canonical_path}: {error}"
                 ) from error
 
             return VerifiedCheckpoint(
@@ -119,10 +117,8 @@ class CheckpointCache:
             )
         finally:
             if staged_path is not None:
-                try:
+                with contextlib.suppress(OSError):
                     staged_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
 
 
 __all__ = ["CheckpointCache"]

@@ -1,3 +1,5 @@
+"""Residue distogram and contact-map encoder registrations."""
+
 from eris.core.config import (
     ResidueContactMapBinsConfig,
     ResidueContactMapConfig,

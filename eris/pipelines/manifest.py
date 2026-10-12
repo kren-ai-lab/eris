@@ -1,3 +1,5 @@
+"""Batch manifest reading, validation and writing."""
+
 from __future__ import annotations
 
 import csv
@@ -8,7 +10,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar, TypeVar
+from typing import Any, ClassVar, TypeVar, cast
 
 
 class ManifestValidationError(ValueError):
@@ -33,7 +35,7 @@ def write_atomically(path: Path, write: Callable[[Path], None]) -> None:
     staging = Path(staging_name)
     try:
         write(staging)
-        os.replace(staging, path)
+        staging.replace(path)
     finally:
         staging.unlink(missing_ok=True)
 
@@ -66,9 +68,7 @@ def _optional_string(value: Any, *, field: str, row_index: int | None = None) ->
     return value.strip() or None
 
 
-def _chain_selection(
-    value: Any, *, field: str, row_index: int | None = None
-) -> tuple[str, ...] | None:
+def _chain_selection(value: Any, *, field: str, row_index: int | None = None) -> tuple[str, ...] | None:
     if value is None or (isinstance(value, str) and not value.strip()):
         return None
     if isinstance(value, str):
@@ -146,6 +146,8 @@ def _literal(
 
 @dataclass
 class BaseManifestRow(ABC):
+    """Base class for manifest rows."""
+
     id: str
 
     field_order: ClassVar[tuple[str, ...]]
@@ -153,15 +155,19 @@ class BaseManifestRow(ABC):
     @classmethod
     @abstractmethod
     def from_dict(cls, d: Mapping[str, Any], *, row_index: int | None = None) -> BaseManifestRow:
+        """Build a row from a mapping."""
         raise NotImplementedError("Manifest from_dict not implemented.")
 
     @abstractmethod
     def to_dict(self) -> dict[str, Any]:
+        """Return the row as a mapping."""
         raise NotImplementedError("Manifest to_dict not implemented.")
 
 
 @dataclass
 class StructureManifestRow(BaseManifestRow):
+    """One input structure in a batch manifest."""
+
     path: str
     chain: str | Sequence[str] | None = None
     model: int = 0
@@ -169,22 +175,21 @@ class StructureManifestRow(BaseManifestRow):
     field_order: ClassVar[tuple[str, ...]] = ("id", "path", "chain", "model")
 
     def __post_init__(self) -> None:
+        """Validate the row fields."""
         self.id = _required_string(self.id, field="id")
         self.path = _required_text_path(self.path, field="path")
         self.chain = _chain_selection(self.chain, field="chain")
         self.model = _model(self.model, field="model")
 
     @classmethod
-    def from_dict(
-        cls, d: Mapping[str, Any], *, row_index: int | None = None
-    ) -> StructureManifestRow:
+    def from_dict(cls, d: Mapping[str, Any], *, row_index: int | None = None) -> StructureManifestRow:
+        """Build a row from a mapping, rejecting unexpected fields."""
         unexpected = sorted(set(d) - set(cls.field_order))
         if unexpected:
             location = row_location(row_index)
             fields = ", ".join(cls.field_order)
             raise ManifestValidationError(
-                f"{location}: unexpected field(s) {', '.join(unexpected)!r}; "
-                f"use canonical fields: {fields}"
+                f"{location}: unexpected field(s) {', '.join(unexpected)!r}; use canonical fields: {fields}"
             )
         sid = _required_string(d.get("id"), field="id", row_index=row_index)
         path = _required_text_path(d.get("path"), field="path", row_index=row_index)
@@ -194,6 +199,7 @@ class StructureManifestRow(BaseManifestRow):
         return cls(id=sid, path=path, chain=chain, model=model)
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the row as a mapping."""
         return {
             "id": self.id,
             "path": self.path,
@@ -204,6 +210,8 @@ class StructureManifestRow(BaseManifestRow):
 
 @dataclass
 class BatchResultRow(BaseManifestRow):
+    """Outcome of processing one manifest row."""
+
     representation_name: str
     representation_family: str
     artifact_dir: str | None
@@ -222,10 +230,9 @@ class BatchResultRow(BaseManifestRow):
     )
 
     def __post_init__(self) -> None:
+        """Validate the row fields."""
         self.id = _required_string(self.id, field="id")
-        self.representation_name = _required_string(
-            self.representation_name, field="representation_name"
-        )
+        self.representation_name = _required_string(self.representation_name, field="representation_name")
         self.representation_family = _literal(
             self.representation_family,
             field="representation_family",
@@ -242,14 +249,10 @@ class BatchResultRow(BaseManifestRow):
                     "manifest row: field 'artifact_dir' must be non-empty for success"
                 )
             if self.error_type is not None or self.error_message is not None:
-                raise ManifestValidationError(
-                    "manifest row: success rows must not include error metadata"
-                )
+                raise ManifestValidationError("manifest row: success rows must not include error metadata")
         else:
             if self.error_type is None:
-                raise ManifestValidationError(
-                    "manifest row: field 'error_type' must be non-empty for failed"
-                )
+                raise ManifestValidationError("manifest row: field 'error_type' must be non-empty for failed")
             if self.error_message is None:
                 raise ManifestValidationError(
                     "manifest row: field 'error_message' must be non-empty for failed"
@@ -257,6 +260,7 @@ class BatchResultRow(BaseManifestRow):
 
     @classmethod
     def from_dict(cls, d: Mapping[str, Any], *, row_index: int | None = None) -> BatchResultRow:
+        """Build a row from a mapping."""
         try:
             return cls(
                 id=_required_string(d.get("id"), field="id", row_index=row_index),
@@ -280,9 +284,7 @@ class BatchResultRow(BaseManifestRow):
                     row_index=row_index,
                     choices={"success", "failed"},
                 ),
-                error_type=_optional_string(
-                    d.get("error_type"), field="error_type", row_index=row_index
-                ),
+                error_type=_optional_string(d.get("error_type"), field="error_type", row_index=row_index),
                 error_message=_optional_string(
                     d.get("error_message"), field="error_message", row_index=row_index
                 ),
@@ -295,6 +297,7 @@ class BatchResultRow(BaseManifestRow):
             raise
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the row as a mapping."""
         return {
             "id": self.id,
             "representation_name": self.representation_name,
@@ -317,15 +320,13 @@ def _read_csv(path: Path) -> list[dict[str, Any]]:
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            line = line.strip()
+        for line_number, raw_line in enumerate(handle, start=1):
+            line = raw_line.strip()
             if not line:
                 continue
             obj = json.loads(line)
             if not isinstance(obj, dict):
-                raise ManifestValidationError(
-                    f"line {line_number}: JSONL manifest entries must be objects"
-                )
+                raise ManifestValidationError(f"line {line_number}: JSONL manifest entries must be objects")
             rows.append(obj)
     return rows
 
@@ -341,8 +342,7 @@ def _read_json(path: Path) -> list[dict[str, Any]]:
 
 
 def read_manifest(path: Path, row_cls: type[T]) -> list[T]:
-    """
-    Read a canonical manifest.
+    """Read a canonical manifest.
 
     Supported containers are CSV, JSONL, and JSON list-of-objects. Structure manifests
     use canonical fields ``id,path,chain,model``. Batch result manifests use canonical
@@ -374,7 +374,7 @@ def read_manifest(path: Path, row_cls: type[T]) -> list[T]:
                 f"row {index}: duplicate id '{row.id}' first seen at row {seen[row.id]}"
             )
         seen[row.id] = index
-    return rows
+    return cast("list[T]", rows)
 
 
 def _csv_row(row: BaseManifestRow) -> dict[str, Any]:
@@ -391,7 +391,7 @@ def _csv_row(row: BaseManifestRow) -> dict[str, Any]:
     }
 
 
-def write_manifest(path: Path, rows: list[BaseManifestRow]) -> None:
+def write_manifest(path: Path, rows: Sequence[BaseManifestRow]) -> None:
     """Write manifest rows with deterministic canonical fields for CSV, JSONL, or JSON."""
     path = Path(path)
     if not rows:
@@ -423,9 +423,7 @@ def write_manifest(path: Path, rows: list[BaseManifestRow]) -> None:
         path.write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         return
 
-    raise ManifestValidationError(
-        f"Unsupported manifest format: {path.suffix} (use .csv, .jsonl, or .json)"
-    )
+    raise ManifestValidationError(f"Unsupported manifest format: {path.suffix} (use .csv, .jsonl, or .json)")
 
 
 __all__ = [

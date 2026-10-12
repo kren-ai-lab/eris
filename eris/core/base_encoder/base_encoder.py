@@ -1,18 +1,24 @@
+"""Shared encoder contract: context, caching and artifact assembly."""
+
 from __future__ import annotations
 
 import logging
-from copy import deepcopy
-
-logger = logging.getLogger(__name__)
-
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
 from eris import exceptions as exc
+from eris.core import io as structure_io
+from eris.core.artifact_schema import (
+    build_artifact_metadata,
+    build_input_metadata,
+    build_provenance,
+    compute_config_fingerprint,
+)
 from eris.core.artifacts import StructureArtifact
 from eris.core.cache import (
     DiskCache,
@@ -20,13 +26,19 @@ from eris.core.cache import (
     parser_hint_from_source,
     parser_hint_matches_format,
 )
-from eris.core.types import StructureInput
+from eris.core.hashing import sha256_file
+from eris.core.types import _chain_ids
 
 if TYPE_CHECKING:
-    from eris.core.config import CanonicalRepresentationConfig
+    from eris.core.config import CanonicalRepresentationConfig, _CommonGeometryConfig
+    from eris.core.io import LoadedStructureData
+    from eris.core.representations.output_declarations import OutputDeclarations
+    from eris.core.types import StructureInput
+
+logger = logging.getLogger(__name__)
 
 
-def _check_output_values(data: Dict[str, np.ndarray]) -> None:
+def _check_output_values(data: dict[str, np.ndarray]) -> None:
     """Reject values that come from the input rather than our code; schema validation checks the shapes."""
     if len(data["residue_ids"]) == 0:
         raise exc.ExecutionError("Encoder output contains no atoms/residues")
@@ -36,13 +48,17 @@ def _check_output_values(data: Dict[str, np.ndarray]) -> None:
     if "edge_attr" in data and np.isinf(data["edge_attr"]).any():
         raise ValueError("Encoder output 'edge_attr' contains infinite values")
     edge_index = data.get("edge_index")
-    if edge_index is not None and edge_index.size > 0:
-        if edge_index.min() < 0 or edge_index.max() >= len(data["pos"]):
-            raise ValueError("Encoder output 'edge_index' contains out-of-range node indices")
+    if (
+        edge_index is not None
+        and edge_index.size > 0
+        and (edge_index.min() < 0 or edge_index.max() >= len(data["pos"]))
+    ):
+        raise ValueError("Encoder output 'edge_index' contains out-of-range node indices")
 
 
-def _structure_validation(ctx: EncodingContext):
+def _structure_validation(ctx: EncodingContext) -> None:
     strc = ctx.raw_structure
+    assert strc is not None  # noqa: S101 - _prepare_data always populates it first
     n = int(strc["pos"].shape[0])
 
     if n < 20:
@@ -60,10 +76,12 @@ def _structure_validation(ctx: EncodingContext):
 
 @dataclass
 class EncodingContext:
+    """Mutable per-encode state shared between the base encoder and concrete encoders."""
+
     inp: StructureInput
     source_sha256: str | None = None
     input_format: str | None = None
-    raw_structure: dict | None = None
+    raw_structure: LoadedStructureData | None = None
     centroid: np.ndarray | None = None
     pos: np.ndarray | None = None
     runtime: dict[str, Any] = field(default_factory=dict)
@@ -71,8 +89,8 @@ class EncodingContext:
 
 
 class BaseEncoder(ABC):
-    """
-    Base class for all encoders.
+    """Base class for all encoders.
+
     Defines the contract for each subclass.
     """
 
@@ -82,8 +100,9 @@ class BaseEncoder(ABC):
     representation_family: ClassVar[str] = "explicit"
     granularity: ClassVar[str]
     representation: ClassVar[Any]
-    output_declarations: ClassVar[Any]
-    config_type: ClassVar[type[CanonicalRepresentationConfig]]
+    output_declarations: ClassVar[OutputDeclarations]
+    config_type: ClassVar[type[_CommonGeometryConfig]]
+    config: _CommonGeometryConfig
 
     def __init__(
         self,
@@ -93,6 +112,7 @@ class BaseEncoder(ABC):
         cache: DiskCache | None = None,
         **representation_kwargs: Any,
     ) -> None:
+        """Build the encoder from a canonical config or from representation keyword arguments."""
         if config is None:
             config = self.config_type(**representation_kwargs)
         elif not isinstance(config, self.config_type):
@@ -106,9 +126,10 @@ class BaseEncoder(ABC):
 
     @property
     def encoder_implementation(self) -> str:
+        """Return the fully qualified class path that identifies this encoder."""
         return f"{type(self).__module__}.{type(self).__qualname__}"
 
-    def _normalize_structure(self, pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _normalize_structure(self, pos: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         n = int(pos.shape[0])
         if n == 0:
             raise ValueError("No residues found to encode.")
@@ -126,7 +147,7 @@ class BaseEncoder(ABC):
 
         return centroid, pos_out
 
-    def _output_declarations(self, data: dict[str, np.ndarray]):
+    def _output_declarations(self, data: dict[str, np.ndarray]) -> OutputDeclarations:  # noqa: ARG002
         return self.output_declarations
 
     def _build_metadata(
@@ -136,14 +157,8 @@ class BaseEncoder(ABC):
         *,
         parameters: dict[str, Any],
         extensions: dict[str, dict[str, Any]] | None = None,
-    ):
+    ) -> dict[str, Any]:
         """Build prospective strict-valid metadata without activating it in encode()."""
-        from eris.core.artifact_schema import (
-            build_artifact_metadata,
-            build_input_metadata,
-            build_provenance,
-        )
-
         if ctx.source_sha256 is None:
             raise ValueError("prospective artifact metadata requires ctx.source_sha256")
         if ctx.input_format is None:
@@ -168,13 +183,13 @@ class BaseEncoder(ABC):
                 source_sha256=ctx.source_sha256,
                 input_format=ctx.input_format,
                 model_index=ctx.inp.model_index,
-                chain_ids=ctx.inp.chain_id,
+                chain_ids=_chain_ids(ctx.inp),
             ),
             parameters=parameters,
             provenance=build_provenance(
                 representation_name=representation_name,
                 parameters=parameters,
-                chain_ids=ctx.inp.chain_id,
+                chain_ids=_chain_ids(ctx.inp),
             ),
             output_declarations=self._output_declarations(data),
             feature_keys=self.representation.feature_keys(data, ctx),
@@ -214,7 +229,7 @@ class BaseEncoder(ABC):
             and provenance.get("config_fingerprint") == config_fingerprint
             and input_meta.get("source_sha256") == source_sha256
             and input_meta.get("model_index") == inp.model_index
-            and input_meta.get("chain_ids") == list(inp.chain_id)
+            and input_meta.get("chain_ids") == list(_chain_ids(inp))
             and isinstance(input_meta.get("format"), str)
             and parser_hint_matches_format(parser_hint, input_meta["format"])
             and "model" not in meta
@@ -228,15 +243,13 @@ class BaseEncoder(ABC):
         source_sha256: str,
         extensions: dict[str, dict[str, Any]] | None,
     ) -> StructureArtifact:
-        from eris.core.artifact_schema import build_input_metadata
-
         meta = deepcopy(artifact.meta)
         meta["input"] = build_input_metadata(
             source=inp.source,
             source_sha256=source_sha256,
             input_format=artifact.meta["input"]["format"],
             model_index=inp.model_index,
-            chain_ids=inp.chain_id,
+            chain_ids=_chain_ids(inp),
         )
         if extensions is not None:
             refreshed_extensions = deepcopy(meta.get("extensions", {}))
@@ -246,23 +259,20 @@ class BaseEncoder(ABC):
         refreshed.validate(strict=True)
         return refreshed
 
-    def _validate_runtime_config_dependencies(self, parameters: dict[str, Any]) -> None:
+    def _validate_runtime_config_dependencies(self, parameters: dict[str, Any]) -> None:  # noqa: B027
         """Validate mutable resources referenced by canonical configuration."""
 
     def _artifact_extensions(
         self,
-        parameters: dict[str, Any],
+        parameters: dict[str, Any],  # noqa: ARG002
     ) -> dict[str, dict[str, Any]] | None:
         """Return invocation provenance that does not participate in identity."""
         return None
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
-        from eris.core.artifact_schema import compute_config_fingerprint
-        from eris.core.hashing import sha256_file
-        from eris.core.io import load_structure, resolve_structure_input
-
-        structure = load_structure(Path(inp.source))
-        inp = resolve_structure_input(inp, structure)
+        """Encode one structure into a validated artifact, using the disk cache when enabled."""
+        structure = structure_io.load_structure(Path(inp.source))
+        inp = structure_io.resolve_structure_input(inp, structure)
 
         source_sha256 = sha256_file(Path(inp.source))
         invocation_parameters = self.config.to_dict()
@@ -272,7 +282,7 @@ class BaseEncoder(ABC):
         config_fingerprint = compute_config_fingerprint(
             self.config.representation_name,
             parameters,
-            chain_ids=inp.chain_id,
+            chain_ids=_chain_ids(inp),
         )
         cache = None
         key = None
@@ -287,7 +297,7 @@ class BaseEncoder(ABC):
                 source_sha256=source_sha256,
                 parser_hint=parser_hint,
                 model_index=inp.model_index,
-                chain_ids=inp.chain_id,
+                chain_ids=_chain_ids(inp),
                 model=None,
             )
             artifact = cache.get(key)
@@ -330,7 +340,7 @@ class BaseEncoder(ABC):
 
         return artifact
 
-    def _prepare_data(self, ctx: EncodingContext):
+    def _prepare_data(self, ctx: EncodingContext) -> None:
         logger.info(
             "Loading structure",
             extra={
@@ -353,15 +363,11 @@ class BaseEncoder(ABC):
         ctx.pos = pos_out.astype(np.float32)
 
     @abstractmethod
-    def _load_structure(self, ctx: EncodingContext) -> Dict[str, Any]:
-        """
-        Implemented in base atom and base residue classes.
-        """
+    def _load_structure(self, ctx: EncodingContext) -> LoadedStructureData:
+        """Load the structure arrays; implemented by the atom and residue base classes."""
         raise NotImplementedError
 
     @abstractmethod
-    def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
-        """
-        Must be implemented in encoder class.
-        """
+    def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
+        """Must be implemented in encoder class."""
         raise NotImplementedError

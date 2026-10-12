@@ -1,15 +1,24 @@
+"""Download of registered official checkpoints."""
+
 from __future__ import annotations
 
+import contextlib
 import os
 import tempfile
 from http.client import HTTPException
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib import error, request
 from urllib.parse import urlsplit
 
-from eris.core.learned.checkpoint_cache import CheckpointCache
-from eris.core.learned.checkpoints import CheckpointDescriptor, VerifiedCheckpoint
 from eris.exceptions import CacheError, ExecutionError
+
+if TYPE_CHECKING:
+    from http.client import HTTPMessage, HTTPResponse
+    from typing import IO
+
+    from eris.core.learned.checkpoint_cache import CheckpointCache
+    from eris.core.learned.checkpoints import CheckpointDescriptor, VerifiedCheckpoint
 
 _CHUNK_SIZE = 1024 * 1024
 _DOWNLOAD_PREFIX = ".eris-checkpoint-download-"
@@ -21,7 +30,7 @@ def _require_safe_final_url(url: str, *, identifier: str) -> None:
     parsed = urlsplit(url)
     try:
         hostname = parsed.hostname
-        parsed.port
+        _ = parsed.port
     except ValueError as error:
         raise ExecutionError(
             f"Official checkpoint '{identifier}' redirected to an invalid URL. "
@@ -41,12 +50,14 @@ def _require_safe_final_url(url: str, *, identifier: str) -> None:
 
 
 class _HttpsOnlyRedirectHandler(request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(
+        self, req: request.Request, fp: IO[bytes], code: int, msg: str, headers: HTTPMessage, newurl: str
+    ) -> request.Request | None:
         _require_safe_final_url(newurl, identifier="registered checkpoint")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def _open_registered_url(download_request: request.Request):
+def _open_registered_url(download_request: request.Request) -> HTTPResponse:
     opener = request.build_opener(_HttpsOnlyRedirectHandler())
     return opener.open(download_request, timeout=_TIMEOUT_SECONDS)
 
@@ -56,7 +67,6 @@ def acquire_registered_checkpoint(
     cache: CheckpointCache,
 ) -> VerifiedCheckpoint:
     """Stream a registered official checkpoint into the verified canonical cache."""
-
     download_url = descriptor.download_url
     if download_url is None:
         raise ExecutionError(
@@ -67,7 +77,7 @@ def acquire_registered_checkpoint(
     temporary_path: Path | None = None
     try:
         try:
-            download_request = request.Request(
+            download_request = request.Request(  # noqa: S310
                 download_url,
                 headers={"User-Agent": _USER_AGENT},
             )
@@ -112,7 +122,5 @@ def acquire_registered_checkpoint(
             ) from cache_error
     finally:
         if temporary_path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 temporary_path.unlink(missing_ok=True)
-            except OSError:
-                pass

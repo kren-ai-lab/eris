@@ -19,9 +19,7 @@ def _validate_execution(execution: ResolvedExecution) -> None:
     if not isinstance(execution, ResolvedExecution):
         raise TypeError("execution must be a ResolvedExecution")
     if execution.device != "cpu" or execution.precision != "fp32":
-        raise ExecutionError(
-            "GearNet-Edge model loading supports only device='cpu' and precision='fp32'"
-        )
+        raise ExecutionError("GearNet-Edge model loading supports only device='cpu' and precision='fp32'")
 
 
 def _validate_checkpoint_identity(checkpoint: VerifiedCheckpoint) -> None:
@@ -29,16 +27,13 @@ def _validate_checkpoint_identity(checkpoint: VerifiedCheckpoint) -> None:
         raise TypeError("checkpoint must be a VerifiedCheckpoint")
     if checkpoint.sha256 != checkpoint.descriptor.sha256:
         raise ExecutionError(
-            f"Verified checkpoint '{checkpoint.descriptor.identifier}' has inconsistent "
-            "SHA-256 metadata"
+            f"Verified checkpoint '{checkpoint.descriptor.identifier}' has inconsistent SHA-256 metadata"
         )
     if (
         checkpoint.descriptor.identifier != GEARNET_EDGE_CHECKPOINT_IDENTIFIER
         or checkpoint.descriptor.sha256 != GEARNET_EDGE_CHECKPOINT_SHA256
     ):
-        raise ExecutionError(
-            "GearNet-Edge requires the frozen mc_gearnet_edge.pth checkpoint identity"
-        )
+        raise ExecutionError("GearNet-Edge requires the frozen mc_gearnet_edge.pth checkpoint identity")
 
 
 def _deserialize_state_dict(checkpoint: VerifiedCheckpoint, torch: Any) -> Mapping[str, Any]:
@@ -68,8 +63,7 @@ def _load_state_dict_strict(model: Any, state_dict: Mapping[str, Any]) -> None:
         result = model.load_state_dict(state_dict, strict=True)
     except RuntimeError as error:
         raise ExecutionError(
-            "Official GearNet-Edge checkpoint is incompatible with the frozen architecture: "
-            f"{error}"
+            f"Official GearNet-Edge checkpoint is incompatible with the frozen architecture: {error}"
         ) from error
     if result.missing_keys or result.unexpected_keys:
         raise ExecutionError(

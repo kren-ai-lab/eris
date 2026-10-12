@@ -90,9 +90,7 @@ def test_parameter_override_matches_low_level_and_changes_config_identity():
         use_cache=False,
         k=8,
     )
-    low_level = get_encoder("residue_knn_graph", use_cache=False, k=8).encode(
-        StructureInput(source=str(PDB))
-    )
+    low_level = get_encoder("residue_knn_graph", use_cache=False, k=8).encode(StructureInput(source=str(PDB)))
     default = eris.encode(
         PDB,
         representation="residue_knn_graph",
@@ -101,10 +99,7 @@ def test_parameter_override_matches_low_level_and_changes_config_identity():
 
     _assert_equivalent(public, low_level)
     assert public.meta["parameters"]["k"] == 8
-    assert (
-        public.meta["provenance"]["config_fingerprint"]
-        != default.meta["provenance"]["config_fingerprint"]
-    )
+    assert public.meta["provenance"]["config_fingerprint"] != default.meta["provenance"]["config_fingerprint"]
 
 
 def test_typed_config_is_passed_through_and_matches_low_level(monkeypatch):
@@ -189,10 +184,7 @@ def test_multichain_selection_is_canonical_and_excludes_nonprotein_chains(tmp_pa
     )
     assert scalar.meta["input"]["chain_ids"] == ["B"]
     assert scalar.data["residue_ids"].tolist() == ["B:1::GLY"]
-    assert (
-        scalar.meta["provenance"]["config_fingerprint"]
-        != default.meta["provenance"]["config_fingerprint"]
-    )
+    assert scalar.meta["provenance"]["config_fingerprint"] != default.meta["provenance"]["config_fingerprint"]
 
     cache = DiskCache(tmp_path / "cache")
     encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
@@ -205,7 +197,7 @@ def test_multichain_selection_is_canonical_and_excludes_nonprotein_chains(tmp_pa
 
 @pytest.mark.parametrize("chain_id", [[], ["A", "A"]])
 def test_invalid_multichain_requests_fail_before_execution(chain_id):
-    with pytest.raises((ConfigError, ValueError), match="empty|duplicate|must not be empty"):
+    with pytest.raises((ConfigError, ValueError), match=r"empty|duplicate|must not be empty"):
         eris.encode(
             PDB,
             representation="residue_point_cloud",
@@ -242,29 +234,20 @@ def test_all_explicit_residue_representations_support_multichain_selection(tmp_p
 def test_multichain_selection_is_resolved_independently_per_model(tmp_path: Path):
     source = tmp_path / "models.pdb"
     source.write_text(
-        "\n".join(
-            [
-                "MODEL        1",
-                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
-                "TER",
-                "ENDMDL",
-                "MODEL        2",
-                "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  ",
-                "TER",
-                "ENDMDL",
-                "END",
-                "",
-            ]
-        ),
+        "MODEL        1\n"
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  \n"
+        "TER\n"
+        "ENDMDL\n"
+        "MODEL        2\n"
+        "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  \n"
+        "TER\n"
+        "ENDMDL\n"
+        "END\n",
         encoding="ascii",
     )
 
-    first = eris.encode(
-        source, representation="residue_point_cloud", model_index=0, use_cache=False
-    )
-    second = eris.encode(
-        source, representation="residue_point_cloud", model_index=1, use_cache=False
-    )
+    first = eris.encode(source, representation="residue_point_cloud", model_index=0, use_cache=False)
+    second = eris.encode(source, representation="residue_point_cloud", model_index=1, use_cache=False)
 
     assert first.meta["input"]["chain_ids"] == ["A"]
     assert first.data["residue_ids"].tolist() == ["A:1::ALA"]
@@ -277,16 +260,11 @@ def test_default_selection_includes_parser_identified_noncanonical_polymer_chain
 ):
     source = tmp_path / "noncanonical.pdb"
     source.write_text(
-        "\n".join(
-            [
-                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  ",
-                "TER",
-                "ATOM      2  CA  MSE B   1       1.000   0.000   0.000  1.00 20.00           C  ",
-                "TER",
-                "END",
-                "",
-            ]
-        ),
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  \n"
+        "TER\n"
+        "ATOM      2  CA  MSE B   1       1.000   0.000   0.000  1.00 20.00           C  \n"
+        "TER\n"
+        "END\n",
         encoding="ascii",
     )
 
@@ -299,9 +277,7 @@ def test_default_selection_includes_parser_identified_noncanonical_polymer_chain
 
 def test_structure_input_preserves_identity_and_allows_identical_overrides(monkeypatch):
     structure_input = StructureInput(source=str(PDB), chain_id="A", model_index=1)
-    expected = get_encoder("residue_contact_map", use_cache=False).encode(
-        StructureInput(source=str(PDB))
-    )
+    expected = get_encoder("residue_contact_map", use_cache=False).encode(StructureInput(source=str(PDB)))
     captured = []
 
     class CapturingEncoder:
@@ -309,7 +285,7 @@ def test_structure_input_preserves_identity_and_allows_identical_overrides(monke
             captured.append(value)
             return expected
 
-    monkeypatch.setattr(api_module, "get_encoder", lambda *args, **kwargs: CapturingEncoder())
+    monkeypatch.setattr(api_module, "get_encoder", lambda *args, **kwargs: CapturingEncoder())  # noqa: ARG005
     without_overrides = eris.encode(
         structure_input,
         representation="residue_contact_map",
@@ -467,4 +443,13 @@ if loaded:
     raise SystemExit(f'optional frameworks loaded: {loaded}')
 """
 
-    subprocess.run([sys.executable, "-c", script], check=True)
+    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603
+
+
+def test_public_signatures_resolve_at_runtime():
+    import typing
+
+    from eris.datasets import ErisFolderDataset
+
+    for obj in (eris.encode, eris.embed, ErisFolderDataset):
+        assert typing.get_type_hints(obj)

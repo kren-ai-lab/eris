@@ -1,3 +1,5 @@
+"""Voxel-grid encoder registrations."""
+
 from eris.core.config import ResidueVoxelGridConfig
 from eris.core.registry import register_encoder
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA

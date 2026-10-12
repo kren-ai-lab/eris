@@ -1,3 +1,5 @@
+"""Backbone and side-chain geometry helpers."""
+
 from __future__ import annotations
 
 from numbers import Real
@@ -287,13 +289,7 @@ def backbone_torsions(
     torsions = np.full((n_rows, 3), np.nan, dtype=np.float64)
 
     for index in range(n_rows):
-        if (
-            index > 0
-            and connected[index - 1]
-            and n_valid[index]
-            and ca_valid[index]
-            and c_valid[index]
-        ):
+        if index > 0 and connected[index - 1] and n_valid[index] and ca_valid[index] and c_valid[index]:
             torsions[index, 0] = signed_dihedral(
                 c_coord[index - 1],
                 n_coord[index],
@@ -341,7 +337,7 @@ def sidechain_torsions(
     if n_atoms and (residue_index.min() < 0 or residue_index.max() >= n_residues):
         raise ValueError("side-chain atom residue index is outside the residue rows")
 
-    atoms_by_residue: list[dict[str, np.ndarray]] = [dict() for _ in range(n_residues)]
+    atoms_by_residue: list[dict[str, np.ndarray]] = [{} for _ in range(n_residues)]
     for index, name, coordinate in zip(
         residue_index.tolist(),
         atom_name.tolist(),
@@ -361,9 +357,7 @@ def sidechain_torsions(
         for chi_index, definition in enumerate(definitions):
             if not all(name in residue_atoms for name in definition):
                 continue
-            torsions[index, chi_index] = signed_dihedral(
-                *(residue_atoms[name] for name in definition)
-            )
+            torsions[index, chi_index] = signed_dihedral(*(residue_atoms[name] for name in definition))
 
     return torsions.astype(np.float32)
 

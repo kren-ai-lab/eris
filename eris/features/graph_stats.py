@@ -1,3 +1,5 @@
+"""Graph-level summary statistics."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -14,8 +16,7 @@ def compute_graph_stats(
     edge_dist: np.ndarray | None,
     n_nodes: int,
 ) -> dict[str, float]:
-    """
-    Deterministic graph-level statistics for graph representations.
+    """Deterministic graph-level statistics for graph representations.
 
     Parameters
     ----------
@@ -30,6 +31,7 @@ def compute_graph_stats(
     -------
     Dict[str, float]
         Flat dict with scalar stats. Safe (no NaNs), deterministic.
+
     """
     ei = np.asarray(edge_index, dtype=np.int64)
     if ei.ndim != 2 or ei.shape[0] != 2:
@@ -47,12 +49,7 @@ def compute_graph_stats(
     dst = ei[1]
 
     # clamp indices defensively
-    if (
-        src.min(initial=0) < 0
-        or dst.min(initial=0) < 0
-        or src.max(initial=0) >= N
-        or dst.max(initial=0) >= N
-    ):
+    if src.min(initial=0) < 0 or dst.min(initial=0) < 0 or src.max(initial=0) >= N or dst.max(initial=0) >= N:
         raise ValueError("edge_index contains node ids outside [0, n_nodes).")
 
     loop_mask = src == dst
@@ -141,9 +138,7 @@ def compute_graph_stats(
 
 
 def pack_graph_stats(stats: dict[str, float]) -> tuple[np.ndarray, list[str]]:
-    """
-    Convert dict stats -> (graph_attr vector, keys) in stable key order.
-    """
+    """Convert dict stats -> (graph_attr vector, keys) in stable key order."""
     keys = sorted(stats.keys())
     vec = np.asarray([stats[k] for k in keys], dtype=np.float32)
     return vec, keys

@@ -9,7 +9,7 @@ import pytest
 
 import eris.core.artifacts as artifacts_module
 from eris.core.artifact_schema import (
-    ArtifactValidationError,
+    InputMetadata,
     build_artifact_metadata,
     build_feature_keys,
     build_input_metadata,
@@ -20,7 +20,7 @@ from eris.exceptions import ConfigError
 from eris.pooling import pool
 
 
-def _input_metadata(digest: str = "a") -> dict:
+def _input_metadata(digest: str = "a") -> InputMetadata:
     return build_input_metadata(
         source="memory://synthetic",
         source_sha256=digest * 64,
@@ -205,22 +205,13 @@ def test_residue_pool_nan_policies_round_trip_and_fingerprints(tmp_path: Path):
     propagate = pool(source, mode="mean", nan_policy="propagate")
     summed = pool(source, mode="sum", nan_policy="omit")
 
-    assert (
-        omit.meta["provenance"]["config_fingerprint"]
-        == repeat.meta["provenance"]["config_fingerprint"]
-    )
+    assert omit.meta["provenance"]["config_fingerprint"] == repeat.meta["provenance"]["config_fingerprint"]
     assert (
         omit.meta["parameters"]["source_artifact_fingerprint"]
         == repeat.meta["parameters"]["source_artifact_fingerprint"]
     )
-    assert (
-        omit.meta["provenance"]["config_fingerprint"]
-        != propagate.meta["provenance"]["config_fingerprint"]
-    )
-    assert (
-        omit.meta["provenance"]["config_fingerprint"]
-        != summed.meta["provenance"]["config_fingerprint"]
-    )
+    assert omit.meta["provenance"]["config_fingerprint"] != propagate.meta["provenance"]["config_fingerprint"]
+    assert omit.meta["provenance"]["config_fingerprint"] != summed.meta["provenance"]["config_fingerprint"]
     reordered = _explicit_artifact()
     reordered.data["node_attr"] = source.data["node_attr"].copy()
     reordered.meta["feature_keys"]["node_attr_keys"] = ["charge", "mass"]
@@ -273,7 +264,7 @@ def test_residue_pool_rejects_incompatible_granularity_and_malformed_source():
 
     malformed = _explicit_artifact()
     malformed.data["node_attr"] = malformed.data["node_attr"].reshape(-1)
-    with pytest.raises(ArtifactValidationError, match="shape|dimensions"):
+    with pytest.raises(ArtifactValidationError, match=r"shape|dimensions"):
         pool(malformed)
 
     missing_keys = _explicit_artifact()
@@ -402,7 +393,7 @@ def test_unsafe_payload_fails_before_filesystem_mutation(tmp_path, unsafe):
     meta_before = deepcopy(artifact.meta)
     target = tmp_path / "unsafe"
 
-    with pytest.raises(ArtifactValidationError) as raised:
+    with pytest.raises(ArtifactValidationError):
         artifact.save(target)
 
     assert artifact.meta == meta_before
@@ -418,7 +409,7 @@ def test_non_finite_metadata_fails_without_mutation(tmp_path, bad_value):
     data_before = {name: array.copy() for name, array in artifact.data.items()}
     target = tmp_path / "non-finite"
 
-    with pytest.raises(ArtifactValidationError) as raised:
+    with pytest.raises(ArtifactValidationError):
         artifact.save(target)
 
     assert artifact.meta is original_meta
@@ -448,7 +439,7 @@ def test_invalid_operations_do_not_mutate_artifact(tmp_path, operation):
     data_before = {name: array.copy() for name, array in artifact.data.items()}
     target = tmp_path / "invalid"
 
-    with pytest.raises(ArtifactValidationError, match="n_nodes"):
+    with pytest.raises(ArtifactValidationError, match="n_nodes"):  # noqa: PT012
         if operation == "validate":
             artifact.validate(strict=False)
         elif operation == "finalize":
@@ -476,7 +467,7 @@ def test_invalid_schema_versions_reject_without_mutation(
     artifact = StructureArtifact(data={}, meta=meta)
     target = tmp_path / "invalid-version"
 
-    with pytest.raises(ArtifactValidationError):
+    with pytest.raises(ArtifactValidationError):  # noqa: PT012
         if operation == "save":
             artifact.save(target)
         else:
@@ -509,7 +500,7 @@ def test_staging_failure_preserves_existing_artifact_and_cleans_temps(
     (target / "meta.json").write_bytes(old_meta)
     (target / "unrelated.txt").write_text("keep", encoding="utf-8")
 
-    def fail_json_write(path: Path, serialized_meta: str) -> None:
+    def fail_json_write(path: Path, serialized_meta: str) -> None:  # noqa: ARG001
         raise OSError("controlled staging failure")
 
     monkeypatch.setattr(artifacts_module, "_write_staged_json", fail_json_write)

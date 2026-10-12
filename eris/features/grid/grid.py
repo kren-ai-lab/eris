@@ -1,6 +1,8 @@
+"""Voxel grid attribute builder."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -8,7 +10,7 @@ from eris.features.feature_builders import build_from_registry_voxel
 from eris.features.feature_registry import GRID_VOXEL_REGISTRY
 
 
-def _bbox(pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _bbox(pos: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     mn = pos.min(axis=0)
     mx = pos.max(axis=0)
     return mn, mx
@@ -18,24 +20,21 @@ def build_grid_attr(
     *,
     pos: np.ndarray,
     centroid: np.ndarray,
-    strc: Dict[str, np.ndarray],
+    strc: dict[str, np.ndarray],
     channels: Any,
     grid_size: int,
-    voxel_size: Optional[float],
+    voxel_size: float | None,
     fit: bool,
     margin: float,
     center: bool,
     pool: str,
     sigma: float,
     return_keys: bool = False,
-) -> Tuple[np.ndarray, List[str], Dict[str, np.ndarray]]:
-
+) -> tuple[np.ndarray, list[str], dict[str, float | np.ndarray]]:
+    """Voxelize atom positions and return the grid, channel keys and grid geometry."""
     G = int(grid_size)
 
     pos_in = pos.copy()
-
-    # if pos_in.shape[0] == 3 and pos_in.shape[1] != 3:
-    #     pos_in = pos_in.T
 
     if center:
         centroid = np.asarray(centroid).reshape(-1)
@@ -44,15 +43,14 @@ def build_grid_attr(
     # -------- voxel size --------
     if voxel_size is not None:
         vs = float(voxel_size)
+    elif fit:
+        mn, mx = _bbox(pos_in)
+        mn -= margin
+        mx += margin
+        span = (mx - mn).max()
+        vs = float(span / max(1, (G - 1)))
     else:
-        if fit:
-            mn, mx = _bbox(pos_in)
-            mn -= margin
-            mx += margin
-            span = (mx - mn).max()
-            vs = float(span / max(1, (G - 1)))
-        else:
-            vs = 1.0
+        vs = 1.0
 
     # -------- origin --------
     half = (G - 1) * vs / 2.0
@@ -60,9 +58,6 @@ def build_grid_attr(
 
     # -------- voxel mapping --------
     ijk = np.floor((pos_in - origin[None, :]) / vs).astype(np.int64)
-
-    # if ijk.shape[0] == 3 and ijk.shape[1] != 3:
-    #     ijk = ijk.T
 
     valid = (
         (ijk[:, 0] >= 0)
@@ -97,7 +92,7 @@ def build_grid_attr(
         return_keys=return_keys,
     )
 
-    if return_keys:
+    if isinstance(result, tuple):
         grid, keys = result
     else:
         grid = result

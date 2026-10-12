@@ -26,11 +26,11 @@ from eris.core.learned.types import (
 )
 
 __all__ = [
-    "BackendAvailability",
-    "CheckpointDescriptor",
-    "CheckpointCache",
-    "EmbedderInfo",
     "GEARNET_EDGE_INFO",
+    "BackendAvailability",
+    "CheckpointCache",
+    "CheckpointDescriptor",
+    "EmbedderInfo",
     "OutputMode",
     "Precision",
     "ResolvedExecution",
@@ -40,8 +40,8 @@ __all__ = [
     "StructuralExecutionConfig",
     "StructuralModelDescriptor",
     "VerifiedCheckpoint",
-    "build_learned_artifact",
     "build_execution_provenance",
+    "build_learned_artifact",
     "execution_request_cache_identity",
     "learned_registry",
     "resolve_execution",

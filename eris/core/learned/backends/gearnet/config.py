@@ -18,16 +18,15 @@ class GearNetEdgeConfig(StructuralEmbedderConfig):
     """Frozen GearNet-Edge v0.1 scientific parameters plus output selection."""
 
     def __post_init__(self) -> None:
+        """Validate the GearNet-Edge representation name."""
         super().__post_init__()
         if self.representation_name != GEARNET_EDGE_REPRESENTATION_NAME:
             raise ConfigError(
-                "GearNetEdgeConfig representation_name must be "
-                f"{GEARNET_EDGE_REPRESENTATION_NAME!r}"
+                f"GearNetEdgeConfig representation_name must be {GEARNET_EDGE_REPRESENTATION_NAME!r}"
             )
 
     def to_dict(self) -> dict[str, Any]:
         """Return canonical parameters used for artifact provenance and cache identity."""
-
         return {
             "representation_name": self.representation_name,
             "output_mode": self.output_mode,

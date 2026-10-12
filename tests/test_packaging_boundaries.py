@@ -36,7 +36,7 @@ def _blocked_import(name, globals=None, locals=None, fromlist=(), level=0):
 
 builtins.__import__ = _blocked_import
 """
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         [sys.executable, "-c", guard + script],
         cwd=ROOT,
         check=True,
@@ -150,3 +150,19 @@ if "torch" not in status.reason:
     raise SystemExit("GearNet unavailable status must identify the missing dependency")
 """
     )
+
+
+def test_import_eris_and_cli_do_not_load_gearnet_numerical_code() -> None:
+    script = """
+import sys
+
+import eris
+import eris.cli.main
+
+numerical = ("backend", "loading", "native_graph", "native_model", "preprocessing")
+gearnet = "eris.core.learned.backends.gearnet."
+loaded = sorted(m for m in sys.modules if m.startswith(gearnet) and m.rsplit(".", 1)[-1] in numerical)
+if loaded:
+    raise SystemExit(f"GearNet numerical code loaded by import eris or the CLI: {loaded}")
+"""
+    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603

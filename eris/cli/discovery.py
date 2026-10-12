@@ -1,3 +1,5 @@
+"""Commands that list representations and embedders."""
+
 from __future__ import annotations
 
 import json
@@ -64,28 +66,24 @@ def _info_command(
 @representations_app.command("list")
 def list_representations() -> None:
     """List explicit structural representations."""
-
     _print_names("Eris Representations", eris.list_representations())
 
 
 @representations_app.command("info")
 def representation_info(name: str) -> None:
     """Show metadata for one explicit representation."""
-
     _info_command(name, lookup=eris.get_representation_info)
 
 
 @embedders_app.command("list")
 def list_embedders() -> None:
     """List learned structural embedders without checking availability."""
-
     _print_names("Eris Embedders", eris.list_embedders())
 
 
 @embedders_app.command("info")
 def embedder_info(name: str) -> None:
     """Show metadata and availability for one learned embedder."""
-
     _info_command(name, lookup=eris.get_embedder_info)
 
 

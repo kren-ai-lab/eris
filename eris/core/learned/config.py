@@ -1,3 +1,5 @@
+"""Base configuration for structural embedders."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,6 +19,7 @@ class StructuralEmbedderConfig:
     output_mode: OutputMode = "both"
 
     def __post_init__(self) -> None:
+        """Validate and normalize the config fields."""
         if not isinstance(self.representation_name, str):
             raise ConfigError("representation_name must be a string")
         representation_name = self.representation_name.strip()
@@ -30,7 +33,6 @@ class StructuralEmbedderConfig:
 
     def to_dict(self) -> dict[str, Any]:
         """Return deterministic JSON-compatible canonical parameters."""
-
         return {
             "representation_name": self.representation_name,
             "output_mode": self.output_mode,

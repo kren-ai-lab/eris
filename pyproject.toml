@@ -89,12 +89,69 @@ testpaths = ["tests"]
 addopts = "-ra"
 
 [tool.ruff]
-line-length = 100
+line-length = 110
 target-version = "py311"
 extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
-select = ["E9", "F63", "F7", "F82"]
+select = ["ALL"]
+ignore = [
+    "COM812",
+    "CPY001",
+    "D203",
+    "D213",
+    "N803",
+    "N806",
+    "PLR0913",
+    # Deliberate exceptions, not pending work.
+    "TRY003",  # a raise names the offending data, not a class per failure mode
+    "EM101",
+    "EM102",
+    "ANN401",  # coercion helpers take anything; `object` only moves it to pyrefly
+    "PLR2004", # `if n < 3` reads better than a named constant
+    "C901",    # workflows branch on contracts; splitting them hides the execution path
+    "PLR0911",
+    "PLR0912",
+    "PLR0915",
+    "PLR0917",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"eris/cli/*" = [
+    "FBT001",  # bool flags are standard in CLI functions
+    "FBT002",
+    "FBT003",
+    "TC001",   # typer resolves annotations at runtime, so they stay imported
+    "TC002",
+    "TC003",
+]
+"eris/features/*/features_*.py" = [
+    "ARG001",  # registry callbacks share one (ctx, data, params) signature
+    "S106",    # `token=` is the feature name, not a secret
+]
+"eris/api.py" = ["TC001"]  # public signatures must resolve with typing.get_type_hints
+"eris/datasets/torch_dataset.py" = ["TC003"]
+"tests/*" = [
+    "ANN",     # test helpers are not part of the typed public surface
+    "D",       # docstrings are not required in tests
+    "INP001",  # test packages are intentionally implicit namespaces
+    "PLC0415",
+    "PT011",
+    "PT017",
+    "PT018",
+    "S101",    # assert is how a test asserts
+    "TC003",   # pytest resolves fixture annotations at runtime
+]
+"examples/*" = [
+    "INP001",  # example scripts are intentionally standalone modules
+    "T201",    # examples print result snippets by design
+]
+
+[tool.pyrefly]
+# Without a config section Pyrefly falls back to the `basic` preset, which
+# silences most of its checks; `default` is the real baseline.
+preset = "default"
+project-includes = ["eris", "tests"]
 
 [tool.taskipy.tasks]
 sort-imports = "ruff check --fix --select I,F401 eris/ tests/"
@@ -104,3 +161,4 @@ lint-fix = "ruff check --fix eris/ tests/"
 test = "pytest -q"
 test-v = "pytest -v"
 test-cov = "pytest --cov=eris --cov-report=html"
+pyrefly = "pyrefly check eris/ tests/"

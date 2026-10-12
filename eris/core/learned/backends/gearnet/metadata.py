@@ -71,7 +71,6 @@ GEARNET_EDGE_CANONICAL_RESIDUES = (
 
 def gearnet_edge_preprocessing_parameters() -> dict[str, Any]:
     """Return a fresh JSON-safe description of frozen v0.1 preprocessing."""
-
     return {
         "biological_selection": {
             "policy": "canonical_20_only",

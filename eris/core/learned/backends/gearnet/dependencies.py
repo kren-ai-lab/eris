@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 
 @dataclass(frozen=True)
@@ -14,6 +18,7 @@ class BackendAvailability:
     reason: str | None = None
 
     def __post_init__(self) -> None:
+        """Validate availability fields."""
         if type(self.available) is not bool:
             raise TypeError("available must be a bool")
         if self.reason is not None:
@@ -27,7 +32,6 @@ class BackendAvailability:
 
 def probe_gearnet_availability() -> BackendAvailability:
     """Check that torch is importable without importing it or running GearNet."""
-
     if importlib.util.find_spec("torch") is None:
         return BackendAvailability(
             available=False,
@@ -39,11 +43,10 @@ def probe_gearnet_availability() -> BackendAvailability:
     return BackendAvailability(available=True)
 
 
-def import_native_gearnet_torch():
+def import_native_gearnet_torch() -> ModuleType:
     """Import the PyTorch runtime required for native GearNet execution."""
-
     try:
-        import torch
+        import torch  # noqa: PLC0415
     except (ImportError, OSError) as error:
         raise ImportError(
             "Native GearNet-Edge requires optional dependency torch; "

@@ -1,3 +1,5 @@
+"""Commands that list learned models and checkpoint status."""
+
 from __future__ import annotations
 
 import typer
@@ -6,7 +8,7 @@ from rich.table import Table
 
 from eris.cli._utils import cache_root, usage_error
 from eris.core.learned.checkpoint_cache import CheckpointCache
-from eris.core.learned.registry import learned_registry
+from eris.core.learned.registry import EmbedderInfo, learned_registry
 from eris.exceptions import CacheError, RepresentationNotFoundError
 
 app = typer.Typer(add_completion=False, help="Inspect registered learned model assets.")
@@ -17,7 +19,7 @@ def _model_names() -> list[str]:
     return [info.representation_name for info in learned_registry.list_info()]
 
 
-def _model_info(name: str):
+def _model_info(name: str) -> EmbedderInfo:
     try:
         info = learned_registry.get_info(name)
     except KeyError as error:
@@ -25,21 +27,18 @@ def _model_info(name: str):
     return info
 
 
-def _checkpoint_cached(info) -> bool:
+def _checkpoint_cached(info: EmbedderInfo) -> bool:
     try:
         checkpoint = CheckpointCache(cache_dir=cache_root()).get(info.model_descriptor.checkpoint)
     except CacheError as error:
         del error
-        usage_error(
-            f"Unable to inspect checkpoint cache for model/embedder {info.representation_name!r}."
-        )
+        usage_error(f"Unable to inspect checkpoint cache for model/embedder {info.representation_name!r}.")
     return checkpoint is not None
 
 
 @app.command("list")
 def list_models() -> None:
     """List registered learned model asset identities."""
-
     table = Table(title="Eris Models")
     table.add_column("Name", style="bold cyan")
     for name in _model_names():
@@ -50,7 +49,6 @@ def list_models() -> None:
 @app.command("info")
 def model_info(name: str) -> None:
     """Show identity and checkpoint cache state for a registered learned model."""
-
     try:
         info = _model_info(name)
     except RepresentationNotFoundError as error:

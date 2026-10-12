@@ -198,9 +198,7 @@ def _expected_counts(data: dict[str, np.ndarray], representation_type: str):
             "n_self_loops": int(np.count_nonzero(edge_index[0] == edge_index[1])),
         }
     elif representation_type == "matrix":
-        primary = next(
-            name for name in ("dist", "dist_bins", "contact", "contact_bins") if name in data
-        )
+        primary = next(name for name in ("dist", "dist_bins", "contact", "contact_bins") if name in data)
         counts = {"n_nodes": int(data[primary].shape[0])}
     else:
         counts = {}
@@ -478,9 +476,7 @@ def test_all_explicit_encoders_return_complete_schema(encoder_type):
     ("num_bins", "add_no_contact_class", "fits"),
     [(256, False, True), (255, True, True), (257, False, False), (256, True, False)],
 )
-def test_binned_class_ids_must_fit_the_output_dtype(
-    representation, num_bins, add_no_contact_class, fits
-):
+def test_binned_class_ids_must_fit_the_output_dtype(representation, num_bins, add_no_contact_class, fits):
     import eris
 
     params = {
@@ -498,6 +494,4 @@ def test_binned_class_ids_must_fit_the_output_dtype(
         assert artifact.data[key[representation]].dtype == np.uint8
     else:
         with pytest.raises(ValueError, match="cannot represent"):
-            eris.encode(
-                "tests/data/1AQ2.pdb", representation=representation, use_cache=False, **params
-            )
+            eris.encode("tests/data/1AQ2.pdb", representation=representation, use_cache=False, **params)

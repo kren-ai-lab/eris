@@ -53,7 +53,7 @@ EMBEDDER_INFO_KEYS = {
 
 
 def _fake_probe(monkeypatch, availability_probe) -> None:
-    def failing_init(self):
+    def failing_init(self):  # noqa: ARG001
         raise AssertionError("backend construction must not run during discovery")
 
     monkeypatch.setattr(GearNetEdgeBackend, "__init__", failing_init)
@@ -252,7 +252,7 @@ if loaded:
     raise SystemExit(f'optional frameworks loaded: {loaded}')
 """
 
-    subprocess.run([sys.executable, "-c", script], check=True)
+    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603
 
 
 def test_public_discovery_preserves_separate_registries():

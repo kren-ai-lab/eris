@@ -1,3 +1,5 @@
+"""Output declarations for each explicit representation."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -95,6 +97,7 @@ _INTERFACE_RESIDUE_IDS_OUTPUT = _output(
 
 
 def residue_graph_output_declarations(data: Mapping[str, object]) -> OutputDeclarations:
+    """Return the graph declarations, adding interface residue ids when present in ``data``."""
     if "interface_residue_ids" not in data:
         return RESIDUE_GRAPH_OUTPUTS
     return (*RESIDUE_GRAPH_OUTPUTS, _INTERFACE_RESIDUE_IDS_OUTPUT)

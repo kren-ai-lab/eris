@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import types
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -42,8 +43,8 @@ def _install_fake_pyg(monkeypatch: pytest.MonkeyPatch) -> None:
     try:
         import torch_geometric.data  # noqa: F401
     except ImportError:
-        pyg_module = types.ModuleType("torch_geometric")
-        data_module = types.ModuleType("torch_geometric.data")
+        pyg_module = cast("Any", types.ModuleType("torch_geometric"))
+        data_module = cast("Any", types.ModuleType("torch_geometric.data"))
         data_module.Data = _FakePyGData
         pyg_module.data = data_module
         monkeypatch.setitem(sys.modules, "torch_geometric", pyg_module)
@@ -52,8 +53,7 @@ def _install_fake_pyg(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _write_structure_manifest(path: Path, rows: list[tuple[str, Path]]) -> None:
     path.write_text(
-        "id,path,chain,model\n"
-        + "".join(f"{sample_id},{source},,0\n" for sample_id, source in rows),
+        "id,path,chain,model\n" + "".join(f"{sample_id},{source},,0\n" for sample_id, source in rows),
         encoding="utf-8",
     )
 
@@ -130,9 +130,7 @@ def test_explicit_public_workflow_preserves_identity_failures_and_resume(
     assert _read_rows(results_path) == results
     assert not (artifact_root / "failed").exists()
     for sample_id in ("first", "second"):
-        artifact = StructureArtifact.load(
-            artifact_root / sample_id / "residue_contact_graph", strict=True
-        )
+        artifact = StructureArtifact.load(artifact_root / sample_id / "residue_contact_graph", strict=True)
         assert artifact.meta["representation_name"] == "residue_contact_graph"
         assert artifact.meta["representation_family"] == "explicit"
 
@@ -145,7 +143,7 @@ def test_explicit_public_workflow_preserves_identity_failures_and_resume(
     resume_manifest = tmp_path / "resume.csv"
     _write_structure_manifest(resume_manifest, [("first", PDB), ("second", PDB)])
 
-    def must_not_execute(*args: object, **kwargs: object) -> StructureArtifact:
+    def must_not_execute(*args: object, **kwargs: object) -> StructureArtifact:  # noqa: ARG001
         raise AssertionError("equivalent artifacts must be reused during resume")
 
     monkeypatch.setattr(eris, "encode", must_not_execute)
@@ -183,9 +181,7 @@ def test_explicit_tensor_and_pyg_workflow(tmp_path: Path, monkeypatch: pytest.Mo
     assert [sample["id"] for sample in samples] == ["sample"]
     assert collate_graph(samples)["id"] == ["sample"]
 
-    artifact = StructureArtifact.load(
-        artifact_root / "sample" / "residue_contact_graph", strict=True
-    )
+    artifact = StructureArtifact.load(artifact_root / "sample" / "residue_contact_graph", strict=True)
     assert eris.to_torch(artifact)["representation_name"] == "residue_contact_graph"
     _install_fake_pyg(monkeypatch)
     pyg_data = eris.to_pyg(artifact)
@@ -203,7 +199,7 @@ def test_learned_public_workflow_uses_canonical_artifacts_and_torch(
     monkeypatch.setattr(
         eris,
         "embed",
-        lambda source, **kwargs: _synthetic_learned_artifact(Path(source)),
+        lambda source, **kwargs: _synthetic_learned_artifact(Path(source)),  # noqa: ARG005
     )
     results = eris.batch_embed(
         manifest_path=manifest,
@@ -258,7 +254,7 @@ def test_cli_workflow_uses_the_same_public_boundaries(
     monkeypatch.setattr(
         eris,
         "embed",
-        lambda source, **kwargs: _synthetic_learned_artifact(Path(source)),
+        lambda source, **kwargs: _synthetic_learned_artifact(Path(source)),  # noqa: ARG005
     )
     learned_root = tmp_path / "learned-artifacts"
     result = runner.invoke(

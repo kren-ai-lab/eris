@@ -1,8 +1,8 @@
+"""Amino-acid code tables and indices."""
+
 from __future__ import annotations
 
-from typing import Dict
-
-AA3_TO_AA1: Dict[str, str] = {
+AA3_TO_AA1: dict[str, str] = {
     "ALA": "A",
     "CYS": "C",
     "ASP": "D",
