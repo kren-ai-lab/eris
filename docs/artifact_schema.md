@@ -84,7 +84,7 @@ The required `input` block is:
 `source` is the invocation locator. `source_sha256` identifies the input bytes. `format` is the
 parser-confirmed format, not an unchecked filename inference. `model_index` is an integer greater
 than or equal to zero. `chain_ids` is a non-empty JSON list of unique strings in selected-model
-chain order. Single-chain artifacts use a one-element list. Legacy scalar `chain_id` metadata is
+chain order. Single-chain artifacts use a one-element list. Scalar `chain_id` metadata is
 rejected. Residue- and atom-aligned explicit artifacts also carry a Unicode `chain_id` array.
 
 The only optional input keys are string-valued `original_filename`, `structure_id`, and
@@ -237,13 +237,12 @@ migrate or delete them automatically.
 
 ## Multi-chain and pooling
 
-Collection-valued `input.chain_ids` replaces scalar `input.chain_id` for
+Collection-valued `input.chain_ids` is used for
 every artifact. It is a non-empty JSON list of unique strings in selected-model
 chain order. Single-chain artifacts use a one-element list. Residue-aligned
 artifacts additionally carry a Unicode `chain_id` array aligned with their
 rows or nodes. The resolved selection is included in the configuration fingerprint and cache
-identity. Legacy scalar metadata is rejected rather than maintained as a parallel permanent
-contract.
+identity. Scalar metadata is rejected.
 
 Structure-level pooling adds these declarations:
 

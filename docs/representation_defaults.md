@@ -238,7 +238,7 @@ as a non-default output dtype.
 | binned matrices | `uint8` by default |
 | voxel grid | `float32` by default; `float16` is optional |
 
-## Final-v0.1 structural defaults
+## Structural defaults
 
 The multi-chain, selected-model, alternate-location, physical-continuity, backbone/side-chain
 torsion, local-frame, secondary-structure, solvent-accessibility, interface, and pooling behavior

@@ -106,7 +106,7 @@ embedders, or loading an existing artifact must not import Torch or require a ch
 GearNet-specific behavior is isolated under
 `eris/core/learned/backends/gearnet/` and frozen by
 [the backend contract](gearnet_edge_backend.md).
-GearNet v0.1 remains single-chain: resolving more than one selected chain fails clearly before
+GearNet-Edge is single-chain: resolving more than one selected chain fails clearly before
 checkpoint inference.
 
 ## Public boundaries
@@ -162,7 +162,7 @@ External producers must also satisfy [the external NPZ contract](external_residu
 
 ## Contracts that extensions must preserve
 
-The final-v0.1 contracts for polymer continuity, backbone and side-chain torsions, local frames,
+The contracts for polymer continuity, backbone and side-chain torsions, local frames,
 secondary structure, solvent accessibility, interfaces, and structure-level pooling are frozen in
 [`structural_features.md`](structural_features.md). Polymer continuity and backbone torsions are
 implemented, as are local frames, relative edge direction, secondary structure, SASA/RSA,

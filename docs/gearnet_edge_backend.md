@@ -1,6 +1,6 @@
 # GearNet-Edge backend
 
-`gearnet_edge` is the only registered learned representation in Eris v0.1. It uses a native
+`gearnet_edge` is the only registered learned representation. It uses a native
 optional PyTorch implementation of GearNet-Edge with frozen preprocessing and the official
 Multiview Contrast checkpoint. The backend is inference-only.
 
@@ -169,7 +169,7 @@ applied.
 
 ## Runtime dependencies
 
-The supported v0.1 contract is:
+The supported contract is:
 
 | Dependency | Requirement |
 | --- | --- |
@@ -230,24 +230,15 @@ Changes to any of the following are scientific contract changes:
 - biological node mapping;
 - artifact and cache identity.
 
-Do not change these during routine refactoring or release hardening.
+Do not change these during routine refactoring.
 
-## Validation and release certification
+## Validation
 
 Tracked tests cover dependency isolation, frozen preprocessing, native graph construction,
 checkpoint loading, model behavior, learned artifacts, cache reuse, and stored reference data
-under `tests/data/`. The native runtime has reproduced frozen reference arrays within
+under `tests/data/`. The native runtime reproduces frozen reference arrays within
 `rtol=1e-6` and `atol=2e-6` in the environment where those references were generated.
-
-Release hardening must still certify:
-
-- the official checkpoint hash and strict load in each supported release environment;
-- frozen graph and embedding references on the final supported Python/PyTorch matrix;
-- repeated CPU/fp32 determinism in that matrix;
-- clean wheel installation, first-run acquisition, cache reuse, and offline inference.
-
-Passing core tests or skipping checkpoint-dependent tests is not release-environment
-certification.
+CI does not run the parity test because it needs the official checkpoint.
 
 ## License and citation
 

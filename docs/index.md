@@ -6,7 +6,7 @@
   points.
 - [Representation defaults](representation_defaults.md): canonical explicit-representation
   parameters and scientific semantics.
-- [Structural feature contracts](structural_features.md): frozen final-v0.1 scientific
+- [Structural feature contracts](structural_features.md): scientific
   contracts for multi-chain selection, derived geometry, interfaces, and pooling.
 - [Artifact Schema](artifact_schema.md): persisted arrays, metadata, validation, and identity.
 - [External residue features](external_residue_features.md): NPZ producer and alignment contract.
@@ -17,8 +17,3 @@
 
 - [DEVELOPMENT.md](../DEVELOPMENT.md): environment setup, tests, checks, and branch workflow.
 - [AGENTS.md](../AGENTS.md): repository-specific constraints for coding agents.
-
-## Internal handoff
-
-- [HANDOFF_V0.1.md](HANDOFF_V0.1.md): transfer status, validation evidence, caveats, and pending
-  release-hardening work.

@@ -1,8 +1,7 @@
 # Structural feature contracts
 
 This document is the authoritative scientific and persistence contract for the
-final Eris v0.1 structural-feature implementation. The contracts are frozen
-and implemented; scientific feature development for v0.1 is complete. They are
+Eris structural-feature implementation. The contracts are implemented; they are
 not a roadmap of planned behavior.
 
 The existing architecture remains authoritative: public APIs build canonical
@@ -14,9 +13,8 @@ as public API.
 
 ## Contract status
 
-All contract groups needed for the final v0.1 scientific implementation are
-frozen and implemented. Release-environment certification is tracked separately
-in [`HANDOFF_V0.1.md`](HANDOFF_V0.1.md).
+All contract groups of the structural-feature implementation are frozen and
+implemented.
 
 | Contract group | Status | Frozen decision |
 | --- | --- | --- |
@@ -515,9 +513,8 @@ serializers, hashes, and registries. Provider imports stay lazy and
 feature-local. Runtime network access is forbidden except for automatic
 acquisition of official model checkpoints whose HTTPS URL and SHA-256 are
 registered by Eris; arbitrary user-supplied download URLs are forbidden. No
-parallel permanent schema, silent legacy fallback, or cache-identity shortcut
+parallel permanent schema, silent fallback, or cache-identity shortcut
 is permitted.
 
 All listed behaviors are implemented. Future changes to scientific behavior
-must be treated as explicit contract changes, not handoff or release-hardening
-cleanup.
+must be treated as explicit contract changes.
