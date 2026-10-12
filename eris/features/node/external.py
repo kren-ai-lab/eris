@@ -14,7 +14,7 @@ import numpy as np
 from eris.core.residue_identity import format_residue_id
 
 ALIGNMENT_POLICY = "strict_residue_id"
-_HASH_DOMAIN = b"eris.external-residue-features.v2\x00"
+_HASH_DOMAIN = b"eris.external-residue-features.v1\x00"
 _REQUIRED_FIELDS = {"values", "residue_ids", "source_name", "chain_ids", "model_index"}
 _OPTIONAL_FIELDS = {"feature_keys", "source_version", "source_model"}
 _ALLOWED_FIELDS = _REQUIRED_FIELDS | _OPTIONAL_FIELDS
