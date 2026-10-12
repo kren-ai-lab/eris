@@ -12,7 +12,6 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 import eris
-from eris.cli._utils import usage_error
 
 app = typer.Typer(add_completion=False)
 representations_app = typer.Typer(
@@ -56,11 +55,7 @@ def _info_command(
     *,
     lookup: Callable[[str], dict[str, Any]],
 ) -> None:
-    try:
-        info = lookup(name)
-    except eris.RepresentationNotFoundError as error:
-        usage_error(str(error))
-    _print_info(info)
+    _print_info(lookup(name))
 
 
 @representations_app.command("list")

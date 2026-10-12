@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from eris.core.artifacts import StructureArtifact
+from eris.exceptions import ErisError, OptionalDependencyError
 from eris.export.torch import to_torch
 from eris.pipelines.pack import (
     PackedIndexRow,
@@ -21,7 +22,7 @@ from eris.pipelines.pack import (
 )
 
 
-class DatasetIndexError(ValueError):
+class DatasetIndexError(ErisError, ValueError):
     """Raised when a packed index row cannot be consumed safely."""
 
 
@@ -129,7 +130,7 @@ class ErisFolderDataset:
                     matrix_as_channel=self.matrix_as_channel,
                 )
             except ImportError as error:
-                raise RuntimeError(
+                raise OptionalDependencyError(
                     "ErisFolderDataset explicit tensor conversion requires optional "
                     "dependency 'torch'. Install the Torch/export dependencies to load "
                     "explicit artifacts as tensors."

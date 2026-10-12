@@ -48,18 +48,18 @@ def parse_mode(mode: Any) -> list[tuple[str, dict[str, Any]]]:
                 token, params = next(iter(item.items()))
 
                 if not isinstance(token, str):
-                    raise ValueError(f"Feature token must be string: {item}")  # noqa: TRY004
+                    raise TypeError(f"Feature token must be string: {item}")
 
                 if params is None:
                     params = {}
 
                 if not isinstance(params, dict):
-                    raise ValueError(f"Params for '{token}' must be dict")  # noqa: TRY004
+                    raise TypeError(f"Params for '{token}' must be dict")
 
                 result.append((token.strip(), params))
 
             else:
-                raise ValueError(f"Invalid mode element: {item}")  # noqa: TRY004
+                raise TypeError(f"Invalid mode element: {item}")
 
         return result
 

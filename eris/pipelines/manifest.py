@@ -12,8 +12,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, TypeVar, cast
 
+from eris.exceptions import ErisError
 
-class ManifestValidationError(ValueError):
+
+class ManifestValidationError(ErisError, ValueError):
     """Raised when a manifest row or manifest file violates the canonical contract."""
 
 

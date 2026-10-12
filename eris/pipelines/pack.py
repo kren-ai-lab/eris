@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING, Any
 
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
+from eris.exceptions import ErisError
 from eris.pipelines.manifest import row_location, write_atomically
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ PACKED_INDEX_FIELDS: tuple[str, ...] = (
 )
 
 
-class PackIndexError(ValueError):
+class PackIndexError(ErisError, ValueError):
     """Raised when artifact packing/index generation cannot complete safely."""
 
 
@@ -179,7 +180,7 @@ def parse_shape_summary(value: str) -> dict[str, Any]:
     """Decode a shape summary string into a mapping."""
     parsed = json.loads(value)
     if not isinstance(parsed, dict):
-        raise ValueError("shape_summary must decode to an object")  # noqa: TRY004
+        raise TypeError("shape_summary must decode to an object")
     return parsed
 
 

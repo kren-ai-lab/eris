@@ -10,10 +10,11 @@ from typing import Any
 import numpy as np
 
 from eris.core.artifacts import StructureArtifact
+from eris.exceptions import ErisError, OptionalDependencyError
 from eris.export.torch import to_torch
 
 
-class PyGExportError(ValueError):
+class PyGExportError(ErisError, ValueError):
     """Raised when an artifact cannot be exported as a PyG graph."""
 
 
@@ -42,7 +43,7 @@ def _pyg_dependencies() -> tuple[Any, Any]:
         import torch  # noqa: PLC0415
         from torch_geometric.data import Data  # noqa: PLC0415
     except ImportError as error:  # pragma: no cover - environment dependent
-        raise ImportError(
+        raise OptionalDependencyError(
             "PyG export requires optional dependencies 'torch' and 'torch_geometric'. "
             "Install the PyG/export dependencies before calling eris.export.pyg.to_pyg()."
         ) from error

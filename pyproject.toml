@@ -49,7 +49,7 @@ dependencies = [
 ]
 
 [project.scripts]
-eris = "eris.cli.main:app"
+eris = "eris.cli.main:main"
 
 [project.optional-dependencies]
 gearnet = ["torch>=2.11,<3"]

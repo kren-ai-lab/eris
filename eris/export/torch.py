@@ -10,12 +10,13 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from eris.core.artifacts import StructureArtifact
+from eris.exceptions import ErisError, OptionalDependencyError
 
 if TYPE_CHECKING:
     from types import ModuleType
 
 
-class TorchExportError(ValueError):
+class TorchExportError(ErisError, ValueError):
     """Raised when an artifact cannot be exported to Torch."""
 
 
@@ -51,7 +52,7 @@ def _torch() -> ModuleType:
     try:
         import torch  # noqa: PLC0415
     except ImportError as error:  # pragma: no cover - environment dependent
-        raise ImportError(
+        raise OptionalDependencyError(
             "Torch export requires optional dependency 'torch'. Install the Torch/export "
             "dependencies before calling eris.export.torch.to_torch()."
         ) from error

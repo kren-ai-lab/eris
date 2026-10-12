@@ -8,10 +8,7 @@ from typing import Annotated, Any
 import typer
 
 import eris
-from eris.cli._utils import parse_json_object, usage_error
-from eris.core.artifacts import ArtifactValidationError
-from eris.core.io import StructureLoadError
-from eris.exceptions import CacheError, ConfigError, RepresentationNotFoundError
+from eris.cli._utils import parse_json_object
 
 
 def encode(
@@ -48,19 +45,7 @@ def encode(
     if model_index is not None:
         encode_kwargs["model_index"] = model_index
 
-    try:
-        artifact = eris.encode(**encode_kwargs)
-    except FileNotFoundError as error:
-        missing = error.filename if error.filename is not None else input
-        usage_error(f"File not found: {missing}")
-    except (
-        RepresentationNotFoundError,
-        ConfigError,
-        StructureLoadError,
-        ArtifactValidationError,
-        CacheError,
-    ) as error:
-        usage_error(str(error))
+    artifact = eris.encode(**encode_kwargs)
 
     typer.echo(f"Encoded {artifact.meta['representation_name']} -> {out}")
 

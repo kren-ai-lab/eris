@@ -6,10 +6,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from eris.cli._utils import cache_root, usage_error
+from eris.cli._utils import cache_root
 from eris.core.learned.checkpoint_cache import CheckpointCache
 from eris.core.learned.registry import EmbedderInfo, learned_registry
-from eris.exceptions import CacheError, RepresentationNotFoundError
+from eris.exceptions import RepresentationNotFoundError
 
 app = typer.Typer(add_completion=False, help="Inspect registered learned model assets.")
 console = Console(width=240)
@@ -28,12 +28,7 @@ def _model_info(name: str) -> EmbedderInfo:
 
 
 def _checkpoint_cached(info: EmbedderInfo) -> bool:
-    try:
-        checkpoint = CheckpointCache(cache_dir=cache_root()).get(info.model_descriptor.checkpoint)
-    except CacheError as error:
-        del error
-        usage_error(f"Unable to inspect checkpoint cache for model/embedder {info.representation_name!r}.")
-    return checkpoint is not None
+    return CheckpointCache(cache_dir=cache_root()).get(info.model_descriptor.checkpoint) is not None
 
 
 @app.command("list")
@@ -49,10 +44,7 @@ def list_models() -> None:
 @app.command("info")
 def model_info(name: str) -> None:
     """Show identity and checkpoint cache state for a registered learned model."""
-    try:
-        info = _model_info(name)
-    except RepresentationNotFoundError as error:
-        usage_error(str(error))
+    info = _model_info(name)
 
     model = info.model_descriptor
     checkpoint = model.checkpoint

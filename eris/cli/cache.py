@@ -40,12 +40,7 @@ def _count_artifact_entries(cache_root: Path) -> int:
 
 
 def _official_checkpoint_cached(cache_root: Path) -> bool:
-    try:
-        checkpoint = CheckpointCache(cache_dir=cache_root).get(GEARNET_EDGE_CHECKPOINT_DESCRIPTOR)
-    except CacheError as error:
-        del error
-        usage_error("Unable to inspect gearnet_edge checkpoint cache.")
-    return checkpoint is not None
+    return CheckpointCache(cache_dir=cache_root).get(GEARNET_EDGE_CHECKPOINT_DESCRIPTOR) is not None
 
 
 def _ensure_cache_child(cache_root: Path, target: Path) -> None:
@@ -122,15 +117,12 @@ def clear_cache(
     if not cache_root.is_dir():
         usage_error(f"Eris cache root is not a directory: {cache_root}")
 
-    try:
-        removed = [
-            label
-            for label, namespace in _target_namespaces(cache_root, target)
-            if _remove_cache_namespace(cache_root, namespace, label)
-        ]
-        root_removed = _remove_empty_cache_root(cache_root) if target is CacheClearTarget.ALL else False
-    except CacheError as error:
-        usage_error(str(error))
+    removed = [
+        label
+        for label, namespace in _target_namespaces(cache_root, target)
+        if _remove_cache_namespace(cache_root, namespace, label)
+    ]
+    root_removed = _remove_empty_cache_root(cache_root) if target is CacheClearTarget.ALL else False
 
     if removed:
         typer.echo(f"Cleared Eris {target.value} cache namespaces: {', '.join(removed)}.")
