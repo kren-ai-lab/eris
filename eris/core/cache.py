@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any
 from platformdirs import user_cache_dir
 
 from eris.core.artifact_schema import (
-    ARTIFACT_SCHEMA_VERSION,
     _IMPLEMENTATION_PATH,
+    ARTIFACT_SCHEMA_VERSION,
     ArtifactValidationError,
     _require_non_empty_string,
     _require_sha256,
