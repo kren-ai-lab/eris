@@ -124,12 +124,14 @@ The CLI exposes `encode`, `embed`, `pack`, `batch`, `export`, `info`, `cache`,
 `models`, `representations`, and `embedders`. CLI handlers parse command-line values and
 delegate to the corresponding Python operation.
 
-Batch structure rows contain `id`, `path`, `chain`, and `model`. Python
-`chain` accepts `null`, one string, or a non-empty list of unique strings; JSON/JSONL preserve
-lists directly and CSV stores a JSON list in the field. Python
+Batch manifests are a CSV or JSONL file or a Polars `DataFrame` with columns `id`, `path`,
+`chain`, and `model`. `chain` accepts `null`, one string, or a non-empty list of unique strings;
+JSONL and DataFrames hold lists directly and CSV stores a JSON list in the field. CSV cells are
+read as text, so no value is type-inferred before validation. `batch_encode()` and
+`batch_embed()` return a Polars `DataFrame` with one result row per manifest row, and Python
 `batch_encode(..., params_by_id=...)` applies row-specific shallow top-level overrides to global
-`params`; the CLI accepts global parameters only. `pack()` writes a metadata index consumed by
-`ErisFolderDataset`.
+`params`; the CLI accepts global parameters only. `pack()` writes a metadata CSV index consumed by
+`ErisFolderDataset` and returns it as a Polars `DataFrame`.
 
 `to_torch()` supports explicit graphs, clouds, matrices, grids, pooled vectors, and learned
 embeddings.

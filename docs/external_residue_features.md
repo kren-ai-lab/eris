@@ -142,7 +142,7 @@ Python `batch_encode()` accepts shallow overrides keyed by manifest row ID:
 from eris import batch_encode
 
 batch_encode(
-    rows=rows,
+    "manifest.csv",
     representation="residue_knn_graph",
     artifact_root="artifacts",
     params={"k": 8},

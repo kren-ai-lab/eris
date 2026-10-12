@@ -80,6 +80,7 @@ def test_core_declares_direct_runtime_imports_and_python_range() -> None:
         "typer>=0.27,<1",
         "rich>=13.0,<16",
         "biotite>=1.6,<2",
+        "polars>=1.44,<2",
     ):
         assert requirement in dependencies
 

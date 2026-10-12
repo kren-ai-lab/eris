@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import polars as pl
 import pytest
 
 import eris
@@ -31,7 +32,6 @@ from eris.features.geometry import (
 from eris.features.node.constants import AA_VOCAB, PHYSchem_KEYS
 from eris.features.node.external import ExternalFeatureError
 from eris.features.node.residue import build_node_attr
-from eris.pipelines.manifest import StructureManifestRow
 
 PDB = Path("tests/data/1AQ2.pdb")
 MMCIF = Path("tests/data/1AQ2.cif")
@@ -1309,10 +1309,13 @@ def test_batch_external_params_by_id_preserve_resume_identity(
         values=[[5.0, 6.0], [7.0, 8.0]],
         residue_ids=["A:1::ALA", "A:2::GLY"],
     )
-    rows = [
-        StructureManifestRow(id="first", path=first_source.source, chain="A"),
-        StructureManifestRow(id="second", path=second_source.source, chain="A"),
-    ]
+    rows = pl.DataFrame(
+        {
+            "id": ["first", "second"],
+            "path": [first_source.source, second_source.source],
+            "chain": ["A", "A"],
+        }
+    )
     params_by_id = {
         "first": {"node_attr_mode": [{"external": {"path": str(first_external)}}]},
         "second": {"node_attr_mode": [{"external": {"path": str(second_external)}}]},
@@ -1327,7 +1330,7 @@ def test_batch_external_params_by_id_preserve_resume_identity(
         use_cache=False,
     )
 
-    assert [result.status for result in results] == ["success", "success"]
+    assert results["status"].to_list() == ["success", "success"]
     first = StructureArtifact.load(artifact_root / "first" / "residue_point_cloud")
     second = StructureArtifact.load(artifact_root / "second" / "residue_point_cloud")
     np.testing.assert_array_equal(first.data["node_attr"], [[1.0, 2.0], [3.0, 4.0]])
@@ -1346,7 +1349,7 @@ def test_batch_external_params_by_id_preserve_resume_identity(
         use_cache=False,
         resume=True,
     )
-    assert [result.status for result in resumed] == ["success", "success"]
+    assert resumed["status"].to_list() == ["success", "success"]
 
 
 def test_secondary_structure_assigns_frozen_states_with_provider_provenance() -> None:

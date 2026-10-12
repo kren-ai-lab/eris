@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
+
+import polars as pl
 
 import eris
 from eris.core.artifact_schema import compute_config_fingerprint
@@ -19,11 +21,11 @@ from eris.core.registry import get_encoder, get_encoder_info, resolve_representa
 from eris.core.types import StructureInput, _chain_ids
 from eris.exceptions import ConfigError, ExecutionError
 from eris.pipelines.manifest import (
-    BatchResultRow,
+    BATCH_RESULT_SCHEMA,
     StructureManifestRow,
     read_manifest,
     write_atomically,
-    write_manifest,
+    write_results,
 )
 
 if TYPE_CHECKING:
@@ -54,28 +56,6 @@ def _coerce_bool(value: object, name: str) -> bool:
     if not isinstance(value, bool):
         raise ConfigError(f"{name} must be a bool")
     return value
-
-
-def _coerce_rows(
-    rows: Iterable[StructureManifestRow] | str | Path | None,
-    *,
-    manifest_path: str | Path | None,
-) -> list[StructureManifestRow]:
-    if rows is not None and manifest_path is not None:
-        raise ConfigError("rows and manifest_path cannot be combined")
-    source = manifest_path if manifest_path is not None else rows
-    if source is None:
-        raise ConfigError("rows or manifest_path is required")
-    if isinstance(source, (str, Path)):
-        return read_manifest(Path(source), StructureManifestRow)
-
-    materialized = list(source)
-    if not materialized:
-        raise ConfigError("batch rows must be non-empty")
-    for index, row in enumerate(materialized, start=1):
-        if not isinstance(row, StructureManifestRow):
-            raise TypeError(f"row {index} must be a StructureManifestRow")
-    return materialized
 
 
 def _resolve_representation(representation: str) -> str:
@@ -245,8 +225,12 @@ def _save_artifact_safely(artifact: StructureArtifact, target: Path) -> None:
             _cleanup_staging(staging, target)
 
 
-def _write_results_safely(path: Path, rows: Sequence[BatchResultRow]) -> None:
-    write_atomically(path, lambda staging: write_manifest(staging, rows))
+def _results_frame(results: list[dict[str, str | None]]) -> pl.DataFrame:
+    return pl.DataFrame(results, schema=BATCH_RESULT_SCHEMA, orient="row")
+
+
+def _write_results_safely(path: Path, results: list[dict[str, str | None]]) -> None:
+    write_atomically(path, lambda staging: write_results(staging, _results_frame(results)))
 
 
 def _input_matches(
@@ -353,16 +337,16 @@ def _success_row(
     representation: str,
     family: RepresentationFamily,
     artifact_dir: Path,
-) -> BatchResultRow:
-    return BatchResultRow(
-        id=row.id,
-        representation_name=representation,
-        representation_family=family,
-        artifact_dir=str(artifact_dir),
-        status="success",
-        error_type=None,
-        error_message=None,
-    )
+) -> dict[str, str | None]:
+    return {
+        "id": row.id,
+        "representation_name": representation,
+        "representation_family": family,
+        "artifact_dir": str(artifact_dir),
+        "status": "success",
+        "error_type": None,
+        "error_message": None,
+    }
 
 
 def _failure_row(
@@ -371,16 +355,16 @@ def _failure_row(
     representation: str,
     family: RepresentationFamily,
     error: Exception,
-) -> BatchResultRow:
-    return BatchResultRow(
-        id=row.id,
-        representation_name=representation,
-        representation_family=family,
-        artifact_dir=None,
-        status="failed",
-        error_type=type(error).__name__,
-        error_message=str(error),
-    )
+) -> dict[str, str | None]:
+    return {
+        "id": row.id,
+        "representation_name": representation,
+        "representation_family": family,
+        "artifact_dir": None,
+        "status": "failed",
+        "error_type": type(error).__name__,
+        "error_message": str(error),
+    }
 
 
 def _run_batch(
@@ -395,14 +379,14 @@ def _run_batch(
     results_path: str | Path | None,
     identity_factory: Callable[[StructureManifestRow], _ResumeIdentity],
     execute: Callable[[StructureManifestRow], StructureArtifact],
-) -> list[BatchResultRow]:
+) -> pl.DataFrame:
     _coerce_bool(resume, "resume")
     _coerce_bool(overwrite, "overwrite")
     _coerce_bool(fail_fast, "fail_fast")
 
     artifact_root.mkdir(parents=True, exist_ok=True)
     results_file = Path(results_path) if results_path is not None else None
-    results: list[BatchResultRow] = []
+    results: list[dict[str, str | None]] = []
 
     for row in rows:
         target = _target_dir(artifact_root, row, representation)
@@ -459,11 +443,11 @@ def _run_batch(
             if results_file is not None:
                 _write_results_safely(results_file, results)
 
-    return results
+    return _results_frame(results)
 
 
 def batch_encode(
-    rows: Iterable[StructureManifestRow] | str | Path | None = None,
+    manifest: str | Path | pl.DataFrame,
     *,
     representation: str,
     artifact_root: str | Path,
@@ -474,12 +458,14 @@ def batch_encode(
     overwrite: bool = False,
     fail_fast: bool = False,
     results_path: str | Path | None = None,
-    manifest_path: str | Path | None = None,
-) -> list[BatchResultRow]:
-    """Run one explicit representation with optional shallow per-row overrides."""
+) -> pl.DataFrame:
+    """Encode every manifest row (CSV/JSONL path or DataFrame) and return one result row each.
+
+    ``params`` applies to all rows; ``params_by_id`` adds shallow per-row overrides.
+    """
     representation_name = _resolve_representation(representation)
     artifact_root_path = _resolve_artifact_root(artifact_root)
-    structure_rows = _coerce_rows(rows, manifest_path=manifest_path)
+    structure_rows = read_manifest(manifest)
     explicit_configs_by_id = _resolve_row_explicit_configs(
         structure_rows,
         representation=representation_name,
@@ -514,7 +500,7 @@ def batch_encode(
 
 
 def batch_embed(
-    rows: Iterable[StructureManifestRow] | str | Path | None = None,
+    manifest: str | Path | pl.DataFrame,
     *,
     representation: str,
     artifact_root: str | Path,
@@ -527,16 +513,15 @@ def batch_embed(
     overwrite: bool = False,
     fail_fast: bool = False,
     results_path: str | Path | None = None,
-    manifest_path: str | Path | None = None,
-) -> list[BatchResultRow]:
-    """Run one learned structural embedder over a structure manifest."""
+) -> pl.DataFrame:
+    """Embed every manifest row (CSV/JSONL path or DataFrame) and return one result row each."""
     if not isinstance(representation, str) or not representation.strip():
         raise ConfigError("representation must be a non-empty string")
     _coerce_bool(use_cache, "use_cache")
 
     representation_name = representation.strip()
     artifact_root_path = _resolve_artifact_root(artifact_root)
-    structure_rows = _coerce_rows(rows, manifest_path=manifest_path)
+    structure_rows = read_manifest(manifest)
 
     return _run_batch(
         structure_rows,

@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import Literal
 
 import numpy as np
+import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 
 import eris
 from eris.core.artifact_schema import build_input_metadata
@@ -28,16 +30,17 @@ from eris.core.learned.execution import (
 from eris.core.learned.types import StructuralEmbeddingResult
 from eris.exceptions import ConfigError
 from eris.pipelines.batch_encode import batch_embed, batch_encode
-from eris.pipelines.manifest import (
-    BatchResultRow,
-    ManifestValidationError,
-    StructureManifestRow,
-    read_manifest,
-)
+from eris.pipelines.manifest import ManifestValidationError, StructureManifestRow, read_manifest
 
 PDB = Path("tests/data/1AQ2.pdb")
 OTHER_PDB = Path("tests/data/3EC1.pdb")
 batch_module = importlib.import_module("eris.pipelines.batch_encode")
+
+
+def _manifest(*ids_paths: tuple[str, str], **columns: list) -> pl.DataFrame:
+    return pl.DataFrame(
+        {"id": [i for i, _ in ids_paths], "path": [p for _, p in ids_paths], **columns},
+    )
 
 
 def _explicit_artifact(
@@ -119,23 +122,20 @@ def _learned_artifact(
 
 
 def test_batch_encode_success_preserves_order_layout_and_strict(tmp_path: Path) -> None:
-    rows = [
-        StructureManifestRow(id="first", path=str(PDB)),
-        StructureManifestRow(id="second", path=str(PDB)),
-    ]
+    manifest = _manifest(("first", str(PDB)), ("second", str(PDB)))
     root = tmp_path / "artifacts"
 
     results = batch_encode(
-        rows,
+        manifest,
         representation="residue_contact_map",
         artifact_root=root,
         use_cache=False,
     )
 
-    assert [row.id for row in results] == ["first", "second"]
-    assert all(row.status == "success" for row in results)
-    for row in rows:
-        target = root / row.id / "residue_contact_map"
+    assert results["id"].to_list() == ["first", "second"]
+    assert results["status"].to_list() == ["success", "success"]
+    for sample_id in ["first", "second"]:
+        target = root / sample_id / "residue_contact_map"
         assert target.is_dir()
         artifact = StructureArtifact.load(target)
         assert artifact.meta["representation_name"] == "residue_contact_map"
@@ -143,15 +143,30 @@ def test_batch_encode_success_preserves_order_layout_and_strict(tmp_path: Path) 
 
 
 def test_manifest_accepts_only_canonical_structure_fields(tmp_path: Path) -> None:
-    manifest = tmp_path / "structures.json"
+    manifest = tmp_path / "structures.jsonl"
     manifest.write_text(
-        '[{"id": "protein", "path": "protein.pdb", "chain": "A", "model": 1}]\n',
+        '{"id": "protein", "path": "protein.pdb", "chain": "A", "model": 1}\n',
         encoding="utf-8",
     )
 
-    rows = read_manifest(manifest, StructureManifestRow)
+    rows = read_manifest(manifest)
 
-    assert rows == [StructureManifestRow(id="protein", path="protein.pdb", chain="A", model=1)]
+    assert rows == [StructureManifestRow(id="protein", path="protein.pdb", chain=("A",), model=1)]
+
+
+def test_manifest_rejects_json_format(tmp_path: Path) -> None:
+    manifest = tmp_path / "structures.json"
+    manifest.write_text('[{"id": "protein", "path": "protein.pdb"}]\n', encoding="utf-8")
+
+    with pytest.raises(ManifestValidationError, match="Unsupported manifest format"):
+        read_manifest(manifest)
+
+
+def test_manifest_rejects_empty_dataframe() -> None:
+    empty = pl.DataFrame({"id": [], "path": []}, schema={"id": pl.String, "path": pl.String})
+
+    with pytest.raises(ManifestValidationError, match="Empty manifest"):
+        batch_encode(empty, representation="residue_contact_map", artifact_root="unused")
 
 
 def test_manifest_batch_and_resume_canonicalize_multichain_selection(
@@ -166,24 +181,21 @@ def test_manifest_batch_and_resume_canonicalize_multichain_selection(
         "END\n",
         encoding="ascii",
     )
-    manifest = tmp_path / "structures.json"
+    manifest = tmp_path / "structures.jsonl"
     manifest.write_text(
         f'{{"id":"protein","path":"{source.as_posix()}","chain":["B","A"],"model":0}}\n',
         encoding="utf-8",
     )
-    # JSON manifests are lists rather than a single object.
-    manifest.write_text(f"[{manifest.read_text(encoding='utf-8').strip()}]\n", encoding="utf-8")
-    rows = read_manifest(manifest, StructureManifestRow)
     artifact_root = tmp_path / "artifacts"
 
     result = batch_encode(
-        rows,
+        manifest,
         representation="residue_point_cloud",
         artifact_root=artifact_root,
         use_cache=False,
     )
 
-    assert result[0].status == "success"
+    assert result["status"][0] == "success"
     artifact = StructureArtifact.load(artifact_root / "protein" / "residue_point_cloud")
     assert artifact.meta["input"]["chain_ids"] == ["A", "B"]
 
@@ -193,18 +205,18 @@ def test_manifest_batch_and_resume_canonicalize_multichain_selection(
         lambda *args, **kwargs: pytest.fail("equivalent resumed artifact must be reused"),  # noqa: ARG005
     )
     resumed = batch_encode(
-        [StructureManifestRow(id="protein", path=str(source), chain=["A", "B"])],
+        _manifest(("protein", str(source)), chain=[["A", "B"]]),
         representation="residue_point_cloud",
         artifact_root=artifact_root,
         resume=True,
         use_cache=False,
     )
-    assert resumed[0].status == "success"
+    assert resumed["status"][0] == "success"
 
 
 @pytest.mark.parametrize("alias", ["sample_id", "input", "chain_id", "model_index"])
 def test_manifest_rejects_legacy_structure_field_aliases(tmp_path: Path, alias: str) -> None:
-    manifest = tmp_path / "structures.json"
+    manifest = tmp_path / "structures.jsonl"
     fields = {"id": "protein", "path": "protein.pdb", "chain": "A", "model": 1}
     fields[alias] = fields.pop(
         {
@@ -214,16 +226,16 @@ def test_manifest_rejects_legacy_structure_field_aliases(tmp_path: Path, alias: 
             "model_index": "model",
         }[alias]
     )
-    manifest.write_text(f"[{fields!r}]\n".replace("'", '"'), encoding="utf-8")
+    manifest.write_text(f"{fields!r}\n".replace("'", '"'), encoding="utf-8")
 
     with pytest.raises(ManifestValidationError, match="unexpected field"):
-        read_manifest(manifest, StructureManifestRow)
+        read_manifest(manifest)
 
 
 def test_batch_encode_uses_artifact_root_only(tmp_path: Path) -> None:
     with pytest.raises(TypeError, match="unexpected keyword argument 'out'"):
         batch_encode(  # pyrefly: ignore[missing-argument]
-            [StructureManifestRow(id="protein", path=str(PDB))],
+            _manifest(("protein", str(PDB))),
             representation="residue_contact_map",
             out=tmp_path,  # pyrefly: ignore[unexpected-keyword]
         )
@@ -238,7 +250,7 @@ def test_batch_encode_uses_artifact_root_only(tmp_path: Path) -> None:
 def test_batch_encode_rejects_pre_release_nested_parameter_translation(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="Unknown parameters"):
         batch_encode(
-            [StructureManifestRow(id="protein", path=str(PDB))],
+            _manifest(("protein", str(PDB))),
             representation="residue_contact_map",
             artifact_root=tmp_path,
             params={"residue_contact_map": {"cutoff": 8.0}},
@@ -261,17 +273,17 @@ def test_batch_encode_delegates_to_public_api_and_propagates_config(monkeypatch,
         return artifact
 
     monkeypatch.setattr(batch_module.eris, "encode", fake_encode)
-    rows = [StructureManifestRow(id="protein", path="input.pdb", chain="A", model=2)]
+    manifest = _manifest(("protein", "input.pdb"), chain=["A"], model=[2])
 
     results = batch_encode(
-        rows,
+        manifest,
         representation="residue_knn_graph",
         artifact_root=tmp_path,
         params={"k": 8},
         use_cache=False,
     )
 
-    assert results[0].status == "success"
+    assert results["status"][0] == "success"
     assert len(captured) == 1
     input_path, kwargs = captured[0]
     resolved_config = kwargs.pop("config")
@@ -297,15 +309,11 @@ def test_batch_encode_partial_failure_continues_and_writes_results(tmp_path, mon
         return artifact
 
     monkeypatch.setattr(batch_module.eris, "encode", fake_encode)
-    rows = [
-        StructureManifestRow(id="ok1", path="ok1.pdb"),
-        StructureManifestRow(id="bad", path="bad.pdb"),
-        StructureManifestRow(id="ok2", path="ok2.pdb"),
-    ]
+    manifest = _manifest(("ok1", "ok1.pdb"), ("bad", "bad.pdb"), ("ok2", "ok2.pdb"))
     results_path = tmp_path / "results.csv"
 
     results = batch_encode(
-        rows,
+        manifest,
         representation="residue_contact_map",
         artifact_root=tmp_path / "artifacts",
         results_path=results_path,
@@ -313,11 +321,11 @@ def test_batch_encode_partial_failure_continues_and_writes_results(tmp_path, mon
     )
 
     assert calls == ["ok1.pdb", "bad.pdb", "ok2.pdb"]
-    assert [row.status for row in results] == ["success", "failed", "success"]
-    assert results[1].error_type == "ValueError"
-    assert results[1].error_message == "cannot parse"
+    assert results["status"].to_list() == ["success", "failed", "success"]
+    assert results["error_type"][1] == "ValueError"
+    assert results["error_message"][1] == "cannot parse"
     assert not (tmp_path / "artifacts" / "bad").exists()
-    assert read_manifest(results_path, BatchResultRow) == results
+    assert_frame_equal(pl.read_csv(results_path, infer_schema=False), results)
 
 
 def test_existing_output_without_resume_or_overwrite_is_a_failure(tmp_path, monkeypatch):
@@ -330,13 +338,13 @@ def test_existing_output_without_resume_or_overwrite_is_a_failure(tmp_path, monk
     monkeypatch.setattr(batch_module.eris, "encode", fail_encode)
 
     results = batch_encode(
-        [StructureManifestRow(id="protein", path=str(PDB))],
+        _manifest(("protein", str(PDB))),
         representation="residue_contact_map",
         artifact_root=tmp_path / "artifacts",
     )
 
-    assert results[0].status == "failed"
-    assert results[0].error_type == "FileExistsError"
+    assert results["status"][0] == "failed"
+    assert results["error_type"][0] == "FileExistsError"
     assert StructureArtifact.load(target).meta["representation_name"] == "residue_contact_map"
 
 
@@ -350,20 +358,22 @@ def test_resume_reuses_equivalent_artifact_without_execution(tmp_path, monkeypat
     monkeypatch.setattr(batch_module.eris, "encode", fail_encode)
 
     results = batch_encode(
-        [StructureManifestRow(id="protein", path=str(PDB))],
+        _manifest(("protein", str(PDB))),
         representation="residue_contact_map",
         artifact_root=tmp_path / "artifacts",
         resume=True,
     )
 
-    assert results == [
-        BatchResultRow(
-            id="protein",
-            representation_name="residue_contact_map",
-            representation_family="explicit",
-            artifact_dir=str(target),
-            status="success",
-        )
+    assert results.to_dicts() == [
+        {
+            "id": "protein",
+            "representation_name": "residue_contact_map",
+            "representation_family": "explicit",
+            "artifact_dir": str(target),
+            "status": "success",
+            "error_type": None,
+            "error_message": None,
+        }
     ]
 
 
@@ -382,7 +392,7 @@ def test_resume_regenerates_invalid_artifact_without_deleting_first(tmp_path, mo
     monkeypatch.setattr(batch_module.eris, "encode", fake_encode)
 
     results = batch_encode(
-        [StructureManifestRow(id="protein", path=str(PDB))],
+        _manifest(("protein", str(PDB))),
         representation="residue_contact_map",
         artifact_root=tmp_path / "artifacts",
         resume=True,
@@ -390,7 +400,7 @@ def test_resume_regenerates_invalid_artifact_without_deleting_first(tmp_path, mo
     )
 
     assert len(calls) == 1
-    assert results[0].status == "success"
+    assert results["status"][0] == "success"
     assert StructureArtifact.load(target).meta["schema_version"] == 1
 
 
@@ -430,7 +440,7 @@ def test_resume_regenerates_non_equivalent_explicit_artifacts(
     monkeypatch.setattr(batch_module.eris, "encode", fake_encode)
 
     results = batch_encode(
-        [StructureManifestRow(id="protein", path=str(PDB))],
+        _manifest(("protein", str(PDB))),
         artifact_root=tmp_path / "artifacts",
         resume=True,
         use_cache=False,
@@ -438,7 +448,7 @@ def test_resume_regenerates_non_equivalent_explicit_artifacts(
     )
 
     assert len(calls) == 1
-    assert results[0].status == "success"
+    assert results["status"][0] == "success"
     loaded = StructureArtifact.load(target)
     assert loaded.meta["representation_name"] == representation
     if "params" in kwargs:
@@ -458,20 +468,16 @@ def test_fail_fast_persists_current_failure_before_raising(tmp_path, monkeypatch
 
     with pytest.raises(ValueError, match="boom"):
         batch_encode(
-            [
-                StructureManifestRow(id="ok", path="ok.pdb"),
-                StructureManifestRow(id="bad", path="bad.pdb"),
-                StructureManifestRow(id="never", path="never.pdb"),
-            ],
+            _manifest(("ok", "ok.pdb"), ("bad", "bad.pdb"), ("never", "never.pdb")),
             representation="residue_contact_map",
             artifact_root=tmp_path / "artifacts",
             results_path=results_path,
             fail_fast=True,
         )
 
-    results = read_manifest(results_path, BatchResultRow)
-    assert [row.id for row in results] == ["ok", "bad"]
-    assert [row.status for row in results] == ["success", "failed"]
+    results = pl.read_ndjson(results_path)
+    assert results["id"].to_list() == ["ok", "bad"]
+    assert results["status"].to_list() == ["success", "failed"]
 
 
 def test_batch_embed_delegates_to_public_api_and_propagates_learned_options(tmp_path, monkeypatch):
@@ -485,7 +491,7 @@ def test_batch_embed_delegates_to_public_api_and_propagates_learned_options(tmp_
     monkeypatch.setattr(batch_module.eris, "embed", fake_embed)
 
     results = batch_embed(
-        [StructureManifestRow(id="protein", path="input.pdb", chain="A", model=0)],
+        _manifest(("protein", "input.pdb"), chain=["A"], model=[0]),
         representation="gearnet_edge",
         artifact_root=tmp_path / "artifacts",
         output_mode="node",
@@ -495,8 +501,8 @@ def test_batch_embed_delegates_to_public_api_and_propagates_learned_options(tmp_
         use_cache=False,
     )
 
-    assert results[0].representation_family == "learned"
-    assert results[0].status == "success"
+    assert results["representation_family"][0] == "learned"
+    assert results["status"][0] == "success"
     assert captured == [
         (
             "input.pdb",
@@ -524,7 +530,7 @@ def test_learned_resume_reuses_only_matching_model_identity(tmp_path, monkeypatc
     monkeypatch.setattr(batch_module.eris, "embed", fail_embed)
 
     results = batch_embed(
-        [StructureManifestRow(id="protein", path=str(PDB))],
+        _manifest(("protein", str(PDB))),
         representation="gearnet_edge",
         artifact_root=tmp_path / "artifacts",
         resume=True,
@@ -532,7 +538,7 @@ def test_learned_resume_reuses_only_matching_model_identity(tmp_path, monkeypatc
         precision="fp32",
     )
 
-    assert results[0].status == "success"
+    assert results["status"][0] == "success"
 
     shutil.rmtree(target)
     _learned_artifact(checkpoint_identifier="other.pth").save(target)
@@ -546,7 +552,7 @@ def test_learned_resume_reuses_only_matching_model_identity(tmp_path, monkeypatc
     monkeypatch.setattr(batch_module.eris, "embed", fake_embed)
 
     results = batch_embed(
-        [StructureManifestRow(id="protein", path=str(PDB))],
+        _manifest(("protein", str(PDB))),
         representation="gearnet_edge",
         artifact_root=tmp_path / "artifacts",
         resume=True,
@@ -555,7 +561,7 @@ def test_learned_resume_reuses_only_matching_model_identity(tmp_path, monkeypatc
     )
 
     assert len(calls) == 1
-    assert results[0].status == "success"
+    assert results["status"][0] == "success"
     assert StructureArtifact.load(target).meta["model"] == GEARNET_EDGE_MODEL_DESCRIPTOR.to_dict()
 
 
@@ -565,7 +571,7 @@ def test_result_manifest_uses_canonical_batch_fields(tmp_path, monkeypatch):
     results_path = tmp_path / "batch_results.csv"
 
     batch_encode(
-        [StructureManifestRow(id="protein", path=str(PDB))],
+        _manifest(("protein", str(PDB))),
         representation="residue_contact_map",
         artifact_root=tmp_path / "artifacts",
         results_path=results_path,
