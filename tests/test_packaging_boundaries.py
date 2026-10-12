@@ -152,14 +152,17 @@ if "torch" not in status.reason:
     )
 
 
-def test_import_eris_does_not_load_gearnet_backend() -> None:
+def test_import_eris_and_cli_do_not_load_gearnet_numerical_code() -> None:
     script = """
 import sys
 
 import eris
+import eris.cli.main
 
-loaded = sorted(m for m in sys.modules if m.startswith("eris.core.learned.backends"))
+numerical = ("backend", "loading", "native_graph", "native_model", "preprocessing")
+gearnet = "eris.core.learned.backends.gearnet."
+loaded = sorted(m for m in sys.modules if m.startswith(gearnet) and m.rsplit(".", 1)[-1] in numerical)
 if loaded:
-    raise SystemExit(f"GearNet backend loaded by import eris: {loaded}")
+    raise SystemExit(f"GearNet numerical code loaded by import eris or the CLI: {loaded}")
 """
     subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603

@@ -444,3 +444,12 @@ if loaded:
 """
 
     subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603
+
+
+def test_public_signatures_resolve_at_runtime():
+    import typing
+
+    from eris.datasets import ErisFolderDataset
+
+    for obj in (eris.encode, eris.embed, ErisFolderDataset):
+        assert typing.get_type_hints(obj)

@@ -15,10 +15,7 @@ from eris.core.cache import (
     parser_hint_matches_format,
 )
 from eris.core.hashing import sha256_file
-from eris.core.io import resolve_structure_input
 from eris.core.learned.artifacts import build_learned_artifact
-from eris.core.learned.backends.gearnet import dependencies
-from eris.core.learned.backends.gearnet.backend import GearNetEdgeBackend
 from eris.core.learned.checkpoint_acquisition import acquire_registered_checkpoint
 from eris.core.learned.checkpoint_cache import CheckpointCache
 from eris.core.learned.checkpoints import StructuralModelDescriptor, VerifiedCheckpoint
@@ -260,6 +257,8 @@ class StructuralEmbedderRunner:
                 f"Config for '{config.representation_name}' must be an {info.config_type.__name__}"
             )
 
+        from eris.core.io import resolve_structure_input  # noqa: PLC0415
+
         structure_input = resolve_structure_input(structure_input)
         if len(_chain_ids(structure_input)) != 1:
             raise ExecutionError(
@@ -310,12 +309,18 @@ class StructuralEmbedderRunner:
                     source_sha256=source_sha256,
                 )
 
-        availability = dependencies.probe_gearnet_availability()
+        from eris.core.learned.backends.gearnet.dependencies import (  # noqa: PLC0415
+            probe_gearnet_availability,
+        )
+
+        availability = probe_gearnet_availability()
         if not availability.available:
             raise ExecutionError(
                 f"Embedder '{info.representation_name}' backend '{info.backend_id}' "
                 f"is unavailable: {availability.reason}"
             )
+        from eris.core.learned.backends.gearnet.backend import GearNetEdgeBackend  # noqa: PLC0415
+
         backend = GearNetEdgeBackend()
         resolved_execution = resolve_execution(execution_request)
 

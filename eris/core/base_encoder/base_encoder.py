@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import numpy as np
 
 from eris import exceptions as exc
+from eris.core import io as structure_io
 from eris.core.artifact_schema import (
     build_artifact_metadata,
     build_input_metadata,
@@ -26,7 +27,6 @@ from eris.core.cache import (
     parser_hint_matches_format,
 )
 from eris.core.hashing import sha256_file
-from eris.core.io import load_structure, resolve_structure_input
 from eris.core.types import _chain_ids
 
 if TYPE_CHECKING:
@@ -271,8 +271,8 @@ class BaseEncoder(ABC):
 
     def encode(self, inp: StructureInput) -> StructureArtifact:
         """Encode one structure into a validated artifact, using the disk cache when enabled."""
-        structure = load_structure(Path(inp.source))
-        inp = resolve_structure_input(inp, structure)
+        structure = structure_io.load_structure(Path(inp.source))
+        inp = structure_io.resolve_structure_input(inp, structure)
 
         source_sha256 = sha256_file(Path(inp.source))
         invocation_parameters = self.config.to_dict()

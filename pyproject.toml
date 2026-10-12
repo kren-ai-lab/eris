@@ -129,6 +129,8 @@ ignore = [
     "ARG001",  # registry callbacks share one (ctx, data, params) signature
     "S106",    # `token=` is the feature name, not a secret
 ]
+"eris/api.py" = ["TC001"]  # public signatures must resolve with typing.get_type_hints
+"eris/datasets/torch_dataset.py" = ["TC003"]
 "tests/*" = [
     "ANN",     # test helpers are not part of the typed public surface
     "D",       # docstrings are not required in tests

@@ -6,6 +6,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from eris.core.artifacts import StructureArtifact
+from eris.core.config import CanonicalRepresentationConfig
 from eris.core.registry import (
     get_encoder,
     resolve_representation_config,
@@ -16,8 +18,6 @@ from eris.exceptions import ConfigError, RepresentationNotFoundError
 from eris.pooling import pool
 
 if TYPE_CHECKING:
-    from eris.core.artifacts import StructureArtifact
-    from eris.core.config import CanonicalRepresentationConfig
     from eris.core.learned.config import OutputMode
     from eris.core.learned.execution import Precision
 

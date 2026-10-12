@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from eris.core.artifacts import StructureArtifact
 from eris.export.torch import to_torch
@@ -18,9 +19,6 @@ from eris.pipelines.pack import (
     resolve_packed_locator,
     shape_summary_from_metadata,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 class DatasetIndexError(ValueError):
