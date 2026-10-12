@@ -62,10 +62,7 @@ def _model_rows(model: dict[str, Any]) -> list[tuple[str, Any]]:
 def show(
     artifact_dir: Annotated[Path, typer.Argument(...)],
 ) -> None:
-    """
-    Print canonical Artifact Schema metadata after strict validation.
-    """
-
+    """Print canonical Artifact Schema metadata after strict validation."""
     artifact = _load_artifact(artifact_dir)
     meta = artifact.meta
     encoder = meta.get("encoder")
@@ -112,9 +109,6 @@ def show(
 def validate(
     artifact_dir: Annotated[Path, typer.Argument(...)],
 ) -> None:
-    """
-    Validate a canonical Artifact Schema directory.
-    """
-
+    """Validate a canonical Artifact Schema directory."""
     artifact = _load_artifact(artifact_dir)
     typer.echo(f"Artifact is valid: {artifact.meta['representation_name']}")

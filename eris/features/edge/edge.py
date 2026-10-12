@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Union
-
 import numpy as np
 
 from eris.features.feature_builders import build_from_registry
@@ -16,20 +14,19 @@ def build_edge_attr(
     mode: str = "dist+rbf+seq+local",
     rbf_k: int = 16,
     rbf_dmax: float = 20.0,
-    seq_pos: Optional[np.ndarray] = None,
-    chain_id: Optional[np.ndarray] = None,
-    backbone_n: Optional[np.ndarray] = None,
-    backbone_ca: Optional[np.ndarray] = None,
-    backbone_c: Optional[np.ndarray] = None,
-    backbone_n_mask: Optional[np.ndarray] = None,
-    backbone_ca_mask: Optional[np.ndarray] = None,
-    backbone_c_mask: Optional[np.ndarray] = None,
-    interface_contact: Optional[np.ndarray] = None,
+    seq_pos: np.ndarray | None = None,
+    chain_id: np.ndarray | None = None,
+    backbone_n: np.ndarray | None = None,
+    backbone_ca: np.ndarray | None = None,
+    backbone_c: np.ndarray | None = None,
+    backbone_n_mask: np.ndarray | None = None,
+    backbone_ca_mask: np.ndarray | None = None,
+    backbone_c_mask: np.ndarray | None = None,
+    interface_contact: np.ndarray | None = None,
     local_cutoff: int = 4,
     return_keys: bool = False,
-) -> Union[np.ndarray, Tuple[np.ndarray, List[str]]]:
-    """
-    Deterministic edge features with stable keys.
+) -> np.ndarray | tuple[np.ndarray, list[str]]:
+    """Deterministic edge features with stable keys.
     Tokens:
       - dist
       - rbf

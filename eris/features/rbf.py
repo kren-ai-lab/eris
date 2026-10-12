@@ -11,8 +11,7 @@ def compute_rbf(
     dmax: float = 20.0,
     sigma_scale: float = 1.0,
 ) -> np.ndarray:
-    """
-    Radial basis encoding for distances.
+    """Radial basis encoding for distances.
 
     Parameters
     ----------
@@ -23,6 +22,7 @@ def compute_rbf(
     Returns
     -------
     (E, K) float32
+
     """
     dist = np.asarray(dist, dtype=np.float32).reshape(-1, 1)
     centers = np.linspace(dmin, dmax, num_kernels, dtype=np.float32).reshape(1, -1)

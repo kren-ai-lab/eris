@@ -66,13 +66,13 @@ def _ordered_data(
     data: dict[str, np.ndarray] = {}
 
     if output_mode in {"node", "both"}:
-        data["node_embedding"] = cast(np.ndarray, result.node_embedding)
+        data["node_embedding"] = cast("np.ndarray", result.node_embedding)
     if output_mode in {"global", "both"}:
-        data["global_embedding"] = cast(np.ndarray, result.global_embedding)
+        data["global_embedding"] = cast("np.ndarray", result.global_embedding)
     if output_mode in {"node", "both"}:
         if len(chain_ids) != 1:
             raise ValueError("Learned residue outputs require exactly one selected chain in v0.1")
-        data["node_ids"] = cast(np.ndarray, result.node_ids)
+        data["node_ids"] = cast("np.ndarray", result.node_ids)
         data["chain_id"] = np.full(data["node_ids"].shape, chain_ids[0], dtype=np.str_)
         if result.valid_mask is not None:
             data["valid_mask"] = result.valid_mask
@@ -90,7 +90,6 @@ def build_learned_artifact(
     provenance_environment: Mapping[str, Any] | None = None,
 ) -> StructureArtifact:
     """Translate framework-independent learned outputs into a strict artifact schema artifact."""
-
     if not isinstance(config, StructuralEmbedderConfig):
         raise TypeError("config must be a StructuralEmbedderConfig")
     if not isinstance(model, StructuralModelDescriptor):
@@ -105,7 +104,7 @@ def build_learned_artifact(
     )
     parameters = config.to_dict()
     counts = (
-        {"n_nodes": int(cast(np.ndarray, result.node_embedding).shape[0])}
+        {"n_nodes": int(cast("np.ndarray", result.node_embedding).shape[0])}
         if config.output_mode in {"node", "both"}
         else {}
     )

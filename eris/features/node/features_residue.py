@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from importlib import metadata
 from numbers import Real
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 
@@ -53,7 +53,7 @@ def aa_index_to_letters(aa_index: np.ndarray) -> np.ndarray:
 # -------------------------
 # aa_onehot
 # -------------------------
-def aa_onehot_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def aa_onehot_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64).reshape(-1)
 
     oh = onehot(
@@ -64,7 +64,7 @@ def aa_onehot_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, An
     return oh.astype(np.float32)
 
 
-def aa_onehot_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def aa_onehot_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return _AA_ONEHOT_KEYS
 
 
@@ -87,7 +87,7 @@ _SECONDARY_STRUCTURE_ALGORITHM = "P-SEA"
 _SECONDARY_STRUCTURE_SEGMENTS = "selected_chain_and_peptide_continuity"
 
 
-def normalize_secondary_structure_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_secondary_structure_params(params: dict[str, Any]) -> dict[str, Any]:
     allowed = {
         "provider",
         "provider_version",
@@ -105,14 +105,11 @@ def normalize_secondary_structure_params(params: Dict[str, Any]) -> Dict[str, An
 
     distance = params.get("max_peptide_bond_distance", 2.0)
     if isinstance(distance, bool) or not isinstance(distance, Real):
-        raise TypeError(
-            "secondary_structure parameter 'max_peptide_bond_distance' must be a real number"
-        )
+        raise TypeError("secondary_structure parameter 'max_peptide_bond_distance' must be a real number")
     distance = float(distance)
     if not np.isfinite(distance) or distance <= 0.0:
         raise ValueError(
-            "secondary_structure parameter 'max_peptide_bond_distance' "
-            "must be a finite positive number"
+            "secondary_structure parameter 'max_peptide_bond_distance' must be a finite positive number"
         )
 
     fixed = {
@@ -132,9 +129,9 @@ def normalize_secondary_structure_params(params: Dict[str, Any]) -> Dict[str, An
 
 
 def secondary_structure_fn(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> np.ndarray:
     return secondary_structure_onehot(
         ca_coord=data["backbone_ca"],
@@ -151,10 +148,10 @@ def secondary_structure_fn(
 
 
 def secondary_structure_keys(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
-) -> List[str]:
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
+) -> list[str]:
     return list(SECONDARY_STRUCTURE_KEYS)
 
 
@@ -211,9 +208,9 @@ _RSA_PARAMS = {
 
 def _normalize_fixed_accessibility_params(
     token: str,
-    params: Dict[str, Any],
-    fixed: Dict[str, Any],
-) -> Dict[str, Any]:
+    params: dict[str, Any],
+    fixed: dict[str, Any],
+) -> dict[str, Any]:
     unknown_params = sorted(set(params) - set(fixed))
     if unknown_params:
         raise ValueError(f"Unknown {token} parameters: {unknown_params}")
@@ -223,17 +220,15 @@ def _normalize_fixed_accessibility_params(
     return dict(fixed)
 
 
-def normalize_sasa_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_sasa_params(params: dict[str, Any]) -> dict[str, Any]:
     return _normalize_fixed_accessibility_params("sasa", params, _ACCESSIBILITY_BASE_PARAMS)
 
 
-def normalize_rsa_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_rsa_params(params: dict[str, Any]) -> dict[str, Any]:
     return _normalize_fixed_accessibility_params("rsa", params, _RSA_PARAMS)
 
 
-def _accessibility_values(
-    data: Dict[str, Any], ctx: Dict[str, Any]
-) -> tuple[np.ndarray, np.ndarray]:
+def _accessibility_values(data: dict[str, Any], ctx: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
     cache_key = "_eris_solvent_accessibility"
     cached = ctx.get(cache_key)
     if cached is None:
@@ -249,21 +244,21 @@ def _accessibility_values(
     return cached
 
 
-def sasa_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def sasa_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     sasa, _ = _accessibility_values(data, ctx)
     return sasa.reshape(-1, 1)
 
 
-def rsa_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def rsa_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     _, rsa = _accessibility_values(data, ctx)
     return rsa.reshape(-1, 1)
 
 
-def sasa_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def sasa_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["sasa"]
 
 
-def rsa_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def rsa_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["rsa"]
 
 
@@ -302,13 +297,13 @@ register_residue_node_feature(
 # -------------------------
 # aa_index
 # -------------------------
-def aa_index_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def aa_index_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64).reshape(-1, 1)
 
     return aa_index.astype(np.float32)
 
 
-def aa_index_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def aa_index_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return _AA_INDEX_KEY
 
 
@@ -326,7 +321,7 @@ register_residue_node_feature(
 # -------------------------
 # physchem
 # -------------------------
-def physchem_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def physchem_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64)
 
     feats = [lookup[aa_index] for _, lookup in PHYSCHEM_LOOKUPS]
@@ -334,7 +329,7 @@ def physchem_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any
     return np.stack(feats, axis=1).astype(np.float32)
 
 
-def physchem_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def physchem_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return PHYSchem_KEYS
 
 
@@ -361,7 +356,7 @@ def _choice(name: str, value: Any, choices: tuple[str, ...]) -> str:
     return normalize_choice(f"aaindex parameter '{name}'", value, choices)
 
 
-def normalize_aaindex_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_aaindex_params(params: dict[str, Any]) -> dict[str, Any]:
     allowed = {
         "ids",
         "normalization",
@@ -407,9 +402,7 @@ def normalize_aaindex_params(params: Dict[str, Any]) -> Dict[str, Any]:
     }
     for name, expected in supplied_identity.items():
         if name in params and params[name] != expected:
-            raise ValueError(
-                f"aaindex parameter '{name}' must match the active provider value {expected!r}"
-            )
+            raise ValueError(f"aaindex parameter '{name}' must match the active provider value {expected!r}")
 
     from aaindex import aaindex1
 
@@ -434,7 +427,7 @@ def _policy_value(policy: str, *, message: str) -> float:
     raise ValueError(message)
 
 
-def aaindex_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def aaindex_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     from aaindex import aaindex1
 
     letters = aa_index_to_letters(data["aa_index"])
@@ -478,7 +471,7 @@ def aaindex_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]
     return np.stack(columns, axis=1).astype(np.float32)
 
 
-def aaindex_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def aaindex_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return [f"aaindex.{accession}" for accession in params["ids"]]
 
 
@@ -498,11 +491,11 @@ register_residue_node_feature(
 # -------------------------
 
 
-def normalize_plddt_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_plddt_params(params: dict[str, Any]) -> dict[str, Any]:
     return normalize_scalar_params("plddt_ca", params)
 
 
-def plddt_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def plddt_ca_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     n = data["n"]
     missing = ctx["missing"]
 
@@ -520,7 +513,7 @@ def plddt_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any
     return v.astype(np.float32)
 
 
-def plddt_ca_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def plddt_ca_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["plddt_ca"]
 
 
@@ -541,7 +534,7 @@ register_residue_node_feature(
 # -------------------------
 
 
-def bfactor_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def bfactor_ca_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     n = data["n"]
     missing = ctx["missing"]
 
@@ -552,7 +545,7 @@ def bfactor_ca_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, A
     return v.astype(np.float32)
 
 
-def bfactor_ca_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def bfactor_ca_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["bfactor_ca"]
 
 
@@ -572,7 +565,7 @@ register_residue_node_feature(
 # -------------------------
 
 
-def flags_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def flags_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     aa_index = np.asarray(data["aa_index"], dtype=np.int64).reshape(-1)
     has_ca = data["has_ca"]
 
@@ -584,7 +577,7 @@ def flags_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) 
     return np.concatenate([is_gly, is_pro, is_unk, has_ca_f], axis=1).astype(np.float32)
 
 
-def flags_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def flags_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["flag.is_gly", "flag.is_pro", "flag.is_unk", "flag.has_ca"]
 
 
@@ -608,7 +601,7 @@ _BACKBONE_TORSION_UNITS = "radians"
 _BACKBONE_MISSING_VALUE_POLICY = "nan"
 
 
-def normalize_backbone_geometry_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_backbone_geometry_params(params: dict[str, Any]) -> dict[str, Any]:
     allowed = {
         "mode",
         "max_peptide_bond_distance",
@@ -629,14 +622,11 @@ def normalize_backbone_geometry_params(params: Dict[str, Any]) -> Dict[str, Any]
 
     distance = params.get("max_peptide_bond_distance", 2.0)
     if isinstance(distance, bool) or not isinstance(distance, Real):
-        raise TypeError(
-            "backbone_geometry parameter 'max_peptide_bond_distance' must be a real number"
-        )
+        raise TypeError("backbone_geometry parameter 'max_peptide_bond_distance' must be a real number")
     distance = float(distance)
     if not np.isfinite(distance) or distance <= 0.0:
         raise ValueError(
-            "backbone_geometry parameter 'max_peptide_bond_distance' "
-            "must be a finite positive number"
+            "backbone_geometry parameter 'max_peptide_bond_distance' must be a finite positive number"
         )
 
     fixed_parameters = {
@@ -656,9 +646,9 @@ def normalize_backbone_geometry_params(params: Dict[str, Any]) -> Dict[str, Any]
 
 
 def backbone_geometry_fn(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> np.ndarray:
     angles = backbone_torsions(
         data["backbone_n"],
@@ -691,10 +681,10 @@ def backbone_geometry_fn(
 
 
 def backbone_geometry_keys(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
-) -> List[str]:
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
+) -> list[str]:
     periodic = [
         "backbone.phi_sin",
         "backbone.phi_cos",
@@ -739,7 +729,7 @@ register_residue_node_feature(
 _SIDECHAIN_ATOM_DEFINITION_CONVENTION = "standard_residue_specific_chi1_through_chi4"
 
 
-def normalize_sidechain_geometry_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_sidechain_geometry_params(params: dict[str, Any]) -> dict[str, Any]:
     allowed = {
         "mode",
         "torsion_convention",
@@ -773,9 +763,9 @@ def normalize_sidechain_geometry_params(params: Dict[str, Any]) -> Dict[str, Any
 
 
 def sidechain_geometry_fn(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> np.ndarray:
     angles = sidechain_torsions(
         data["polymer_heavy_atom_coordinates"],
@@ -795,13 +785,11 @@ def sidechain_geometry_fn(
 
 
 def sidechain_geometry_keys(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
-) -> List[str]:
-    periodic = [
-        f"sidechain.chi{chi}_{component}" for chi in range(1, 5) for component in ("sin", "cos")
-    ]
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
+) -> list[str]:
+    periodic = [f"sidechain.chi{chi}_{component}" for chi in range(1, 5) for component in ("sin", "cos")]
     raw = [f"sidechain.chi{chi}" for chi in range(1, 5)]
     if params["mode"] == "sincos":
         return periodic
@@ -849,18 +837,18 @@ register_residue_node_feature(
 # inter-chain interface
 # -------------------------
 def interface_fn(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> np.ndarray:
     return np.asarray(data["interface_flags"], dtype=np.float32).reshape(-1, 1)
 
 
 def interface_keys(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
-) -> List[str]:
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
+) -> list[str]:
     return ["interface.is_interface"]
 
 

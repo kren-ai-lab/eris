@@ -59,9 +59,7 @@ def test_shared_residue_config_exposes_only_skip_and_error() -> None:
 
 def test_residue_encoder_traces_skipped_residues(tmp_path: Path) -> None:
     structure_input = _write_missing_ca_structure(tmp_path / "missing-ca.pdb")
-    artifact = ResiduePointCloudCA(missing_residue_center="skip", use_cache=False).encode(
-        structure_input
-    )
+    artifact = ResiduePointCloudCA(missing_residue_center="skip", use_cache=False).encode(structure_input)
 
     assert ResiduePointCloudCA.version == "0.1.3"
     assert artifact.meta["parameters"]["missing_residue_center"] == "skip"
@@ -101,9 +99,7 @@ def test_zero_omission_output_is_deterministic_and_round_trips(tmp_path: Path) -
     assert artifact.data["omitted_residue_ids"].shape == (0,)
     assert artifact.data["omitted_residue_ids"].dtype.kind == "U"
     assert artifact.meta["counts"]["n_omitted_residues"] == 0
-    np.testing.assert_array_equal(
-        loaded.data["omitted_residue_ids"], artifact.data["omitted_residue_ids"]
-    )
+    np.testing.assert_array_equal(loaded.data["omitted_residue_ids"], artifact.data["omitted_residue_ids"])
     assert loaded.meta["counts"]["n_omitted_residues"] == 0
 
 

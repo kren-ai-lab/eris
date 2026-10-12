@@ -50,7 +50,6 @@ class GearNetEdgeBackend:
         config: StructuralEmbedderConfig,
     ) -> tuple[GearNetPreparedInput, str]:
         """Return the prepared input and the parser-confirmed structure format."""
-
         if not isinstance(structure, StructureInput):
             raise TypeError("structure must be a StructureInput")
         if not isinstance(config, StructuralEmbedderConfig):
@@ -99,9 +98,7 @@ class GearNetEdgeBackend:
         missing = {"node_feature", "graph_feature"}.difference(output)
         if missing:
             missing_names = ", ".join(sorted(missing))
-            raise ExecutionError(
-                f"GearNet-Edge forward output is missing required keys: {missing_names}"
-            )
+            raise ExecutionError(f"GearNet-Edge forward output is missing required keys: {missing_names}")
 
         node_numpy = output["node_feature"].cpu().numpy()
         global_numpy = output["graph_feature"][0].cpu().numpy()

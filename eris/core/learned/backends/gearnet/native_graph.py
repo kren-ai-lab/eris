@@ -97,18 +97,15 @@ class _ReferenceKdTree:
         spans = high - low
         max_span = spans.max()
         candidates = np.flatnonzero(spans > np.float32(0.99999) * max_span)
-        spreads = [
-            self.points[indexes, axis].max() - self.points[indexes, axis].min()
-            for axis in candidates
-        ]
+        spreads = [self.points[indexes, axis].max() - self.points[indexes, axis].min() for axis in candidates]
         axis = int(candidates[int(np.argmax(np.asarray(spreads, dtype=np.float32)))])
         minimum = self.points[indexes, axis].min()
         maximum = self.points[indexes, axis].max()
         split = np.float32((low[axis] + high[axis]) / np.float32(2.0))
-        cut = minimum if split < minimum else maximum if split > maximum else split
+        cut = minimum if split < minimum else min(split, maximum)
         ordered, lim1, lim2 = self._plane_split(indexes.copy(), axis, cut)
         half = indexes.shape[0] // 2
-        split_index = lim1 if lim1 > half else lim2 if lim2 < half else half
+        split_index = lim1 if lim1 > half else min(half, lim2)
 
         left_high = high.copy()
         left_high[axis] = cut
@@ -121,9 +118,7 @@ class _ReferenceKdTree:
             right=self._build(ordered[split_index:], right_low, high.copy()),
         )
 
-    def _plane_split(
-        self, indexes: np.ndarray, axis: int, cut: np.float32
-    ) -> tuple[np.ndarray, int, int]:
+    def _plane_split(self, indexes: np.ndarray, axis: int, cut: np.float32) -> tuple[np.ndarray, int, int]:
         left = 0
         right = indexes.shape[0] - 1
         while True:
@@ -231,9 +226,7 @@ def _sequential_edges(nodes: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     sources: list[int] = []
     destinations: list[int] = []
     relations: list[int] = []
-    for delta in range(
-        -GEARNET_EDGE_SEQUENTIAL_MAX_DISTANCE, GEARNET_EDGE_SEQUENTIAL_MAX_DISTANCE + 1
-    ):
+    for delta in range(-GEARNET_EDGE_SEQUENTIAL_MAX_DISTANCE, GEARNET_EDGE_SEQUENTIAL_MAX_DISTANCE + 1):
         for source in range(nodes):
             destination = source + delta
             if 0 <= destination < nodes:
@@ -252,16 +245,12 @@ def _spatial_edges(tree: _ReferenceKdTree, positions: np.ndarray) -> tuple[np.nd
     destinations: list[int] = []
     for destination, query in enumerate(positions):
         candidates = [
-            source
-            for source in tree.radius(query, GEARNET_EDGE_SPATIAL_RADIUS)
-            if source != destination
+            source for source in tree.radius(query, GEARNET_EDGE_SPATIAL_RADIUS) if source != destination
         ]
         for source in candidates[:GEARNET_EDGE_SPATIAL_MAX_NEIGHBORS]:
             if abs(source - destination) < GEARNET_EDGE_SPATIAL_MIN_DISTANCE:
                 continue
-            if np.sqrt(np.sum((positions[source] - query) ** 2, dtype=np.float32)) < np.float32(
-                1e-10
-            ):
+            if np.sqrt(np.sum((positions[source] - query) ** 2, dtype=np.float32)) < np.float32(1e-10):
                 continue
             sources.append(source)
             destinations.append(destination)
@@ -275,9 +264,7 @@ def _knn_edges(tree: _ReferenceKdTree, positions: np.ndarray) -> tuple[np.ndarra
         for source in tree.knn(query, GEARNET_EDGE_KNN_K + 1):
             if abs(source - destination) < GEARNET_EDGE_KNN_MIN_DISTANCE:
                 continue
-            if np.sqrt(np.sum((positions[source] - query) ** 2, dtype=np.float32)) < np.float32(
-                1e-10
-            ):
+            if np.sqrt(np.sum((positions[source] - query) ** 2, dtype=np.float32)) < np.float32(1e-10):
                 continue
             sources.append(source)
             destinations.append(destination)
@@ -330,25 +317,14 @@ def _line_graph(
     inner_size = in_degree.repeat_interleave(size)
     incoming_offset = (out_degree.cumsum(0) - out_degree).repeat_interleave(size)
     outgoing_offset = (in_degree.cumsum(0) - in_degree).repeat_interleave(size)
-    line_source = incoming[
-        torch.div(local_index, inner_size, rounding_mode="floor") + incoming_offset
-    ]
+    line_source = incoming[torch.div(local_index, inner_size, rounding_mode="floor") + incoming_offset]
     line_destination = outgoing[local_index % inner_size + outgoing_offset]
 
     node_position = torch.from_numpy(positions)
-    vector1 = (
-        node_position[edge_destination[line_destination]]
-        - node_position[edge_source[line_destination]]
-    )
+    vector1 = node_position[edge_destination[line_destination]] - node_position[edge_source[line_destination]]
     vector2 = node_position[edge_source[line_source]] - node_position[edge_source[line_destination]]
-    angle = torch.atan2(
-        torch.cross(vector1, vector2, dim=-1).norm(dim=-1), (vector1 * vector2).sum(dim=-1)
-    )
-    bins = (
-        (angle / torch.pi * GEARNET_EDGE_NUM_ANGLE_BIN)
-        .long()
-        .clamp(max=GEARNET_EDGE_NUM_ANGLE_BIN - 1)
-    )
+    angle = torch.atan2(torch.cross(vector1, vector2, dim=-1).norm(dim=-1), (vector1 * vector2).sum(dim=-1))
+    bins = (angle / torch.pi * GEARNET_EDGE_NUM_ANGLE_BIN).long().clamp(max=GEARNET_EDGE_NUM_ANGLE_BIN - 1)
     return (
         line_source.numpy().astype(np.int64, copy=False),
         line_destination.numpy().astype(np.int64, copy=False),
@@ -358,14 +334,11 @@ def _line_graph(
 
 def construct_native_gearnet_graph(records: tuple[TransportNodeRecord, ...]) -> NativeGearNetGraph:
     """Construct frozen GearNet graph arrays for native inference."""
-
     normalized = _validate_transport_records(records)
     positions = _positions(normalized)
     node_feature = _node_feature(normalized)
     tree = _ReferenceKdTree(positions)
-    sequential_source, sequential_destination, sequential_relation = _sequential_edges(
-        len(normalized)
-    )
+    sequential_source, sequential_destination, sequential_relation = _sequential_edges(len(normalized))
     spatial_source, spatial_destination = _spatial_edges(tree, positions)
     knn_source, knn_destination = _knn_edges(tree, positions)
     source = np.concatenate((sequential_source, spatial_source, knn_source))

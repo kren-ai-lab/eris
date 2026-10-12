@@ -30,16 +30,13 @@ def _checkpoint_cached(info) -> bool:
         checkpoint = CheckpointCache(cache_dir=cache_root()).get(info.model_descriptor.checkpoint)
     except CacheError as error:
         del error
-        usage_error(
-            f"Unable to inspect checkpoint cache for model/embedder {info.representation_name!r}."
-        )
+        usage_error(f"Unable to inspect checkpoint cache for model/embedder {info.representation_name!r}.")
     return checkpoint is not None
 
 
 @app.command("list")
 def list_models() -> None:
     """List registered learned model asset identities."""
-
     table = Table(title="Eris Models")
     table.add_column("Name", style="bold cyan")
     for name in _model_names():
@@ -50,7 +47,6 @@ def list_models() -> None:
 @app.command("info")
 def model_info(name: str) -> None:
     """Show identity and checkpoint cache state for a registered learned model."""
-
     try:
         info = _model_info(name)
     except RepresentationNotFoundError as error:

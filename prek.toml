@@ -28,5 +28,13 @@ hooks = [
     entry = "uv run task lint",
     language = "system",
     pass_filenames = false
+  },
+  {
+    id = "pyrefly",
+    name = "pyrefly-check",
+    entry = "uv run task pyrefly",
+    language = "python",
+    types = ["python"],
+    pass_filenames = false
   }
 ]

@@ -15,8 +15,7 @@ from eris.spatial.knn import knn_edges
 
 
 class AtomKNNGraph(BaseAtomEncoder):
-    """
-    Atom-level kNN graph (CA-independent) with deterministic node/edge features baseline.
+    """Atom-level kNN graph (CA-independent) with deterministic node/edge features baseline.
 
     Outputs:
       - pos, edge_index, edge_dist

@@ -34,7 +34,6 @@ def encode(
     ] = None,
 ) -> None:
     """Encode one structure file into an Eris artifact."""
-
     encode_kwargs = {
         "input": input,
         "representation": representation,

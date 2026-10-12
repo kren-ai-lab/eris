@@ -112,9 +112,7 @@ def _explicit_resume_identity(
         granularity=info.granularity,
         coordinate_source=config.coordinate_source,
         parameters=parameters,
-        config_fingerprint=compute_config_fingerprint(
-            representation, parameters, chain_ids=chain_ids
-        ),
+        config_fingerprint=compute_config_fingerprint(representation, parameters, chain_ids=chain_ids),
         chain_ids=chain_ids,
         encoder_implementation=encoder.encoder_implementation,
         encoder_version=encoder.version,
@@ -144,9 +142,7 @@ def _resolve_row_explicit_configs(
             row_id for row_id, override in params_by_id.items() if not isinstance(override, Mapping)
         ]
         if invalid_ids:
-            raise TypeError(
-                f"params_by_id values must be mappings; invalid row IDs: {sorted(invalid_ids)}"
-            )
+            raise TypeError(f"params_by_id values must be mappings; invalid row IDs: {sorted(invalid_ids)}")
         row_overrides = dict(params_by_id)
 
     config_by_id: dict[str, CanonicalRepresentationConfig] = {}
@@ -188,9 +184,7 @@ def _learned_resume_identity(
         granularity=info["granularity_by_output_mode"][output_mode],
         coordinate_source=info["coordinate_source"],
         parameters=parameters,
-        config_fingerprint=compute_config_fingerprint(
-            representation, parameters, chain_ids=chain_ids
-        ),
+        config_fingerprint=compute_config_fingerprint(representation, parameters, chain_ids=chain_ids),
         chain_ids=chain_ids,
         model=registry_info.model_descriptor.to_cache_identity(),
         encoder_implementation=registry_info.implementation,
@@ -204,9 +198,7 @@ def _target_dir(artifact_root: Path, row: StructureManifestRow, representation: 
 
 
 def _resolved_row_input(row: StructureManifestRow) -> StructureInput:
-    return resolve_structure_input(
-        StructureInput(source=row.path, chain_id=row.chain, model_index=row.model)
-    )
+    return resolve_structure_input(StructureInput(source=row.path, chain_id=row.chain, model_index=row.model))
 
 
 def _staging_dir(target: Path) -> Path:
@@ -217,9 +209,7 @@ def _staging_dir(target: Path) -> Path:
 def _cleanup_staging(staging: Path, target: Path) -> None:
     if staging.exists():
         resolved_parent = staging.parent.resolve()
-        if resolved_parent != target.parent.resolve() or not staging.name.startswith(
-            f".{target.name}.tmp-"
-        ):
+        if resolved_parent != target.parent.resolve() or not staging.name.startswith(f".{target.name}.tmp-"):
             raise RuntimeError(f"Refusing to remove unexpected staging path: {staging}")
         shutil.rmtree(staging)
 
@@ -481,7 +471,6 @@ def batch_encode(
     manifest_path: str | Path | None = None,
 ) -> list[BatchResultRow]:
     """Run one explicit representation with optional shallow per-row overrides."""
-
     representation_name = _resolve_representation(representation)
     artifact_root_path = _resolve_artifact_root(artifact_root)
     structure_rows = _coerce_rows(rows, manifest_path=manifest_path)
@@ -535,7 +524,6 @@ def batch_embed(
     manifest_path: str | Path | None = None,
 ) -> list[BatchResultRow]:
     """Run one learned structural embedder over a structure manifest."""
-
     if not isinstance(representation, str) or not representation.strip():
         raise ConfigError("representation must be a non-empty string")
     _coerce_bool(use_cache, "use_cache")

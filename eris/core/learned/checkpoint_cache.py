@@ -33,7 +33,6 @@ class CheckpointCache:
 
     def get(self, descriptor: CheckpointDescriptor) -> VerifiedCheckpoint | None:
         """Return a verified cached checkpoint, or a non-destructive cache miss."""
-
         canonical_path = self._canonical_path(descriptor)
         if not canonical_path.is_file():
             return None
@@ -44,8 +43,7 @@ class CheckpointCache:
             cause = error.__cause__
             if isinstance(cause, OSError):
                 raise CacheError(
-                    f"Unable to read cached checkpoint '{descriptor.identifier}' "
-                    f"at {canonical_path}: {cause}"
+                    f"Unable to read cached checkpoint '{descriptor.identifier}' at {canonical_path}: {cause}"
                 ) from cause
             return None
 
@@ -55,16 +53,13 @@ class CheckpointCache:
         descriptor: CheckpointDescriptor,
     ) -> VerifiedCheckpoint:
         """Safely insert verified candidate bytes and return the canonical cache entry."""
-
         existing = self.get(descriptor)
         if existing is not None:
             return existing
 
         candidate_path = Path(path)
         if not candidate_path.exists():
-            raise ExecutionError(
-                f"Checkpoint '{descriptor.identifier}' does not exist: {candidate_path}"
-            )
+            raise ExecutionError(f"Checkpoint '{descriptor.identifier}' does not exist: {candidate_path}")
         if not candidate_path.is_file():
             raise ExecutionError(
                 f"Checkpoint '{descriptor.identifier}' is not a regular file: {candidate_path}"
@@ -108,8 +103,7 @@ class CheckpointCache:
                 os.replace(staged_path, canonical_path)
             except OSError as error:
                 raise CacheError(
-                    f"Unable to install checkpoint '{descriptor.identifier}' "
-                    f"at {canonical_path}: {error}"
+                    f"Unable to install checkpoint '{descriptor.identifier}' at {canonical_path}: {error}"
                 ) from error
 
             return VerifiedCheckpoint(

@@ -96,9 +96,7 @@ class ResidueKNNGraph(BaseResidueEncoder):
             edge_dist = np.concatenate([edge_dist, loop_dist], axis=0)
 
         interface_edges = (
-            interface_edge_flags(edge_index, interface_pairs)
-            if interface_pairs is not None
-            else None
+            interface_edge_flags(edge_index, interface_pairs) if interface_pairs is not None else None
         )
 
         edge_attr, edge_attr_keys = build_edge_attr(

@@ -66,9 +66,7 @@ def _parameter_schema(config_type: type, *, representation_name: str) -> list[di
             "name": config_field.name,
             "type": _render_type(annotation),
             "default": getattr(config, config_field.name),
-            "required": (
-                config_field.default is MISSING and config_field.default_factory is MISSING
-            ),
+            "required": (config_field.default is MISSING and config_field.default_factory is MISSING),
             "nullable": _is_nullable(annotation),
             "description": config_field.metadata.get("description"),
         }
@@ -88,13 +86,11 @@ def _get_explicit_registration(name: str):
 
 def list_representations() -> list[str]:
     """Return canonical explicit representation names in Registry order."""
-
     return list_encoders()
 
 
 def get_representation_info(name: str) -> dict[str, Any]:
     """Return JSON-safe public metadata for one explicit representation."""
-
     info = _get_explicit_registration(name)
 
     return _json_safe_copy(
@@ -113,7 +109,6 @@ def get_representation_info(name: str) -> dict[str, Any]:
 
 def list_embedders() -> list[str]:
     """Return registered learned representation names without probing availability."""
-
     from eris.core.learned.registry import learned_registry
 
     return learned_registry.names()
@@ -121,7 +116,6 @@ def list_embedders() -> list[str]:
 
 def get_embedder_info(name: str) -> dict[str, Any]:
     """Return JSON-safe public metadata and lazy availability for one embedder."""
-
     from eris.core.learned.backends.gearnet import dependencies
     from eris.core.learned.registry import learned_registry
 

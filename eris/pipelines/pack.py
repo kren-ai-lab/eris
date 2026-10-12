@@ -134,9 +134,7 @@ def _required_locator(value: Any, field: str, *, row_index: int | None) -> str:
     if _is_absolute_locator(text):
         raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must be relative")
     if "\\" in text:
-        raise PackIndexError(
-            f"{_row_location(row_index)}: field {field!r} must use POSIX '/' separators"
-        )
+        raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must use POSIX '/' separators")
     return text
 
 
@@ -150,9 +148,7 @@ def _literal_index_value(
     text = _required_index_string(value, field, row_index=row_index)
     if text not in choices:
         expected = ", ".join(sorted(choices))
-        raise PackIndexError(
-            f"{_row_location(row_index)}: field {field!r} must be one of: {expected}"
-        )
+        raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must be one of: {expected}")
     return text
 
 
@@ -167,9 +163,7 @@ def _optional_index_count(value: Any, field: str, *, row_index: int | None) -> i
             return int(text)
     if type(value) is int and value >= 0:
         return value
-    raise PackIndexError(
-        f"{_row_location(row_index)}: field {field!r} must be empty or an integer >= 0"
-    )
+    raise PackIndexError(f"{_row_location(row_index)}: field {field!r} must be empty or an integer >= 0")
 
 
 def parse_shape_summary(value: str) -> dict[str, Any]:
@@ -267,8 +261,7 @@ def _candidate_artifact_dirs(root: Path) -> list[Path]:
         ordered_incomplete = sorted(incomplete, key=lambda item: item.as_posix())
         relative = ", ".join(_posix_relative(path, root) for path in ordered_incomplete)
         raise PackIndexError(
-            "Incomplete artifact directories found; each candidate needs meta.json "
-            f"and data.npz: {relative}"
+            f"Incomplete artifact directories found; each candidate needs meta.json and data.npz: {relative}"
         )
 
     return sorted(candidates, key=lambda item: _posix_relative(item, root))
@@ -322,24 +315,19 @@ def _validate_index_rows(rows: list[PackedIndexRow], root: Path) -> None:
         if resolved in seen_artifact_dirs:
             first = seen_artifact_dirs[resolved]
             raise PackIndexError(
-                f"row {index}: duplicate artifact_dir {row.artifact_dir!r} "
-                f"first seen at row {first}"
+                f"row {index}: duplicate artifact_dir {row.artifact_dir!r} first seen at row {first}"
             )
         seen_artifact_dirs[resolved] = index
 
 
 def validate_packed_index_rows(rows: list[PackedIndexRow], locator_root: Path) -> None:
     """Validate duplicate/ambiguity constraints for parsed packed index rows."""
-
     _validate_index_rows(rows, locator_root)
 
 
 def _csv_row(row: PackedIndexRow) -> dict[str, Any]:
     serialized = row.to_dict()
-    return {
-        field: "" if serialized[field] is None else serialized[field]
-        for field in PACKED_INDEX_FIELDS
-    }
+    return {field: "" if serialized[field] is None else serialized[field] for field in PACKED_INDEX_FIELDS}
 
 
 def _write_index_safely(path: Path, rows: list[PackedIndexRow]) -> None:
@@ -363,8 +351,7 @@ def _validate_packed_index_header(fieldnames: list[str] | None) -> None:
         expected = ",".join(PACKED_INDEX_FIELDS)
         actual = ",".join(fieldnames)
         raise PackIndexError(
-            "Packed index CSV canonical columns must appear first in exact order: "
-            f"{expected}; got: {actual}"
+            f"Packed index CSV canonical columns must appear first in exact order: {expected}; got: {actual}"
         )
 
 
@@ -379,8 +366,7 @@ def read_packed_index(path: str | Path) -> list[PackedIndexRow]:
         reader = csv.DictReader(handle)
         _validate_packed_index_header(reader.fieldnames)
         rows = [
-            PackedIndexRow.from_dict(dict(row), row_index=index)
-            for index, row in enumerate(reader, start=1)
+            PackedIndexRow.from_dict(dict(row), row_index=index) for index, row in enumerate(reader, start=1)
         ]
     validate_packed_index_rows(rows, index_path.parent)
     return rows
@@ -390,8 +376,7 @@ def pack_artifacts(
     artifact_root: str | Path,
     output_path: str | Path,
 ) -> list[PackedIndexRow]:
-    """
-    Build a canonical metadata-only packed index for strict-valid Artifact Schema directories.
+    """Build a canonical metadata-only packed index for strict-valid Artifact Schema directories.
 
     The function never rewrites artifact ``meta.json`` or ``data.npz`` files. ``output_path``
     is replaced atomically only after discovery, validation, duplicate checks, and full CSV

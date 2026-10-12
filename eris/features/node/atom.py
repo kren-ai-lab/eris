@@ -14,9 +14,7 @@ def build_node_attr(
     return_keys: bool = False,
     missing: str = "zero",
 ) -> np.ndarray:
-    """
-    node_attr: [onehot(elem,17), onehot(role,6), bfactor(1), occ(1)] => (N,25)
-    """
+    """node_attr: [onehot(elem,17), onehot(role,6), bfactor(1), occ(1)] => (N,25)"""
     elem_index = np.asarray(elem_index, dtype=np.int64).reshape(-1)
     atom_role = np.asarray(atom_role, dtype=np.int64).reshape(-1)
     n = int(elem_index.shape[0])

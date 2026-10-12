@@ -1,5 +1,5 @@
 from numbers import Real
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 
@@ -12,12 +12,12 @@ from eris.features.rbf import compute_rbf as rbf_encode
 # -------------------------
 # dist
 # -------------------------
-def dist_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def dist_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     dist = data["dist"]
     return dist.reshape(-1, 1).astype(np.float32)
 
 
-def dist_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def dist_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["dist"]
 
 
@@ -36,18 +36,18 @@ register_graph_edge_feature(
 # chain relationship
 # -------------------------
 def same_chain_fn(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> np.ndarray:
     return np.asarray(ctx["same_chain"], dtype=np.float32).reshape(-1, 1)
 
 
 def same_chain_keys(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
-) -> List[str]:
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
+) -> list[str]:
     return ["edge.same_chain"]
 
 
@@ -63,18 +63,18 @@ register_graph_edge_feature(
 
 
 def inter_chain_fn(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> np.ndarray:
     return np.asarray(~ctx["same_chain"], dtype=np.float32).reshape(-1, 1)
 
 
 def inter_chain_keys(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
-) -> List[str]:
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
+) -> list[str]:
     return ["edge.inter_chain"]
 
 
@@ -101,7 +101,7 @@ _DIRECTION_CONVENTION = "source_frame_transpose_unit_ca_displacement"
 _MISSING_FRAME_POLICY = "nan"
 
 
-def normalize_relative_direction_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_relative_direction_params(params: dict[str, Any]) -> dict[str, Any]:
     fixed = {
         "frame_atoms": _FRAME_ATOMS,
         "frame_origin": _FRAME_ORIGIN,
@@ -130,9 +130,9 @@ def normalize_relative_direction_params(params: Dict[str, Any]) -> Dict[str, Any
 
 
 def relative_direction_fn(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> np.ndarray:
     frames, frame_valid = local_frames(
         data["backbone_n"],
@@ -153,10 +153,10 @@ def relative_direction_fn(
 
 
 def relative_direction_keys(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
-) -> List[str]:
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
+) -> list[str]:
     return [
         "edge.relative_direction_x",
         "edge.relative_direction_y",
@@ -188,18 +188,18 @@ register_graph_edge_feature(
 # inter-chain interface contact
 # -------------------------
 def interface_contact_fn(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> np.ndarray:
     return np.asarray(ctx["interface_contact"], dtype=np.float32).reshape(-1, 1)
 
 
 def interface_contact_keys(
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
-) -> List[str]:
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
+) -> list[str]:
     return ["edge.interface_contact"]
 
 
@@ -218,7 +218,7 @@ register_graph_edge_feature(
 # -------------------------
 # rbf
 # -------------------------
-def rbf_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def rbf_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     dist = data["dist"]
     E = data["E"]
     rbf_k = ctx["rbf_k"]
@@ -232,7 +232,7 @@ def rbf_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) ->
     return r.astype(np.float32)
 
 
-def rbf_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def rbf_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     rbf_k = ctx["rbf_k"]
     return [f"rbf.{i}" for i in range(int(rbf_k))]
 
@@ -251,12 +251,12 @@ register_graph_edge_feature(
 # -------------------------
 # seq_sep
 # -------------------------
-def seq_sep_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def seq_sep_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     seq_sep = ctx["seq_sep"]
     return seq_sep.reshape(-1, 1).astype(np.float32)
 
 
-def seq_sep_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def seq_sep_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["seq_sep"]
 
 
@@ -274,7 +274,7 @@ register_graph_edge_feature(
 # -------------------------
 # local
 # -------------------------
-def local_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> np.ndarray:
+def local_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> np.ndarray:
     seq_sep = ctx["seq_sep"]
     local_cutoff = ctx["local_cutoff"]
 
@@ -283,7 +283,7 @@ def local_fn(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) 
     return is_local.astype(np.float32)
 
 
-def local_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def local_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     local_cutoff = ctx["local_cutoff"]
 
     return [f"flag.is_local_le_{int(local_cutoff)}"]

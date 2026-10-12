@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from eris.core.config import CanonicalRepresentationConfig
 
 
-def _check_output_values(data: Dict[str, np.ndarray]) -> None:
+def _check_output_values(data: dict[str, np.ndarray]) -> None:
     """Reject values that come from the input rather than our code; schema validation checks the shapes."""
     if len(data["residue_ids"]) == 0:
         raise exc.ExecutionError("Encoder output contains no atoms/residues")
@@ -71,8 +71,7 @@ class EncodingContext:
 
 
 class BaseEncoder(ABC):
-    """
-    Base class for all encoders.
+    """Base class for all encoders.
     Defines the contract for each subclass.
     """
 
@@ -108,7 +107,7 @@ class BaseEncoder(ABC):
     def encoder_implementation(self) -> str:
         return f"{type(self).__module__}.{type(self).__qualname__}"
 
-    def _normalize_structure(self, pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _normalize_structure(self, pos: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         n = int(pos.shape[0])
         if n == 0:
             raise ValueError("No residues found to encode.")
@@ -353,15 +352,11 @@ class BaseEncoder(ABC):
         ctx.pos = pos_out.astype(np.float32)
 
     @abstractmethod
-    def _load_structure(self, ctx: EncodingContext) -> Dict[str, Any]:
-        """
-        Implemented in base atom and base residue classes.
-        """
+    def _load_structure(self, ctx: EncodingContext) -> dict[str, Any]:
+        """Implemented in base atom and base residue classes."""
         raise NotImplementedError
 
     @abstractmethod
-    def _create_data(self, ctx: EncodingContext) -> Dict[str, Any]:
-        """
-        Must be implemented in encoder class.
-        """
+    def _create_data(self, ctx: EncodingContext) -> dict[str, Any]:
+        """Must be implemented in encoder class."""
         raise NotImplementedError

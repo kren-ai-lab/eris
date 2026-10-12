@@ -56,7 +56,6 @@ def acquire_registered_checkpoint(
     cache: CheckpointCache,
 ) -> VerifiedCheckpoint:
     """Stream a registered official checkpoint into the verified canonical cache."""
-
     download_url = descriptor.download_url
     if download_url is None:
         raise ExecutionError(

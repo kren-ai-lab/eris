@@ -107,7 +107,6 @@ class NativeGearNetEdgeModel(nn.Module):
 
     def forward(self, graph: NativeGearNetGraph) -> dict[str, torch.Tensor]:
         """Return canonical node and single-graph sum embeddings for one native graph."""
-
         self._validate_graph(graph)
         source = self._tensor(graph.edge_source, dtype=torch.int64)
         destination = self._tensor(graph.edge_destination, dtype=torch.int64)
@@ -151,13 +150,11 @@ class NativeGearNetEdgeModel(nn.Module):
 
 def construct_native_gearnet_edge_model() -> NativeGearNetEdgeModel:
     """Construct the frozen native GearNet-Edge architecture on CPU/fp32."""
-
     return NativeGearNetEdgeModel()
 
 
 def load_native_gearnet_edge_model(checkpoint: VerifiedCheckpoint) -> NativeGearNetEdgeModel:
     """Load the original verified GearNet checkpoint through strict key and shape matching."""
-
     _validate_checkpoint_identity(checkpoint)
     model = construct_native_gearnet_edge_model()
     state_dict = _deserialize_state_dict(checkpoint, torch)

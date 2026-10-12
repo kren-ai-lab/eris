@@ -107,9 +107,7 @@ class RepresentationInfo:
                 "name": config_field.name,
                 "type": _render_type(annotation),
                 "default": defaults[config_field.name],
-                "required": (
-                    config_field.default is MISSING and config_field.default_factory is MISSING
-                ),
+                "required": (config_field.default is MISSING and config_field.default_factory is MISSING),
                 "nullable": _is_nullable(annotation),
                 "description": config_field.metadata.get("description"),
             }
@@ -142,9 +140,7 @@ def register_encoder(
     description: str = "",
 ) -> None:
     """Register one canonical explicit representation."""
-    if not isinstance(config_type, type) or not issubclass(
-        config_type, CanonicalRepresentationConfig
-    ):
+    if not isinstance(config_type, type) or not issubclass(config_type, CanonicalRepresentationConfig):
         raise TypeError("config_type must be a CanonicalRepresentationConfig subclass")
     if not isinstance(encoder_type, type) or not issubclass(encoder_type, BaseEncoder):
         raise TypeError("encoder_type must be a BaseEncoder subclass")
@@ -181,9 +177,7 @@ def register_encoder(
             f"{encoder.granularity!r} != {info.granularity!r}"
         )
     if info.representation_type not in {"cloud", "graph", "matrix", "grid"}:
-        raise TypeError(
-            f"Unsupported representation type for '{name}': {info.representation_type!r}"
-        )
+        raise TypeError(f"Unsupported representation type for '{name}': {info.representation_type!r}")
 
     _REGISTRY[name] = info
 

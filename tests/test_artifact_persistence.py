@@ -205,22 +205,13 @@ def test_residue_pool_nan_policies_round_trip_and_fingerprints(tmp_path: Path):
     propagate = pool(source, mode="mean", nan_policy="propagate")
     summed = pool(source, mode="sum", nan_policy="omit")
 
-    assert (
-        omit.meta["provenance"]["config_fingerprint"]
-        == repeat.meta["provenance"]["config_fingerprint"]
-    )
+    assert omit.meta["provenance"]["config_fingerprint"] == repeat.meta["provenance"]["config_fingerprint"]
     assert (
         omit.meta["parameters"]["source_artifact_fingerprint"]
         == repeat.meta["parameters"]["source_artifact_fingerprint"]
     )
-    assert (
-        omit.meta["provenance"]["config_fingerprint"]
-        != propagate.meta["provenance"]["config_fingerprint"]
-    )
-    assert (
-        omit.meta["provenance"]["config_fingerprint"]
-        != summed.meta["provenance"]["config_fingerprint"]
-    )
+    assert omit.meta["provenance"]["config_fingerprint"] != propagate.meta["provenance"]["config_fingerprint"]
+    assert omit.meta["provenance"]["config_fingerprint"] != summed.meta["provenance"]["config_fingerprint"]
     reordered = _explicit_artifact()
     reordered.data["node_attr"] = source.data["node_attr"].copy()
     reordered.meta["feature_keys"]["node_attr_keys"] = ["charge", "mass"]

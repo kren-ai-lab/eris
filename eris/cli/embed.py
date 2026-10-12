@@ -51,7 +51,6 @@ def embed(
     ] = False,
 ) -> None:
     """Embed one structure file into a learned Eris artifact."""
-
     embed_kwargs = {
         "input": input,
         "representation": representation,

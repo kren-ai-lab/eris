@@ -90,9 +90,7 @@ def test_parameter_override_matches_low_level_and_changes_config_identity():
         use_cache=False,
         k=8,
     )
-    low_level = get_encoder("residue_knn_graph", use_cache=False, k=8).encode(
-        StructureInput(source=str(PDB))
-    )
+    low_level = get_encoder("residue_knn_graph", use_cache=False, k=8).encode(StructureInput(source=str(PDB)))
     default = eris.encode(
         PDB,
         representation="residue_knn_graph",
@@ -101,10 +99,7 @@ def test_parameter_override_matches_low_level_and_changes_config_identity():
 
     _assert_equivalent(public, low_level)
     assert public.meta["parameters"]["k"] == 8
-    assert (
-        public.meta["provenance"]["config_fingerprint"]
-        != default.meta["provenance"]["config_fingerprint"]
-    )
+    assert public.meta["provenance"]["config_fingerprint"] != default.meta["provenance"]["config_fingerprint"]
 
 
 def test_typed_config_is_passed_through_and_matches_low_level(monkeypatch):
@@ -189,10 +184,7 @@ def test_multichain_selection_is_canonical_and_excludes_nonprotein_chains(tmp_pa
     )
     assert scalar.meta["input"]["chain_ids"] == ["B"]
     assert scalar.data["residue_ids"].tolist() == ["B:1::GLY"]
-    assert (
-        scalar.meta["provenance"]["config_fingerprint"]
-        != default.meta["provenance"]["config_fingerprint"]
-    )
+    assert scalar.meta["provenance"]["config_fingerprint"] != default.meta["provenance"]["config_fingerprint"]
 
     cache = DiskCache(tmp_path / "cache")
     encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
@@ -259,12 +251,8 @@ def test_multichain_selection_is_resolved_independently_per_model(tmp_path: Path
         encoding="ascii",
     )
 
-    first = eris.encode(
-        source, representation="residue_point_cloud", model_index=0, use_cache=False
-    )
-    second = eris.encode(
-        source, representation="residue_point_cloud", model_index=1, use_cache=False
-    )
+    first = eris.encode(source, representation="residue_point_cloud", model_index=0, use_cache=False)
+    second = eris.encode(source, representation="residue_point_cloud", model_index=1, use_cache=False)
 
     assert first.meta["input"]["chain_ids"] == ["A"]
     assert first.data["residue_ids"].tolist() == ["A:1::ALA"]
@@ -299,9 +287,7 @@ def test_default_selection_includes_parser_identified_noncanonical_polymer_chain
 
 def test_structure_input_preserves_identity_and_allows_identical_overrides(monkeypatch):
     structure_input = StructureInput(source=str(PDB), chain_id="A", model_index=1)
-    expected = get_encoder("residue_contact_map", use_cache=False).encode(
-        StructureInput(source=str(PDB))
-    )
+    expected = get_encoder("residue_contact_map", use_cache=False).encode(StructureInput(source=str(PDB)))
     captured = []
 
     class CapturingEncoder:

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional
 
 import gemmi
 import numpy as np
@@ -111,9 +111,7 @@ def select_chains(
     return tuple(chain for chain in model if chain.name in requested)
 
 
-def resolve_structure_input(
-    inp: StructureInput, structure: gemmi.Structure | None = None
-) -> StructureInput:
+def resolve_structure_input(inp: StructureInput, structure: gemmi.Structure | None = None) -> StructureInput:
     """Resolve a requested selection to an immutable tuple in model order."""
     if structure is None:
         structure = load_structure(Path(inp.source))
@@ -126,8 +124,7 @@ def resolve_structure_input(
 
 
 def _residue_id(chain: gemmi.Chain, res: gemmi.Residue) -> str:
-    """
-    Stable residue identifier for downstream mapping and reproducibility.
+    """Stable residue identifier for downstream mapping and reproducibility.
 
     Format: <chain>:<seqnum>:<icode>:<resname>
     Example: A:123::GLY   (empty insertion code becomes "")
@@ -144,8 +141,7 @@ def _residue_id(chain: gemmi.Chain, res: gemmi.Residue) -> str:
 # Altloc selection policy
 # -----------------------
 def _altloc_rank(alt: str) -> int:
-    """
-    Prefer blank altloc over 'A' over others (for deterministic tie-breaking).
+    """Prefer blank altloc over 'A' over others (for deterministic tie-breaking).
     Lower rank is preferred.
     """
     a = _altloc_identifier(alt)
@@ -168,9 +164,8 @@ def _max_occupancy_sort_key(atom: gemmi.Atom) -> tuple[int, float, int, str]:
     return finite_rank, occupancy_rank, _altloc_rank(identifier), identifier
 
 
-def _select_atom_altloc(atoms: Iterable[gemmi.Atom], altloc: str) -> Optional[gemmi.Atom]:
-    """
-    Select a single atom from an iterable of alternate locations.
+def _select_atom_altloc(atoms: Iterable[gemmi.Atom], altloc: str) -> gemmi.Atom | None:
+    """Select a single atom from an iterable of alternate locations.
 
     Parameters
     ----------
@@ -185,6 +180,7 @@ def _select_atom_altloc(atoms: Iterable[gemmi.Atom], altloc: str) -> Optional[ge
     Returns
     -------
     gemmi.Atom or None
+
     """
     atoms_list = list(atoms)
     if not atoms_list:
@@ -238,11 +234,9 @@ def _atomic_mass(atom: gemmi.Atom) -> float:
     return mass
 
 
-def _selected_atoms_from_residue(res: gemmi.Residue, altloc: str) -> List[gemmi.Atom]:
-    """
-    Select one atom per atom-name according to altloc policy.
-    """
-    selected: List[gemmi.Atom] = []
+def _selected_atoms_from_residue(res: gemmi.Residue, altloc: str) -> list[gemmi.Atom]:
+    """Select one atom per atom-name according to altloc policy."""
+    selected: list[gemmi.Atom] = []
 
     atom_names = sorted({a.name for a in res})
     for atom_name in atom_names:
@@ -297,10 +291,10 @@ def _selected_heavy_atoms(
 
 
 def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
-    """
-    Returns:
-        np.ndarray shape (3,) or None if center cannot be computed
-        bfactor_ca: float
+    """Returns:
+    np.ndarray shape (3,) or None if center cannot be computed
+    bfactor_ca: float
+
     """
     # CA-based signals stay anchored to CA independently of the center mode.
     ca_atom = _select_atom_altloc(res["CA"], altloc) if "CA" in res else None
@@ -323,9 +317,7 @@ def _compute_residue_center(res: gemmi.Residue, mode: str, altloc: str):
     if not atoms:
         return None, bfactor_ca
 
-    coords = np.asarray(
-        [[float(a.pos.x), float(a.pos.y), float(a.pos.z)] for a in atoms], dtype=np.float32
-    )
+    coords = np.asarray([[float(a.pos.x), float(a.pos.y), float(a.pos.z)] for a in atoms], dtype=np.float32)
 
     if mode == "mean":
         center = coords.mean(axis=0).astype(np.float32)
@@ -367,9 +359,8 @@ def extract_residue_bundle(
     missing_residue: str = "skip",
     mode: str = "ca",
     plddt_source: str = "none",
-) -> Dict[str, np.ndarray]:
-    """
-    Extract per-residue coordinates and basic residue-level signals.
+) -> dict[str, np.ndarray]:
+    """Extract per-residue coordinates and basic residue-level signals.
 
     Parameters
     ----------
@@ -407,12 +398,11 @@ def extract_residue_bundle(
         polymer_heavy_atom_residue_index : (M,) int64
         polymer_heavy_atom_name/polymer_heavy_atom_element : (M,) str
         structural_residue_index : (N,) int64
+
     """
     missing_policy = (missing_residue or "skip").strip().lower()
     if missing_policy not in {"skip", "error", "nan"}:
-        raise ValueError(
-            f"Invalid missing_ca policy: {missing_residue!r}. Use 'skip', 'error', or 'nan'."
-        )
+        raise ValueError(f"Invalid missing_ca policy: {missing_residue!r}. Use 'skip', 'error', or 'nan'.")
 
     mode = (mode or "ca").strip().lower()
     if mode not in {"ca", "mean", "com"}:
@@ -422,26 +412,26 @@ def extract_residue_bundle(
     if plddt_source not in {"none", "bfactor"}:
         raise ValueError(f"Invalid plddt_source: {plddt_source!r}. Use 'none' or 'bfactor'.")
 
-    coords: List[List[float]] = []
-    ids: List[str] = []
-    chain_ids: List[str] = []
-    resnames: List[str] = []
-    aa_idx: List[int] = []
-    plddt_list: List[float] = []
-    bfac_list: List[float] = []
-    missing_ids: List[str] = []
-    biological_sequence_positions: List[int] = []
-    structural_residue_indices: List[int] = []
-    backbone_n: List[List[float]] = []
-    backbone_ca: List[List[float]] = []
-    backbone_c: List[List[float]] = []
-    backbone_n_mask: List[bool] = []
-    backbone_ca_mask: List[bool] = []
-    backbone_c_mask: List[bool] = []
-    polymer_heavy_atom_coordinates: List[List[float]] = []
-    polymer_heavy_atom_residue_index: List[int] = []
-    polymer_heavy_atom_names: List[str] = []
-    polymer_heavy_atom_elements: List[str] = []
+    coords: list[list[float]] = []
+    ids: list[str] = []
+    chain_ids: list[str] = []
+    resnames: list[str] = []
+    aa_idx: list[int] = []
+    plddt_list: list[float] = []
+    bfac_list: list[float] = []
+    missing_ids: list[str] = []
+    biological_sequence_positions: list[int] = []
+    structural_residue_indices: list[int] = []
+    backbone_n: list[list[float]] = []
+    backbone_ca: list[list[float]] = []
+    backbone_c: list[list[float]] = []
+    backbone_n_mask: list[bool] = []
+    backbone_ca_mask: list[bool] = []
+    backbone_c_mask: list[bool] = []
+    polymer_heavy_atom_coordinates: list[list[float]] = []
+    polymer_heavy_atom_residue_index: list[int] = []
+    polymer_heavy_atom_names: list[str] = []
+    polymer_heavy_atom_elements: list[str] = []
     previous_residue_number: int | None = None
     previous_sequence_position: int | None = None
     structural_residue_index = -1
@@ -450,9 +440,7 @@ def extract_residue_bundle(
         r3 = res.name.upper()
 
         residue_info = gemmi.find_tabulated_residue(r3)
-        is_polymer_amino_acid = (
-            res.entity_type == gemmi.EntityType.Polymer and residue_info.is_amino_acid()
-        )
+        is_polymer_amino_acid = res.entity_type == gemmi.EntityType.Polymer and residue_info.is_amino_acid()
         if amino_acids_only and not is_polymer_amino_acid:
             continue
 
@@ -514,9 +502,7 @@ def extract_residue_bundle(
             backbone_c_mask.append(c_valid)
             residue_index = len(ids) - 1
             polymer_heavy_atom_coordinates.extend(heavy_atom_coordinates.tolist())
-            polymer_heavy_atom_residue_index.extend(
-                [residue_index] * heavy_atom_coordinates.shape[0]
-            )
+            polymer_heavy_atom_residue_index.extend([residue_index] * heavy_atom_coordinates.shape[0])
             polymer_heavy_atom_names.extend(heavy_atom_names.tolist())
             polymer_heavy_atom_elements.extend(heavy_atom_elements.tolist())
             continue
@@ -598,9 +584,7 @@ def load_select_and_extract(
                 axis=0,
             ).astype(np.int64)
         if data["pos"].shape[0] == 0:
-            raise StructureLoadError(
-                "No positions found in selected chains (after filters/policies)."
-            )
+            raise StructureLoadError("No positions found in selected chains (after filters/policies).")
         return LoadedStructureData(
             data,
             input_format=_parsed_input_format(st),
@@ -683,14 +667,13 @@ def _elem_index(atom: gemmi.Atom) -> int:
 
 
 def _atom_role(atom_name: str) -> int:
-    """
-    Stable compact atom-role encoding.
-      0 unknown
-      1 backbone N
-      2 CA
-      3 backbone C
-      4 backbone O
-      5 sidechain/other
+    """Stable compact atom-role encoding.
+    0 unknown
+    1 backbone N
+    2 CA
+    3 backbone C
+    4 backbone O
+    5 sidechain/other
     """
     a = (atom_name or "").strip().upper()
     if a == "N":
@@ -736,9 +719,8 @@ def extract_atom_bundle(
     keep_ions: bool = True,
     altloc: str = "max_occupancy",  # "all" | "first" | "max_occupancy" | "A" etc.
     amino_acids_only: bool = False,  # if True, only residues in AA3_TO_AA1
-) -> Dict[str, np.ndarray]:
-    """
-    Extract per-atom arrays from a chain.
+) -> dict[str, np.ndarray]:
+    """Extract per-atom arrays from a chain.
 
     Altloc policy:
       - "all": retain every atom record, including alternate locations
@@ -756,17 +738,17 @@ def extract_atom_bundle(
       - seq_pos_residue: (N,) int32 (residue index in chain order; per atom)
       - aa_index_residue: (N,) int16 (residue AA index; unknown for non-AA)
     """
-    coords: List[List[float]] = []
-    elem_idx: List[int] = []
-    roles: List[int] = []
-    bfac: List[float] = []
-    occ: List[float] = []
-    residue_ids: List[str] = []
-    chain_ids: List[str] = []
-    resname: List[str] = []
-    atom_name: List[str] = []
-    seq_pos_res: List[int] = []
-    aa_idx_res: List[int] = []
+    coords: list[list[float]] = []
+    elem_idx: list[int] = []
+    roles: list[int] = []
+    bfac: list[float] = []
+    occ: list[float] = []
+    residue_ids: list[str] = []
+    chain_ids: list[str] = []
+    resname: list[str] = []
+    atom_name: list[str] = []
+    seq_pos_res: list[int] = []
+    aa_idx_res: list[int] = []
 
     policy = (altloc or "max_occupancy").strip()
 
@@ -802,12 +784,12 @@ def extract_atom_bundle(
             atoms_iter = list(res)
         else:
             # group by atom name; select one per name
-            by_name: Dict[str, List[gemmi.Atom]] = {}
+            by_name: dict[str, list[gemmi.Atom]] = {}
             for a in res:
                 name = (a.name or "").strip().upper()
                 by_name.setdefault(name, []).append(a)
 
-            chosen: List[gemmi.Atom] = []
+            chosen: list[gemmi.Atom] = []
             for atoms in by_name.values():
                 chosen_atom = _select_atom_altloc(atoms, policy)
                 if chosen_atom is not None:
@@ -860,9 +842,7 @@ def load_and_extract_atoms(
     amino_acids_only: bool = False,
     structure: gemmi.Structure | None = None,
 ) -> LoadedStructureData:
-    """
-    Atom-level extraction wrapper using StructureInput.
-    """
+    """Atom-level extraction wrapper using StructureInput."""
 
     def _extract(ch):
         return extract_atom_bundle(

@@ -55,21 +55,11 @@ def encode(
         Path | None,
         typer.Option("--results", help="Batch-result manifest path."),
     ] = None,
-    resume: Annotated[
-        bool, typer.Option("--resume", help="Reuse equivalent completed artifacts.")
-    ] = False,
-    overwrite: Annotated[
-        bool, typer.Option("--overwrite", help="Replace existing artifacts.")
-    ] = False,
-    fail_fast: Annotated[
-        bool, typer.Option("--fail-fast", help="Stop on the first failed row.")
-    ] = False,
-    no_cache: Annotated[
-        bool, typer.Option("--no-cache", help="Disable representation cache.")
-    ] = False,
-    params: Annotated[
-        str | None, typer.Option("--params", help="JSON representation parameters.")
-    ] = None,
+    resume: Annotated[bool, typer.Option("--resume", help="Reuse equivalent completed artifacts.")] = False,
+    overwrite: Annotated[bool, typer.Option("--overwrite", help="Replace existing artifacts.")] = False,
+    fail_fast: Annotated[bool, typer.Option("--fail-fast", help="Stop on the first failed row.")] = False,
+    no_cache: Annotated[bool, typer.Option("--no-cache", help="Disable representation cache.")] = False,
+    params: Annotated[str | None, typer.Option("--params", help="JSON representation parameters.")] = None,
 ) -> None:
     """Encode one canonical explicit representation for every manifest row."""
     try:
@@ -103,9 +93,7 @@ def embed(
         typer.Option("--representation", "-r", help="Canonical learned representation name."),
     ],
     out: Annotated[Path, typer.Option("--out", help="Artifact root directory.")],
-    results: Annotated[
-        Path | None, typer.Option("--results", help="Batch-result manifest path.")
-    ] = None,
+    results: Annotated[Path | None, typer.Option("--results", help="Batch-result manifest path.")] = None,
     output_mode: Annotated[str, typer.Option("--output-mode")] = "both",
     checkpoint: Annotated[Path | None, typer.Option("--checkpoint")] = None,
     device: Annotated[str, typer.Option("--device")] = "auto",
@@ -156,21 +144,11 @@ def from_folder(
         Path | None,
         typer.Option("--results", help="Batch-result manifest path."),
     ] = None,
-    resume: Annotated[
-        bool, typer.Option("--resume", help="Reuse equivalent completed artifacts.")
-    ] = False,
-    overwrite: Annotated[
-        bool, typer.Option("--overwrite", help="Replace existing artifacts.")
-    ] = False,
-    fail_fast: Annotated[
-        bool, typer.Option("--fail-fast", help="Stop on the first failed row.")
-    ] = False,
-    no_cache: Annotated[
-        bool, typer.Option("--no-cache", help="Disable representation cache.")
-    ] = False,
-    params: Annotated[
-        str | None, typer.Option("--params", help="JSON representation parameters.")
-    ] = None,
+    resume: Annotated[bool, typer.Option("--resume", help="Reuse equivalent completed artifacts.")] = False,
+    overwrite: Annotated[bool, typer.Option("--overwrite", help="Replace existing artifacts.")] = False,
+    fail_fast: Annotated[bool, typer.Option("--fail-fast", help="Stop on the first failed row.")] = False,
+    no_cache: Annotated[bool, typer.Option("--no-cache", help="Disable representation cache.")] = False,
+    params: Annotated[str | None, typer.Option("--params", help="JSON representation parameters.")] = None,
 ) -> None:
     """Encode one explicit representation for every matching structure file."""
     try:

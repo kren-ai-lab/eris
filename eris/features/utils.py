@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
@@ -22,7 +23,7 @@ def normalize_choice(
     return normalized
 
 
-def parse_mode(mode: Any) -> List[Tuple[str, Dict[str, Any]]]:
+def parse_mode(mode: Any) -> list[tuple[str, dict[str, Any]]]:
     if isinstance(mode, str):
         return [(t.strip(), {}) for t in mode.split("+") if t.strip()]
 
@@ -57,9 +58,7 @@ def parse_mode(mode: Any) -> List[Tuple[str, Dict[str, Any]]]:
 
         return result
 
-    raise ValueError(
-        "Mode must be string ('a+b'), list of strings ['a','b'], or list of dict [{'a': {...}}]"
-    )
+    raise ValueError("Mode must be string ('a+b'), list of strings ['a','b'], or list of dict [{'a': {...}}]")
 
 
 def safe_float(x: np.ndarray, *, missing: str = "zero") -> np.ndarray:

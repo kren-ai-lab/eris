@@ -9,7 +9,6 @@ def format_residue_id(
     residue_name: str,
 ) -> str:
     """Format Eris' internal canonical biological residue identifier."""
-
     normalized_insertion_code = (insertion_code or "").strip()
     return f"{chain_id}:{residue_number}:{normalized_insertion_code}:{residue_name}"
 

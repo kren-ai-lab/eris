@@ -32,4 +32,4 @@ __all__ = [
 ]
 
 # register built-in encoders
-from eris import encoders as _encoders  # noqa: E402, F401
+from eris import encoders as _encoders  # noqa: F401

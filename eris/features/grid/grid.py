@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -8,7 +8,7 @@ from eris.features.feature_builders import build_from_registry_voxel
 from eris.features.feature_registry import GRID_VOXEL_REGISTRY
 
 
-def _bbox(pos: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _bbox(pos: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     mn = pos.min(axis=0)
     mx = pos.max(axis=0)
     return mn, mx
@@ -18,17 +18,17 @@ def build_grid_attr(
     *,
     pos: np.ndarray,
     centroid: np.ndarray,
-    strc: Dict[str, np.ndarray],
+    strc: dict[str, np.ndarray],
     channels: Any,
     grid_size: int,
-    voxel_size: Optional[float],
+    voxel_size: float | None,
     fit: bool,
     margin: float,
     center: bool,
     pool: str,
     sigma: float,
     return_keys: bool = False,
-) -> Tuple[np.ndarray, List[str], Dict[str, np.ndarray]]:
+) -> tuple[np.ndarray, list[str], dict[str, np.ndarray]]:
 
     G = int(grid_size)
 
@@ -44,15 +44,14 @@ def build_grid_attr(
     # -------- voxel size --------
     if voxel_size is not None:
         vs = float(voxel_size)
+    elif fit:
+        mn, mx = _bbox(pos_in)
+        mn -= margin
+        mx += margin
+        span = (mx - mn).max()
+        vs = float(span / max(1, (G - 1)))
     else:
-        if fit:
-            mn, mx = _bbox(pos_in)
-            mn -= margin
-            mx += margin
-            span = (mx - mn).max()
-            vs = float(span / max(1, (G - 1)))
-        else:
-            vs = 1.0
+        vs = 1.0
 
     # -------- origin --------
     half = (G - 1) * vs / 2.0

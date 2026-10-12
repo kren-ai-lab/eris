@@ -57,9 +57,7 @@ def _identity(artifact: StructureArtifact) -> tuple[str, str]:
     family = artifact.meta.get("representation_family")
     representation_type = artifact.meta.get("representation_type")
     if not isinstance(family, str) or not isinstance(representation_type, str):
-        raise PyGExportError(
-            "Artifact metadata must define representation_family and representation_type."
-        )
+        raise PyGExportError("Artifact metadata must define representation_family and representation_type.")
     return family, representation_type
 
 
@@ -114,8 +112,7 @@ def _attach_auxiliary_attrs(data: Any, torch_mapping: Mapping[str, Any]) -> None
 
 
 def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None):
-    """
-    Convert a canonical graph Torch mapping into ``torch_geometric.data.Data``.
+    """Convert a canonical graph Torch mapping into ``torch_geometric.data.Data``.
 
     This compatibility helper is graph-only. It does not infer topology for cloud,
     matrix, grid, or learned embedding mappings.
@@ -123,9 +120,7 @@ def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None):
     family = out.get("representation_family")
     representation_type = out.get("representation_type")
     if family is not None and family != "explicit":
-        raise PyGExportError(
-            "Only explicit graph Torch mappings are supported for PyG graph export."
-        )
+        raise PyGExportError("Only explicit graph Torch mappings are supported for PyG graph export.")
     if representation_type is not None and representation_type != "graph":
         raise PyGExportError("Only graph Torch mappings are supported for PyG graph export.")
     if "edge_index" not in out:
@@ -174,8 +169,7 @@ def to_pyg(
     *,
     device: str | None = None,
 ):
-    """
-    Export one explicit graph artifact schema artifact to ``torch_geometric.data.Data``.
+    """Export one explicit graph artifact schema artifact to ``torch_geometric.data.Data``.
 
     Non-graph artifacts are rejected because this exporter preserves public topology; it
     never invents edges from clouds, matrices, grids, or learned model internals.

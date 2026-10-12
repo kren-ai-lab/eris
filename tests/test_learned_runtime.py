@@ -78,9 +78,7 @@ def test_scientific_fingerprint_is_independent_of_execution_requests():
         representation_name="synthetic_embedding",
         output_mode="both",
     )
-    fingerprint = compute_config_fingerprint(
-        config.representation_name, config.to_dict(), chain_ids=["A"]
-    )
+    fingerprint = compute_config_fingerprint(config.representation_name, config.to_dict(), chain_ids=["A"])
 
     assert StructuralExecutionConfig(device="auto") != StructuralExecutionConfig(device="cpu")
     assert (

@@ -71,9 +71,7 @@ def _artifact_metadata(
             }
         ]
     parameters = {"fixture": representation_name}
-    requires_chain_id = granularity == "residue" or (
-        granularity == "mixed" and "node_embedding" in data
-    )
+    requires_chain_id = granularity == "residue" or (granularity == "mixed" and "node_embedding" in data)
     if requires_chain_id and "chain_id" not in data:
         node_count = (
             int(data["node_embedding"].shape[0])

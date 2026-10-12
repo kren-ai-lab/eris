@@ -58,9 +58,7 @@ def _reference_graph(path: Path) -> dict[str, np.ndarray]:
 
 
 def _records(path: Path):
-    selected = load_selected_biological_structure(
-        StructureInput(source=path, chain_id="A", model_index=0)
-    )
+    selected = load_selected_biological_structure(StructureInput(source=path, chain_id="A", model_index=0))
     return select_gearnet_transport_records(selected)
 
 
@@ -185,9 +183,7 @@ def test_spatial_reference_freezes_boundary_tie_and_neighbor_order():
         (DATA_DIR / "gearnet_spatial_max_neighbors_reference.json").read_text(encoding="utf-8")
     )
     graph = _reference_graph(DATA_DIR / "gearnet_spatial_reference_graph.npz")
-    with np.load(
-        DATA_DIR / "gearnet_spatial_max_neighbors_reference.npz", allow_pickle=False
-    ) as probe:
+    with np.load(DATA_DIR / "gearnet_spatial_max_neighbors_reference.npz", allow_pickle=False) as probe:
         target_zero_sources = probe["spatial_edge_source"][probe["spatial_edge_destination"] == 0]
 
     assert metadata["purpose"] == "frozen spatial reference"
@@ -216,9 +212,7 @@ def test_biological_policy_preserves_identity_and_rejects_invalid_retained_resid
         + "\n",
         encoding="ascii",
     )
-    selected = load_selected_biological_structure(
-        StructureInput(source=source, chain_id="A", model_index=0)
-    )
+    selected = load_selected_biological_structure(StructureInput(source=source, chain_id="A", model_index=0))
 
     with pytest.raises(GearNetPreprocessingError, match="missing CA.*A:5::SER"):
         select_gearnet_transport_records(selected)
@@ -237,9 +231,7 @@ def test_biological_policy_preserves_identity_and_rejects_invalid_retained_resid
         + "\n",
         encoding="ascii",
     )
-    selected = load_selected_biological_structure(
-        StructureInput(source=source, chain_id="A", model_index=0)
-    )
+    selected = load_selected_biological_structure(StructureInput(source=source, chain_id="A", model_index=0))
     records = select_gearnet_transport_records(selected)
 
     assert [record.biological_index for record in records] == [0, 2]

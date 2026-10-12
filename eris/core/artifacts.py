@@ -4,9 +4,10 @@ import json
 import os
 import tempfile
 import zipfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import Any
 
 import numpy as np
 
@@ -83,9 +84,7 @@ def _output_names(meta: dict[str, Any]) -> list[str]:
             raise ArtifactValidationError(f"Artifact meta.outputs[{index}] must be an object.")
         name = output.get("name")
         if not isinstance(name, str) or not name:
-            raise ArtifactValidationError(
-                f"Artifact meta.outputs[{index}].name must be a non-empty string."
-            )
+            raise ArtifactValidationError(f"Artifact meta.outputs[{index}].name must be a non-empty string.")
         names.append(name)
 
     if len(names) != len(set(names)):
@@ -115,16 +114,15 @@ def _load_npz_data(data_path: Path, output_names: list[str]) -> dict[str, np.nda
 
 @dataclass
 class StructureArtifact:
-    """
-    Canonical artifact with enforced schema contract.
+    """Canonical artifact with enforced schema contract.
 
     Always writes:
       - data.npz
       - meta.json (schema-validated)
     """
 
-    data: Dict[str, np.ndarray]
-    meta: Dict[str, Any]
+    data: dict[str, np.ndarray]
+    meta: dict[str, Any]
 
     def finalize(self) -> None:
         canonical_meta = _validate_artifact(self.meta, self.data)
@@ -155,7 +153,7 @@ class StructureArtifact:
         )
 
     @staticmethod
-    def load(indir: Path, *, strict: bool = False) -> "StructureArtifact":
+    def load(indir: Path, *, strict: bool = False) -> StructureArtifact:
         # Loading always validates strictly; `strict` is kept for existing callers.
         if not indir.exists():
             raise ArtifactValidationError(f"Artifact directory does not exist: {indir}")
@@ -166,9 +164,7 @@ class StructureArtifact:
         data_path = indir / "data.npz"
 
         if not meta_path.exists() or not data_path.exists():
-            raise ArtifactValidationError(
-                f"Missing artifact files in {indir} (need meta.json + data.npz)"
-            )
+            raise ArtifactValidationError(f"Missing artifact files in {indir} (need meta.json + data.npz)")
 
         meta = _read_artifact_metadata(meta_path)
         data = _load_npz_data(data_path, _output_names(meta))

@@ -101,7 +101,7 @@ CANONICAL_REQUIRED_HEAVY_ATOMS = {
 
 
 def _load_biotite() -> Any:
-    import biotite.structure as structure
+    from biotite import structure
 
     return structure
 
@@ -237,9 +237,7 @@ def solvent_accessibility(
                 f"ProtOr radius is unavailable for selected polymer atom {residue_name}:{name}"
             ) from error
         if radius is None or not np.isfinite(radius):
-            raise ValueError(
-                f"ProtOr radius is unavailable for selected polymer atom {residue_name}:{name}"
-            )
+            raise ValueError(f"ProtOr radius is unavailable for selected polymer atom {residue_name}:{name}")
 
     if n_atoms:
         atom_array = _biotite_atom_array(

@@ -147,10 +147,7 @@ EXPECTED_DEFAULTS = {
 
 def test_all_ten_defaults_match_the_m2_1_contract():
     assert len(_CONFIG_TYPES_BY_REPRESENTATION) == 10
-    actual = {
-        name: config_type().to_dict()
-        for name, config_type in _CONFIG_TYPES_BY_REPRESENTATION.items()
-    }
+    actual = {name: config_type().to_dict() for name, config_type in _CONFIG_TYPES_BY_REPRESENTATION.items()}
     assert actual == EXPECTED_DEFAULTS
 
 

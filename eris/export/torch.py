@@ -121,9 +121,7 @@ def _graph_to_torch(artifact: StructureArtifact) -> dict[str, Any]:
     node_attr = _to_tensor(_require_array(data, "node_attr"))
     edge_index = _to_tensor(_require_array(data, "edge_index"))
     if edge_index.ndim != 2 or tuple(edge_index.shape[:1]) != (2,):
-        raise TorchExportError(
-            f"Graph edge_index must have shape (2, E), got {tuple(edge_index.shape)}"
-        )
+        raise TorchExportError(f"Graph edge_index must have shape (2, E), got {tuple(edge_index.shape)}")
     if edge_index.dtype.is_floating_point or edge_index.dtype == _torch().bool:
         raise TorchExportError("Graph edge_index must use an integer dtype.")
 
@@ -192,9 +190,7 @@ def _vector_to_torch(artifact: StructureArtifact) -> dict[str, Any]:
     out = _metadata(artifact.meta)
     pooled_attr = _to_tensor(_require_array(artifact.data, "pooled_attr"))
     if pooled_attr.ndim != 1:
-        raise TorchExportError(
-            f"Vector pooled_attr must have shape (F,), got {tuple(pooled_attr.shape)}"
-        )
+        raise TorchExportError(f"Vector pooled_attr must have shape (F,), got {tuple(pooled_attr.shape)}")
     out["pooled_attr"] = pooled_attr
     return out
 
@@ -250,23 +246,18 @@ def _learned_to_torch(artifact: StructureArtifact) -> dict[str, Any]:
         if "valid_mask" in data:
             valid_mask = _to_tensor(data["valid_mask"])
             if valid_mask.ndim != 1:
-                raise TorchExportError(
-                    f"Learned valid_mask must be 1D, got {tuple(valid_mask.shape)}"
-                )
+                raise TorchExportError(f"Learned valid_mask must be 1D, got {tuple(valid_mask.shape)}")
             if valid_mask.dtype != _torch().bool:
                 raise TorchExportError("Learned valid_mask must use bool dtype.")
             if int(valid_mask.shape[0]) != int(node_embedding.shape[0]):
-                raise TorchExportError(
-                    "Learned valid_mask length must match node_embedding row count."
-                )
+                raise TorchExportError("Learned valid_mask length must match node_embedding row count.")
             out["valid_mask"] = valid_mask
 
     if layout in {"global", "both"}:
         global_embedding = _to_tensor(_require_array(data, "global_embedding"))
         if global_embedding.ndim != 1:
             raise TorchExportError(
-                "Learned global_embedding must have shape (D,), "
-                f"got {tuple(global_embedding.shape)}"
+                f"Learned global_embedding must have shape (D,), got {tuple(global_embedding.shape)}"
             )
         out["global_embedding"] = global_embedding
 
@@ -278,9 +269,7 @@ def _representation_identity(artifact: StructureArtifact) -> tuple[str, str]:
     family = meta.get("representation_family")
     representation_type = meta.get("representation_type")
     if not isinstance(family, str) or not isinstance(representation_type, str):
-        raise TorchExportError(
-            "Artifact metadata must define representation_family and representation_type."
-        )
+        raise TorchExportError("Artifact metadata must define representation_family and representation_type.")
     return family, representation_type
 
 
@@ -293,9 +282,7 @@ def _apply_device(out: dict[str, Any], device: str | None) -> dict[str, Any]:
             out[key] = value.to(device)
         elif key == "extra" and isinstance(value, Mapping):
             out[key] = {
-                extra_key: extra_value.to(device)
-                if isinstance(extra_value, torch.Tensor)
-                else extra_value
+                extra_key: extra_value.to(device) if isinstance(extra_value, torch.Tensor) else extra_value
                 for extra_key, extra_value in value.items()
             }
     return out
@@ -307,8 +294,7 @@ def to_torch(
     device: str | None = None,
     matrix_as_channel: bool = True,
 ) -> dict[str, Any]:
-    """
-    Convert one strict-valid artifact schema ``StructureArtifact`` to Torch.
+    """Convert one strict-valid artifact schema ``StructureArtifact`` to Torch.
 
     The returned mapping contains Torch tensors plus lightweight metadata. Torch export is
     downstream-only: it does not mutate artifacts, change canonical storage, batch samples,
@@ -322,9 +308,7 @@ def to_torch(
 
     if family == "learned":
         if representation_type != "embedding":
-            raise TorchExportError(
-                f"Unsupported learned representation_type={representation_type!r}."
-            )
+            raise TorchExportError(f"Unsupported learned representation_type={representation_type!r}.")
         return _apply_device(_learned_to_torch(artifact), device)
 
     if family != "explicit":

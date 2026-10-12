@@ -74,12 +74,8 @@ def _learned_artifact(
     execution_request = StructuralExecutionConfig(device="cpu", precision=precision)
     execution_resolved = ResolvedExecution(device="cpu", precision=precision)
     result = StructuralEmbeddingResult(
-        node_embedding=(
-            np.ones((2, 4), dtype=np.float32) if output_mode in {"node", "both"} else None
-        ),
-        global_embedding=(
-            np.ones((4,), dtype=np.float32) if output_mode in {"global", "both"} else None
-        ),
+        node_embedding=(np.ones((2, 4), dtype=np.float32) if output_mode in {"node", "both"} else None),
+        global_embedding=(np.ones((4,), dtype=np.float32) if output_mode in {"global", "both"} else None),
         node_ids=(np.array(["A:1::ALA", "A:2::GLY"]) if output_mode in {"node", "both"} else None),
     )
     model = GEARNET_EDGE_MODEL_DESCRIPTOR
@@ -192,9 +188,7 @@ def test_manifest_batch_and_resume_canonicalize_multichain_selection(
     )
 
     assert result[0].status == "success"
-    artifact = StructureArtifact.load(
-        artifact_root / "protein" / "residue_point_cloud", strict=True
-    )
+    artifact = StructureArtifact.load(artifact_root / "protein" / "residue_point_cloud", strict=True)
     assert artifact.meta["input"]["chain_ids"] == ["A", "B"]
 
     monkeypatch.setattr(
@@ -347,10 +341,7 @@ def test_existing_output_without_resume_or_overwrite_is_a_failure(tmp_path, monk
 
     assert results[0].status == "failed"
     assert results[0].error_type == "FileExistsError"
-    assert (
-        StructureArtifact.load(target, strict=True).meta["representation_name"]
-        == "residue_contact_map"
-    )
+    assert StructureArtifact.load(target, strict=True).meta["representation_name"] == "residue_contact_map"
 
 
 def test_resume_reuses_equivalent_artifact_without_execution(tmp_path, monkeypatch):
@@ -570,8 +561,7 @@ def test_learned_resume_reuses_only_matching_model_identity(tmp_path, monkeypatc
     assert len(calls) == 1
     assert results[0].status == "success"
     assert (
-        StructureArtifact.load(target, strict=True).meta["model"]
-        == GEARNET_EDGE_MODEL_DESCRIPTOR.to_dict()
+        StructureArtifact.load(target, strict=True).meta["model"] == GEARNET_EDGE_MODEL_DESCRIPTOR.to_dict()
     )
 
 

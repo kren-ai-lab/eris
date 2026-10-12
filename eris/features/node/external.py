@@ -4,9 +4,10 @@ import hashlib
 import json
 import re
 import struct
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 from zipfile import BadZipFile
 
 import numpy as np
@@ -138,9 +139,7 @@ def _text_scalar(
     allow_empty: bool = False,
 ) -> str:
     if array.shape != () or array.dtype.kind not in {"U", "S"}:
-        raise ExternalFeatureError(
-            f"External field '{field}' must be a scalar Unicode/string value"
-        )
+        raise ExternalFeatureError(f"External field '{field}' must be a scalar Unicode/string value")
     value = _decode_text(array[()], field=field)
     if not allow_empty and not value:
         raise ExternalFeatureError(f"External field '{field}' must not be empty")
@@ -157,9 +156,7 @@ def _optional_text_scalar(arrays: Mapping[str, np.ndarray], field: str) -> str |
 
 def _text_vector(array: np.ndarray, *, field: str) -> list[str]:
     if array.ndim != 1 or array.dtype.kind not in {"U", "S"}:
-        raise ExternalFeatureError(
-            f"External field '{field}' must be a one-dimensional Unicode/string array"
-        )
+        raise ExternalFeatureError(f"External field '{field}' must be a one-dimensional Unicode/string array")
     return [_decode_text(item, field=field) for item in array]
 
 
@@ -384,9 +381,7 @@ def normalize_external_params(params: dict[str, Any]) -> dict[str, Any]:
     descriptor = payload.descriptor()
     for field in sorted(_DESCRIPTOR_FIELDS - {"path"}):
         if field in params and params[field] != descriptor[field]:
-            raise ExternalFeatureError(
-                f"external parameter '{field}' does not match the resolved payload"
-            )
+            raise ExternalFeatureError(f"external parameter '{field}' does not match the resolved payload")
     return descriptor
 
 
@@ -463,9 +458,7 @@ def strict_align_external_payload(
             details.append(f"missing={len(missing)} preview={_preview(missing)}")
         if extra:
             details.append(f"extra={len(extra)} preview={_preview(extra)}")
-        raise ExternalFeatureError(
-            "External strict_residue_id alignment failed: " + "; ".join(details)
-        )
+        raise ExternalFeatureError("External strict_residue_id alignment failed: " + "; ".join(details))
 
     row_by_id = {residue_id: row for row, residue_id in enumerate(payload.residue_ids)}
     aligned = payload.values[[row_by_id[residue_id] for residue_id in target_ids]]
@@ -491,9 +484,7 @@ def external_feature_keys(
     ctx: dict[str, Any],
     params: dict[str, Any],
 ) -> list[str]:
-    return [
-        f"external.{params['source_name']}.{feature_key}" for feature_key in params["feature_keys"]
-    ]
+    return [f"external.{params['source_name']}.{feature_key}" for feature_key in params["feature_keys"]]
 
 
 __all__ = [

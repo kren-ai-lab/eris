@@ -71,7 +71,6 @@ class CheckpointDescriptor:
 
     def to_dict(self) -> dict[str, str]:
         """Return deterministic artifact schema checkpoint metadata."""
-
         metadata = {
             "identifier": self.identifier,
             "sha256": self.sha256,
@@ -97,7 +96,6 @@ class StructuralModelDescriptor:
 
     def to_dict(self) -> dict[str, object]:
         """Return complete artifact schema model metadata."""
-
         return {
             "architecture": self.architecture,
             "checkpoint": self.checkpoint.to_dict(),
@@ -105,7 +103,6 @@ class StructuralModelDescriptor:
 
     def to_cache_identity(self) -> dict[str, object]:
         """Return scientific model identity without acquisition location."""
-
         checkpoint = {
             "identifier": self.checkpoint.identifier,
         }
@@ -136,16 +133,11 @@ def verify_checkpoint(
     Digest equality establishes byte identity only; it does not establish authenticity,
     licensing, safe deserialization, or scientific compatibility.
     """
-
     checkpoint_path = Path(path)
     if not checkpoint_path.exists():
-        raise ExecutionError(
-            f"Checkpoint '{descriptor.identifier}' does not exist: {checkpoint_path}"
-        )
+        raise ExecutionError(f"Checkpoint '{descriptor.identifier}' does not exist: {checkpoint_path}")
     if not checkpoint_path.is_file():
-        raise ExecutionError(
-            f"Checkpoint '{descriptor.identifier}' is not a regular file: {checkpoint_path}"
-        )
+        raise ExecutionError(f"Checkpoint '{descriptor.identifier}' is not a regular file: {checkpoint_path}")
 
     try:
         actual_sha256 = sha256_file(checkpoint_path)

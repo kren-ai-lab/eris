@@ -84,8 +84,7 @@ def _learned_sample(artifact: StructureArtifact) -> dict[str, Any]:
 
 @dataclass
 class ErisFolderDataset:
-    """
-    Dataset consumer for canonical ``eris pack`` indexes.
+    """Dataset consumer for canonical ``eris pack`` indexes.
 
     The packed index is the collection snapshot. Artifact locators are POSIX-style paths
     relative to the index file parent. Individual artifacts are strict-loaded lazily in

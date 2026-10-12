@@ -8,7 +8,7 @@ from urllib.error import URLError
 
 import pytest
 
-import eris.core.learned.checkpoint_acquisition as checkpoint_acquisition
+from eris.core.learned import checkpoint_acquisition
 from eris.core.learned.checkpoint_cache import CheckpointCache
 from eris.core.learned.checkpoints import CheckpointDescriptor, StructuralModelDescriptor
 from eris.core.learned.runner import StructuralEmbedderRunner

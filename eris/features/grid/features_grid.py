@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -11,11 +11,11 @@ _AA_ONEHOT_KEYS = [f"aa_onehot.{aa}" for aa in AA_VOCAB]
 _AA_INDEX_KEY = ["aa_index"]
 
 
-def normalize_plddt_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_plddt_params(params: dict[str, Any]) -> dict[str, Any]:
     return normalize_scalar_params("plddt voxel", params)
 
 
-def normalize_bfactor_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_bfactor_params(params: dict[str, Any]) -> dict[str, Any]:
     return normalize_scalar_params("bfactor voxel", params)
 
 
@@ -25,11 +25,11 @@ def normalize_bfactor_params(params: Dict[str, Any]) -> Dict[str, Any]:
 def add_occupancy_fn(
     *,
     grid: np.ndarray,
-    counts: Optional[np.ndarray],
+    counts: np.ndarray | None,
     ch_start: int,
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> int:
     ijk = data["ijk"]
     pool = ctx["pool"]
@@ -44,11 +44,11 @@ def add_occupancy_fn(
     return ch_start + 1
 
 
-def occupancy_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def occupancy_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["occupancy"]
 
 
-def occupancy_n_channels(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> int:
+def occupancy_n_channels(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> int:
     return 1
 
 
@@ -68,7 +68,7 @@ register_grid_voxel_feature(
 # density
 # -------------------------
 def _gaussian_splat(
-    grid: np.ndarray, center_ijk: Tuple[int, int, int], sigma: float, value: float = 1.0
+    grid: np.ndarray, center_ijk: tuple[int, int, int], sigma: float, value: float = 1.0
 ) -> None:
     if sigma <= 0:
         return
@@ -95,11 +95,11 @@ def _gaussian_splat(
 def add_density_fn(
     *,
     grid: np.ndarray,
-    counts: Optional[np.ndarray],
+    counts: np.ndarray | None,
     ch_start: int,
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> int:
     ijk = data["ijk"]
     pool = ctx["pool"]
@@ -114,11 +114,11 @@ def add_density_fn(
     return ch_start + 1
 
 
-def density_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def density_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["density"]
 
 
-def density_n_channels(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> int:
+def density_n_channels(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> int:
     return 1
 
 
@@ -139,19 +139,18 @@ register_grid_voxel_feature(
 # -------------------------
 def _accumulate_scalar(
     grid_ch: np.ndarray,
-    counts_ch: Optional[np.ndarray],
+    counts_ch: np.ndarray | None,
     ijk: np.ndarray,
     values: np.ndarray,
     pool: str,
 ) -> None:
-    """
-    Accumulate scalar values into a single channel (in-place).
+    """Accumulate scalar values into a single channel (in-place).
     - max: max pooling
     - sum: sum pooling
     - mean: sum pooling + counts (counts_ch required)
     """
     if pool == "max":
-        maxima: Dict[Tuple[int, int, int], float] = {}
+        maxima: dict[tuple[int, int, int], float] = {}
         for (i, j, k), val in zip(ijk, values):
             coordinate = (int(i), int(j), int(k))
             maxima[coordinate] = max(maxima.get(coordinate, float("-inf")), float(val))
@@ -167,12 +166,12 @@ def _accumulate_scalar(
 def add_scalar_pool(
     *,
     grid: np.ndarray,
-    counts: Optional[np.ndarray],
+    counts: np.ndarray | None,
     ch: int,
     ijk: np.ndarray,
     values: np.ndarray,
     pool: str,
-    normalize: Optional[Tuple[float, float]] = None,
+    normalize: tuple[float, float] | None = None,
 ) -> int:
     v = values.copy()
 
@@ -191,11 +190,11 @@ def add_scalar_pool(
 def add_plddt_fn(
     *,
     grid: np.ndarray,
-    counts: Optional[np.ndarray],
+    counts: np.ndarray | None,
     ch_start: int,
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> int:
 
     return add_scalar_pool(
@@ -209,11 +208,11 @@ def add_plddt_fn(
     )
 
 
-def plddt_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def plddt_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["plddt"]
 
 
-def plddt_n_channels(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> int:
+def plddt_n_channels(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> int:
     return 1
 
 
@@ -236,11 +235,11 @@ register_grid_voxel_feature(
 def add_bfactor_fn(
     *,
     grid: np.ndarray,
-    counts: Optional[np.ndarray],
+    counts: np.ndarray | None,
     ch_start: int,
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> int:
 
     return add_scalar_pool(
@@ -254,11 +253,11 @@ def add_bfactor_fn(
     )
 
 
-def bfactor_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def bfactor_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return ["bfactor"]
 
 
-def bfactor_n_channels(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> int:
+def bfactor_n_channels(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> int:
     return 1
 
 
@@ -280,14 +279,13 @@ register_grid_voxel_feature(
 # -------------------------
 def _accumulate_onehot(
     grid: np.ndarray,
-    counts: Optional[np.ndarray],
+    counts: np.ndarray | None,
     ijk: np.ndarray,
     aa: np.ndarray,
     base_ch: int,
     pool: str,
 ) -> None:
-    """
-    Accumulate AA onehot into channels base_ch..base_ch+20.
+    """Accumulate AA onehot into channels base_ch..base_ch+20.
     - max: set presence (0/1)
     - sum/mean: add 1 per hit (mean divides by counts later)
     """
@@ -308,11 +306,11 @@ def _accumulate_onehot(
 def add_aa_onehot_fn(
     *,
     grid: np.ndarray,
-    counts: Optional[np.ndarray],
+    counts: np.ndarray | None,
     ch_start: int,
-    data: Dict[str, Any],
-    ctx: Dict[str, Any],
-    params: Dict[str, Any],
+    data: dict[str, Any],
+    ctx: dict[str, Any],
+    params: dict[str, Any],
 ) -> int:
     ijk = data["ijk"]
     aa_v = data["aa_index"]
@@ -322,11 +320,11 @@ def add_aa_onehot_fn(
     return ch_start + 21
 
 
-def aa_onehot_keys(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+def aa_onehot_keys(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> list[str]:
     return _AA_ONEHOT_KEYS
 
 
-def aa_onehot_n_channels(data: Dict[str, Any], ctx: Dict[str, Any], params: Dict[str, Any]) -> int:
+def aa_onehot_n_channels(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) -> int:
     return params.get("num_classes", 21)
 
 

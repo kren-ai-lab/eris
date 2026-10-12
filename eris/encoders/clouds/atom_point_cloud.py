@@ -12,8 +12,7 @@ from eris.features.node.atom import build_node_attr
 
 
 class AtomPointCloud(BaseAtomEncoder):
-    """
-    Atom-level point cloud.
+    """Atom-level point cloud.
 
     Stores:
       - pos (N,3)

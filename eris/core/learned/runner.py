@@ -124,9 +124,9 @@ def _matches_cache_identity(
     input_metadata = meta.get("input")
     provenance = meta.get("provenance")
     outputs = meta.get("outputs")
-    if not all(
-        isinstance(value, dict) for value in (encoder, input_metadata, provenance)
-    ) or not isinstance(outputs, list):
+    if not all(isinstance(value, dict) for value in (encoder, input_metadata, provenance)) or not isinstance(
+        outputs, list
+    ):
         return False
 
     output_names = tuple(output.get("name") for output in outputs if isinstance(output, dict))

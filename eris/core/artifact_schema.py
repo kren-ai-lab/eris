@@ -104,9 +104,7 @@ def normalize_metadata(value: Any, *, _path: str = "metadata") -> JSONValue:
             normalized[key] = normalize_metadata(item, _path=f"{_path}.{key}")
         return normalized
     if isinstance(value, (list, tuple)):
-        return [
-            normalize_metadata(item, _path=f"{_path}[{index}]") for index, item in enumerate(value)
-        ]
+        return [normalize_metadata(item, _path=f"{_path}[{index}]") for index, item in enumerate(value)]
     _fail(f"{_path} contains unsupported value type {type(value).__name__}")
 
 
@@ -200,9 +198,7 @@ def compute_config_fingerprint(
 def _validate_encoder(encoder: Any) -> None:
     value = _require_mapping(encoder, "meta.encoder")
     _require_exact_keys(value, required={"implementation", "version"}, path="meta.encoder")
-    implementation = _require_non_empty_string(
-        value["implementation"], "meta.encoder.implementation"
-    )
+    implementation = _require_non_empty_string(value["implementation"], "meta.encoder.implementation")
     if _IMPLEMENTATION_PATH.fullmatch(implementation) is None:
         _fail("meta.encoder.implementation must be an import-path-like dotted name")
     _require_non_empty_string(value["version"], "meta.encoder.version")
@@ -536,9 +532,7 @@ def build_artifact_metadata(
     if model is not None:
         metadata["model"] = dict(model)
     if extensions is not None:
-        metadata["extensions"] = {
-            namespace: dict(content) for namespace, content in extensions.items()
-        }
+        metadata["extensions"] = {namespace: dict(content) for namespace, content in extensions.items()}
 
     return validate_schema(metadata, data, strict=True)
 

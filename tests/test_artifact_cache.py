@@ -376,9 +376,7 @@ def test_cache_hit_refreshes_current_source_without_rewriting_cached_metadata(
     source_b.write_bytes(source_bytes)
     cache = _RecordingDiskCache(tmp_path / "cache")
 
-    first = ResiduePointCloudCA(use_cache=True, cache=cache).encode(
-        StructureInput(source=str(source_a))
-    )
+    first = ResiduePointCloudCA(use_cache=True, cache=cache).encode(StructureInput(source=str(source_a)))
     second_encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
 
     def fail_recompute(ctx):
@@ -409,9 +407,7 @@ def test_parser_hint_prevents_pdb_cache_from_satisfying_cif_parse(tmp_path):
 
     ResiduePointCloudCA(use_cache=True, cache=cache).encode(StructureInput(source=str(pdb_source)))
     with pytest.raises(StructureLoadError, match="Failed to parse structure"):
-        ResiduePointCloudCA(use_cache=True, cache=cache).encode(
-            StructureInput(source=str(cif_source))
-        )
+        ResiduePointCloudCA(use_cache=True, cache=cache).encode(StructureInput(source=str(cif_source)))
 
     # Chain resolution parses the structure before cache lookup, so the mislabeled
     # coordinate file fails without consulting the PDB cache entry.
@@ -428,9 +424,7 @@ def test_strict_valid_cache_artifact_with_wrong_identity_is_a_miss(tmp_path):
         representation_name=expected_encoder.name,
         encoder_implementation=expected_encoder.encoder_implementation,
         encoder_version=expected_encoder.version,
-        config_fingerprint=compute_config_fingerprint(
-            expected_encoder.name, parameters, chain_ids=["A"]
-        ),
+        config_fingerprint=compute_config_fingerprint(expected_encoder.name, parameters, chain_ids=["A"]),
         source_sha256=sha256_file(PDB),
         parser_hint=".pdb",
         model_index=0,

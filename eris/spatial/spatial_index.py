@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterator, List, Tuple
+from collections.abc import Iterator
 
 import numpy as np
 
@@ -11,15 +11,15 @@ def cell_index(pos: np.ndarray, cell_size: float) -> np.ndarray:
     return np.floor(pos / float(cell_size)).astype(np.int64)
 
 
-def build_cell_dict(cells: np.ndarray) -> dict[Tuple[int, int, int], List[int]]:
-    d: dict[Tuple[int, int, int], List[int]] = {}
+def build_cell_dict(cells: np.ndarray) -> dict[tuple[int, int, int], list[int]]:
+    d: dict[tuple[int, int, int], list[int]] = {}
     for i, c in enumerate(cells):
         key = (int(c[0]), int(c[1]), int(c[2]))
         d.setdefault(key, []).append(i)
     return d
 
 
-def iter_pairs_within(pos: np.ndarray, cutoff: float) -> Iterator[Tuple[int, int, float]]:
+def iter_pairs_within(pos: np.ndarray, cutoff: float) -> Iterator[tuple[int, int, float]]:
     """Yield each unordered pair ``(i, j, dist)`` with ``dist <= cutoff`` once, in cell-list order."""
     r = float(cutoff)
     r2 = r * r
@@ -35,9 +35,7 @@ def iter_pairs_within(pos: np.ndarray, cutoff: float) -> Iterator[Tuple[int, int
 
             if nkey == cell_key:
                 # within same cell: compare i<j
-                pairs = (
-                    (idxs[a], idxs[b]) for a in range(len(idxs)) for b in range(a + 1, len(idxs))
-                )
+                pairs = ((idxs[a], idxs[b]) for a in range(len(idxs)) for b in range(a + 1, len(idxs)))
             else:
                 # across two different cells: full cross
                 pairs = ((i, j) for i in idxs for j in cell_dict[nkey])

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -8,7 +8,7 @@ from eris.features.utils import parse_mode
 
 def _select_features(
     mode: Any,
-    registry: Dict[str, Any],
+    registry: dict[str, Any],
     *,
     kind: str,
     allow_unvalidated_params: bool,
@@ -41,7 +41,7 @@ def _select_features(
     return selected
 
 
-def validate_feature_mode(mode: Any, registry: Dict[str, FeatureSpec]) -> None:
+def validate_feature_mode(mode: Any, registry: dict[str, FeatureSpec]) -> None:
     _select_features(
         mode,
         registry,
@@ -56,11 +56,11 @@ def validate_feature_mode(mode: Any, registry: Dict[str, FeatureSpec]) -> None:
 
 
 def build_from_registry(
-    data: Dict[str, Any],
+    data: dict[str, Any],
     *,
     mode: str,
-    registry: Dict[str, FeatureSpec],
-    feat_ctx: Optional[Dict[str, Any]] = None,
+    registry: dict[str, FeatureSpec],
+    feat_ctx: dict[str, Any] | None = None,
     return_keys: bool = False,
 ):
     feat_ctx = feat_ctx or {}
@@ -72,11 +72,11 @@ def build_from_registry(
         allow_unvalidated_params=False,
     )
 
-    feats: List[np.ndarray] = []
-    keys: List[str] = []
+    feats: list[np.ndarray] = []
+    keys: list[str] = []
 
     if "n" in data:
-        expected_rows: Optional[int] = int(data["n"])
+        expected_rows: int | None = int(data["n"])
     elif "E" in data:
         expected_rows = int(data["E"])
     else:
@@ -108,17 +108,13 @@ def build_from_registry(
         if N is None:
             N = f.shape[0]
         elif f.shape[0] != N:
-            raise ValueError(
-                f"Feature '{spec.token}' has mismatched rows: expected {N}, got {f.shape[0]}"
-            )
+            raise ValueError(f"Feature '{spec.token}' has mismatched rows: expected {N}, got {f.shape[0]}")
 
         feats.append(f.astype(np.float32))
 
         k = spec.keys_fn(data, feat_ctx, params)
         if len(k) != f.shape[1]:
-            raise ValueError(
-                f"Feature '{spec.token}' keys mismatch: {len(k)} keys for {f.shape[1]} columns"
-            )
+            raise ValueError(f"Feature '{spec.token}' keys mismatch: {len(k)} keys for {f.shape[1]} columns")
         keys.extend(k)
 
     # -------------------------
@@ -156,11 +152,11 @@ def _pool_mode(pool: str) -> str:
 
 
 def build_from_registry_voxel(
-    data: Dict[str, Any],
+    data: dict[str, Any],
     *,
     mode: Any,
-    registry: Dict[str, Any],
-    feat_ctx: Optional[Dict[str, Any]] = None,
+    registry: dict[str, Any],
+    feat_ctx: dict[str, Any] | None = None,
     grid_size: int,
     pool: str = "sum",
     return_keys: bool = False,
@@ -188,9 +184,7 @@ def build_from_registry_voxel(
         declared = int(spec.n_channels_fn(data, feat_ctx, params))
         feature_keys = spec.keys_fn(data, feat_ctx, params)
         if declared < 0:
-            raise ValueError(
-                f"Voxel feature '{spec.token}' declared a negative channel count: {declared}"
-            )
+            raise ValueError(f"Voxel feature '{spec.token}' declared a negative channel count: {declared}")
         if len(feature_keys) != declared:
             raise ValueError(
                 f"Voxel feature '{spec.token}' channel/key mismatch: "
@@ -223,8 +217,7 @@ def build_from_registry_voxel(
         emitted = ch - ch_start
         if emitted != declared:
             raise ValueError(
-                f"Voxel feature '{spec.token}' channel mismatch: "
-                f"declared {declared} but emitted {emitted}"
+                f"Voxel feature '{spec.token}' channel mismatch: declared {declared} but emitted {emitted}"
             )
 
         keys.extend(feature_keys)

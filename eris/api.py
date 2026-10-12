@@ -50,7 +50,7 @@ def _validate_model_index(value: object) -> None:
 def _coerce_structure_input(
     input: str | Path | StructureInput,
     *,
-    chain_id: str | Sequence[str] | None | _NoOverride,
+    chain_id: str | Sequence[str] | _NoOverride | None,
     model_index: int | _NoOverride,
 ) -> StructureInput:
     if isinstance(input, StructureInput):
@@ -58,8 +58,7 @@ def _coerce_structure_input(
             normalized_chain_id = _normalize_chain_id(chain_id)
             if normalized_chain_id != input.chain_id:
                 raise ConfigError(
-                    "chain_id override conflicts with StructureInput: "
-                    f"{chain_id!r} != {input.chain_id!r}"
+                    f"chain_id override conflicts with StructureInput: {chain_id!r} != {input.chain_id!r}"
                 )
         if model_index is not _NO_OVERRIDE:
             _validate_model_index(model_index)
@@ -106,7 +105,7 @@ def encode(
     input: str | Path | StructureInput,
     *,
     representation: str,
-    chain_id: str | Sequence[str] | None | _NoOverride = _NO_OVERRIDE,
+    chain_id: str | Sequence[str] | _NoOverride | None = _NO_OVERRIDE,
     model_index: int | _NoOverride = _NO_OVERRIDE,
     config: CanonicalRepresentationConfig | None = None,
     output: str | Path | None = None,
@@ -114,7 +113,6 @@ def encode(
     **params: Any,
 ) -> StructureArtifact:
     """Encode one structure with a canonical explicit representation."""
-
     if type(use_cache) is not bool:
         raise ConfigError("use_cache must be a bool")
     if output is not None and not isinstance(output, (str, Path)):
@@ -145,7 +143,7 @@ def embed(
     input: str | Path | StructureInput,
     *,
     representation: str,
-    chain_id: str | Sequence[str] | None | _NoOverride = _NO_OVERRIDE,
+    chain_id: str | Sequence[str] | _NoOverride | None = _NO_OVERRIDE,
     model_index: int | _NoOverride = _NO_OVERRIDE,
     output_mode: str = "both",
     checkpoint_path: str | Path | None = None,
@@ -155,7 +153,6 @@ def embed(
     use_cache: bool = True,
 ) -> StructureArtifact:
     """Embed one structure with a registered learned representation."""
-
     from eris.core.learned import StructuralEmbedderRunner, StructuralExecutionConfig
     from eris.core.learned.registry import learned_registry
 

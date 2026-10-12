@@ -489,9 +489,7 @@ class _AtomGraphFeatureConfig(_AtomNodeFeatureConfig):
             "relative_direction",
             "interface_contact",
         }
-        invalid = sorted(
-            token.name for token in self.edge_attr_mode.tokens if token.name in residue_only
-        )
+        invalid = sorted(token.name for token in self.edge_attr_mode.tokens if token.name in residue_only)
         if invalid:
             raise ValueError(f"atom graphs do not support residue-only edge features: {invalid}")
 

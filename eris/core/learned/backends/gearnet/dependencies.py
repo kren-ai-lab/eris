@@ -27,7 +27,6 @@ class BackendAvailability:
 
 def probe_gearnet_availability() -> BackendAvailability:
     """Check that torch is importable without importing it or running GearNet."""
-
     if importlib.util.find_spec("torch") is None:
         return BackendAvailability(
             available=False,
@@ -41,7 +40,6 @@ def probe_gearnet_availability() -> BackendAvailability:
 
 def import_native_gearnet_torch():
     """Import the PyTorch runtime required for native GearNet execution."""
-
     try:
         import torch
     except (ImportError, OSError) as error:

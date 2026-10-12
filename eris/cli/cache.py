@@ -82,9 +82,7 @@ def _remove_empty_cache_root(cache_root: Path) -> bool:
     try:
         cache_root.rmdir()
     except OSError as error:
-        raise CacheError(
-            f"Unable to remove empty Eris cache root at {cache_root}: {error}"
-        ) from error
+        raise CacheError(f"Unable to remove empty Eris cache root at {cache_root}: {error}") from error
     return True
 
 
@@ -98,16 +96,14 @@ def clear_cache(
             "checkpoints=learned model checkpoint assets; all=both known namespaces."
         ),
     ),
-    yes: bool = typer.Option(  # noqa: B008
+    yes: bool = typer.Option(
         False,
         "--yes",
         "-y",
         help="Confirm cache deletion without an interactive prompt.",
     ),
 ) -> None:
-    """
-    Clear one known Eris cache namespace.
-    """
+    """Clear one known Eris cache namespace."""
     cache_root = default_cache_root()
     if not yes and not typer.confirm(
         f"Clear Eris {target.value} cache? This cannot be undone.",
@@ -145,10 +141,7 @@ def clear_cache(
 
 @app.command("info")
 def cache_info() -> None:
-    """
-    Inspect Eris cache state without creating, deleting, or repairing entries.
-    """
-
+    """Inspect Eris cache state without creating, deleting, or repairing entries."""
     cache_root = default_cache_root()
     artifact_root = cache_root / "artifacts"
     checkpoint_root = cache_root / "checkpoints"

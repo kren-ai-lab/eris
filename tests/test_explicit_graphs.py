@@ -121,10 +121,7 @@ def _transform_residues(
             chain_id,
             residue_number,
             residue_name,
-            {
-                atom_name: coordinate @ rotation.T + translation
-                for atom_name, coordinate in atoms.items()
-            },
+            {atom_name: coordinate @ rotation.T + translation for atom_name, coordinate in atoms.items()},
         )
         for chain_id, residue_number, residue_name, atoms in residues
     ]
@@ -506,9 +503,7 @@ def _encode_orientation_graph(encoder_type: type, structure_input: StructureInpu
             edge_attr_mode=edge_mode,
             use_cache=False,
         ).encode(structure_input)
-    return encoder_type(cutoff=3.0, edge_attr_mode=edge_mode, use_cache=False).encode(
-        structure_input
-    )
+    return encoder_type(cutoff=3.0, edge_attr_mode=edge_mode, use_cache=False).encode(structure_input)
 
 
 @pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
@@ -619,9 +614,7 @@ def test_multichain_edge_feature_composition_is_deterministic_and_round_trips(
             use_cache=False,
         ).encode(StructureInput(source=str(path)))
 
-    original = encode(
-        _write_backbone_graph_structure(tmp_path / "edge-original.pdb", residues).source
-    )
+    original = encode(_write_backbone_graph_structure(tmp_path / "edge-original.pdb", residues).source)
     transformed = encode(
         _write_backbone_graph_structure(
             tmp_path / "edge-transformed.pdb",

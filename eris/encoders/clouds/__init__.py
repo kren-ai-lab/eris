@@ -7,8 +7,7 @@ register_encoder(
     ResiduePointCloudConfig,
     ResiduePointCloudCA,
     description=(
-        "Residue point cloud from CA coordinates "
-        "(+ residue ids, aa_index, plddt/bfactor if available)."
+        "Residue point cloud from CA coordinates (+ residue ids, aa_index, plddt/bfactor if available)."
     ),
 )
 

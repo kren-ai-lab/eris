@@ -14,10 +14,7 @@ def pack(
     artifact_root: Annotated[Path, typer.Argument(metavar="ARTIFACT_ROOT")],
     out: Annotated[Path, typer.Option("--out", help="Output index.csv path.")],
 ) -> None:
-    """
-    Recursively validate Artifact Schema directories and write a metadata-only index.
-    """
-
+    """Recursively validate Artifact Schema directories and write a metadata-only index."""
     try:
         rows = eris.pack(artifact_root, out)
     except (PackIndexError, OSError) as error:

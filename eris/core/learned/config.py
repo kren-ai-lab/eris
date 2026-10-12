@@ -30,7 +30,6 @@ class StructuralEmbedderConfig:
 
     def to_dict(self) -> dict[str, Any]:
         """Return deterministic JSON-compatible canonical parameters."""
-
         return {
             "representation_name": self.representation_name,
             "output_mode": self.output_mode,
