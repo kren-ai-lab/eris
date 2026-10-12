@@ -1,3 +1,5 @@
+"""Command that packs artifacts into one dataset."""
+
 from __future__ import annotations
 
 from pathlib import Path

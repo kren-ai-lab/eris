@@ -1,3 +1,5 @@
+"""Command that prints a summary of a stored artifact."""
+
 from __future__ import annotations
 
 import json

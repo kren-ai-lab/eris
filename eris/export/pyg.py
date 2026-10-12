@@ -1,3 +1,5 @@
+"""Export of artifacts to PyTorch Geometric data."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -35,10 +37,10 @@ _EDGE_INDEX_INTEGER_DTYPES = {
 }
 
 
-def _pyg_dependencies():
+def _pyg_dependencies() -> tuple[Any, Any]:
     try:
-        import torch
-        from torch_geometric.data import Data
+        import torch  # noqa: PLC0415
+        from torch_geometric.data import Data  # noqa: PLC0415
     except ImportError as error:  # pragma: no cover - environment dependent
         raise ImportError(
             "PyG export requires optional dependencies 'torch' and 'torch_geometric'. "
@@ -111,7 +113,7 @@ def _attach_auxiliary_attrs(data: Any, torch_mapping: Mapping[str, Any]) -> None
         data.extra = deepcopy(dict(extra))
 
 
-def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None):
+def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None) -> Any:
     """Convert a canonical graph Torch mapping into ``torch_geometric.data.Data``.
 
     This compatibility helper is graph-only. It does not infer topology for cloud,
@@ -145,7 +147,7 @@ def _torch_dict_to_pyg(out: Mapping[str, Any], *, device: str | None = None):
         ("graph_attr", "graph_attr"),
         ("centroid", "centroid"),
     ):
-        value = out.get(source_key)
+        value: Any = out.get(source_key)
         if isinstance(value, torch.Tensor):
             setattr(pyg, target_key, value.clone())
 
@@ -168,7 +170,7 @@ def to_pyg(
     artifact: StructureArtifact,
     *,
     device: str | None = None,
-):
+) -> Any:
     """Export one explicit graph artifact schema artifact to ``torch_geometric.data.Data``.
 
     Non-graph artifacts are rejected because this exporter preserves public topology; it
@@ -193,6 +195,7 @@ def save_artifact_to_pyg(
     out_path: Path,
     device: str | None = None,
 ) -> None:
+    """Export one artifact directory to a PyG file."""
     torch, _ = _pyg_dependencies()
     artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
     pyg = to_pyg(artifact, device=device)

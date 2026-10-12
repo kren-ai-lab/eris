@@ -1,3 +1,5 @@
+"""Checkpoint and model descriptors."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -35,7 +37,7 @@ def _require_https_url(value: object, field_name: str) -> str:
     parsed = urlsplit(url)
     try:
         hostname = parsed.hostname
-        parsed.port
+        _ = parsed.port
     except ValueError as error:
         raise ConfigError(f"{field_name} must be a valid HTTPS URL") from error
     if (
@@ -60,6 +62,7 @@ class CheckpointDescriptor:
     download_url: str | None = None
 
     def __post_init__(self) -> None:
+        """Validate descriptor fields."""
         _require_canonical_string(self.identifier, "identifier")
         _require_sha256(self.sha256)
         if self.revision is not None:
@@ -90,6 +93,7 @@ class StructuralModelDescriptor:
     checkpoint: CheckpointDescriptor
 
     def __post_init__(self) -> None:
+        """Validate descriptor fields."""
         _require_canonical_string(self.architecture, "architecture")
         if not isinstance(self.checkpoint, CheckpointDescriptor):
             raise ConfigError("checkpoint must be a CheckpointDescriptor")

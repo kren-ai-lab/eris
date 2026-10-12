@@ -1,3 +1,5 @@
+"""Batch manifest reading, validation and writing."""
+
 from __future__ import annotations
 
 import csv
@@ -8,7 +10,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar, TypeVar
+from typing import Any, ClassVar, TypeVar, cast
 
 
 class ManifestValidationError(ValueError):
@@ -33,7 +35,7 @@ def write_atomically(path: Path, write: Callable[[Path], None]) -> None:
     staging = Path(staging_name)
     try:
         write(staging)
-        os.replace(staging, path)
+        staging.replace(path)
     finally:
         staging.unlink(missing_ok=True)
 
@@ -144,6 +146,8 @@ def _literal(
 
 @dataclass
 class BaseManifestRow(ABC):
+    """Base class for manifest rows."""
+
     id: str
 
     field_order: ClassVar[tuple[str, ...]]
@@ -151,15 +155,19 @@ class BaseManifestRow(ABC):
     @classmethod
     @abstractmethod
     def from_dict(cls, d: Mapping[str, Any], *, row_index: int | None = None) -> BaseManifestRow:
+        """Build a row from a mapping."""
         raise NotImplementedError("Manifest from_dict not implemented.")
 
     @abstractmethod
     def to_dict(self) -> dict[str, Any]:
+        """Return the row as a mapping."""
         raise NotImplementedError("Manifest to_dict not implemented.")
 
 
 @dataclass
 class StructureManifestRow(BaseManifestRow):
+    """One input structure in a batch manifest."""
+
     path: str
     chain: str | Sequence[str] | None = None
     model: int = 0
@@ -167,6 +175,7 @@ class StructureManifestRow(BaseManifestRow):
     field_order: ClassVar[tuple[str, ...]] = ("id", "path", "chain", "model")
 
     def __post_init__(self) -> None:
+        """Validate the row fields."""
         self.id = _required_string(self.id, field="id")
         self.path = _required_text_path(self.path, field="path")
         self.chain = _chain_selection(self.chain, field="chain")
@@ -174,6 +183,7 @@ class StructureManifestRow(BaseManifestRow):
 
     @classmethod
     def from_dict(cls, d: Mapping[str, Any], *, row_index: int | None = None) -> StructureManifestRow:
+        """Build a row from a mapping, rejecting unexpected fields."""
         unexpected = sorted(set(d) - set(cls.field_order))
         if unexpected:
             location = row_location(row_index)
@@ -189,6 +199,7 @@ class StructureManifestRow(BaseManifestRow):
         return cls(id=sid, path=path, chain=chain, model=model)
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the row as a mapping."""
         return {
             "id": self.id,
             "path": self.path,
@@ -199,6 +210,8 @@ class StructureManifestRow(BaseManifestRow):
 
 @dataclass
 class BatchResultRow(BaseManifestRow):
+    """Outcome of processing one manifest row."""
+
     representation_name: str
     representation_family: str
     artifact_dir: str | None
@@ -217,6 +230,7 @@ class BatchResultRow(BaseManifestRow):
     )
 
     def __post_init__(self) -> None:
+        """Validate the row fields."""
         self.id = _required_string(self.id, field="id")
         self.representation_name = _required_string(self.representation_name, field="representation_name")
         self.representation_family = _literal(
@@ -246,6 +260,7 @@ class BatchResultRow(BaseManifestRow):
 
     @classmethod
     def from_dict(cls, d: Mapping[str, Any], *, row_index: int | None = None) -> BatchResultRow:
+        """Build a row from a mapping."""
         try:
             return cls(
                 id=_required_string(d.get("id"), field="id", row_index=row_index),
@@ -282,6 +297,7 @@ class BatchResultRow(BaseManifestRow):
             raise
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the row as a mapping."""
         return {
             "id": self.id,
             "representation_name": self.representation_name,
@@ -304,8 +320,8 @@ def _read_csv(path: Path) -> list[dict[str, Any]]:
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            line = line.strip()
+        for line_number, raw_line in enumerate(handle, start=1):
+            line = raw_line.strip()
             if not line:
                 continue
             obj = json.loads(line)
@@ -358,7 +374,7 @@ def read_manifest(path: Path, row_cls: type[T]) -> list[T]:
                 f"row {index}: duplicate id '{row.id}' first seen at row {seen[row.id]}"
             )
         seen[row.id] = index
-    return rows
+    return cast("list[T]", rows)
 
 
 def _csv_row(row: BaseManifestRow) -> dict[str, Any]:
@@ -375,7 +391,7 @@ def _csv_row(row: BaseManifestRow) -> dict[str, Any]:
     }
 
 
-def write_manifest(path: Path, rows: list[BaseManifestRow]) -> None:
+def write_manifest(path: Path, rows: Sequence[BaseManifestRow]) -> None:
     """Write manifest rows with deterministic canonical fields for CSV, JSONL, or JSON."""
     path = Path(path)
     if not rows:

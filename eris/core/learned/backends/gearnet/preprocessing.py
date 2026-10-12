@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
 from dataclasses import dataclass
 from numbers import Real
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import gemmi
 import numpy as np
@@ -15,8 +14,12 @@ import numpy as np
 from eris.core.io import _parsed_input_format, _select_atom_altloc, load_structure, select_chains
 from eris.core.learned.backends.gearnet.metadata import GEARNET_EDGE_CANONICAL_RESIDUES
 from eris.core.residue_identity import format_residue_id
-from eris.core.types import StructureInput
 from eris.exceptions import ExecutionError
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from eris.core.types import StructureInput
 
 _CANONICAL_AMINO_ACIDS = frozenset(GEARNET_EDGE_CANONICAL_RESIDUES)
 
@@ -44,6 +47,7 @@ class BiologicalIdentityTable:
     records: tuple[BiologicalResidueIdentity, ...]
 
     def __post_init__(self) -> None:
+        """Validate that identity indexes are contiguous and ordered."""
         if any(type(record.index) is not int or record.index < 0 for record in self.records):
             raise GearNetPreprocessingError("biological identity indexes must be non-negative integers")
         indexes = [record.index for record in self.records]
@@ -58,6 +62,7 @@ class BiologicalIdentityTable:
             raise GearNetPreprocessingError("biological identity node_ids must be unique")
 
     def node_ids_for(self, carrier: Sequence[int]) -> tuple[str, ...]:
+        """Return the unique node IDs for the carrier indexes."""
         indexes = _validate_carrier(carrier, table_size=len(self.records))
         node_ids = tuple(self.records[index].node_id for index in indexes)
         if len(node_ids) != len(set(node_ids)):
@@ -105,12 +110,12 @@ def build_biological_identity_table(chain: gemmi.Chain) -> BiologicalIdentityTab
             BiologicalResidueIdentity(
                 index=index,
                 chain_id=chain.name,
-                residue_number=residue.seqid.num,
+                residue_number=cast("int", residue.seqid.num),
                 insertion_code=insertion_code,
                 residue_name=residue.name,
                 node_id=format_residue_id(
                     chain_id=chain.name,
-                    residue_number=residue.seqid.num,
+                    residue_number=cast("int", residue.seqid.num),
                     insertion_code=insertion_code,
                     residue_name=residue.name,
                 ),
@@ -124,7 +129,9 @@ def load_selected_biological_structure(
 ) -> SelectedBiologicalStructure:
     """Load and select one model/chain while deliberately applying no residue policy."""
     structure = load_structure(Path(structure_input.source))
-    chains = select_chains(structure, structure_input.chain_id, structure_input.model_index)
+    chains = select_chains(
+        structure, cast("tuple[str, ...] | None", structure_input.chain_id), structure_input.model_index
+    )
     if len(chains) != 1:
         raise GearNetPreprocessingError("GearNet v0.1 requires exactly one selected chain")
     chain = chains[0]
@@ -259,7 +266,7 @@ def construct_native_gearnet_input(
 ) -> GearNetPreparedInput:
     """Build the native graph while preserving the existing biological carrier contract."""
     normalized = _validate_transport_records(records, table_size=len(biological_table.records))
-    from eris.core.learned.backends.gearnet.native_graph import construct_native_gearnet_graph
+    from eris.core.learned.backends.gearnet.native_graph import construct_native_gearnet_graph  # noqa: PLC0415
 
     graph = construct_native_gearnet_graph(normalized)
     carrier = np.asarray([record.biological_index for record in normalized], dtype=np.int64)

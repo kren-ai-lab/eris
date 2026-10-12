@@ -1,11 +1,13 @@
+"""Public encode and embed entry points."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
-from eris.core.artifacts import StructureArtifact
-from eris.core.config import CanonicalRepresentationConfig
+from eris.core.learned import StructuralEmbedderRunner, StructuralExecutionConfig
+from eris.core.learned.registry import learned_registry
 from eris.core.registry import (
     get_encoder,
     resolve_representation_config,
@@ -15,8 +17,16 @@ from eris.core.types import StructureInput
 from eris.exceptions import ConfigError, RepresentationNotFoundError
 from eris.pooling import pool
 
+if TYPE_CHECKING:
+    from eris.core.artifacts import StructureArtifact
+    from eris.core.config import CanonicalRepresentationConfig
+    from eris.core.learned.config import OutputMode
+    from eris.core.learned.execution import Precision
+
 
 class _NoOverride:
+    """Sentinel type for an argument that was not overridden."""
+
     def __repr__(self) -> str:
         return "<no override>"
 
@@ -48,7 +58,7 @@ def _validate_model_index(value: object) -> None:
 
 
 def _coerce_structure_input(
-    input: str | Path | StructureInput,
+    input: str | Path | StructureInput,  # noqa: A002
     *,
     chain_id: str | Sequence[str] | _NoOverride | None,
     model_index: int | _NoOverride,
@@ -79,7 +89,7 @@ def _coerce_structure_input(
     return StructureInput(
         source=str(input),
         chain_id=effective_chain,
-        model_index=effective_model,
+        model_index=cast("int", effective_model),
     )
 
 
@@ -88,7 +98,7 @@ def _resolve_config(
     *,
     config: CanonicalRepresentationConfig | None,
     params: dict[str, Any],
-):
+) -> CanonicalRepresentationConfig:
     if config is not None:
         return validate_resolved_representation_config(
             representation,
@@ -102,7 +112,7 @@ def _resolve_config(
 
 
 def encode(
-    input: str | Path | StructureInput,
+    input: str | Path | StructureInput,  # noqa: A002
     *,
     representation: str,
     chain_id: str | Sequence[str] | _NoOverride | None = _NO_OVERRIDE,
@@ -140,7 +150,7 @@ def encode(
 
 
 def embed(
-    input: str | Path | StructureInput,
+    input: str | Path | StructureInput,  # noqa: A002
     *,
     representation: str,
     chain_id: str | Sequence[str] | _NoOverride | None = _NO_OVERRIDE,
@@ -153,9 +163,6 @@ def embed(
     use_cache: bool = True,
 ) -> StructureArtifact:
     """Embed one structure with a registered learned representation."""
-    from eris.core.learned import StructuralEmbedderRunner, StructuralExecutionConfig
-    from eris.core.learned.registry import learned_registry
-
     try:
         info = learned_registry.get_info(representation)
     except KeyError as error:
@@ -175,9 +182,9 @@ def embed(
     )
     config = info.config_type(
         representation_name=info.representation_name,
-        output_mode=output_mode,
+        output_mode=cast("OutputMode", output_mode),
     )
-    execution = StructuralExecutionConfig(device=device, precision=precision)
+    execution = StructuralExecutionConfig(device=device, precision=cast("Precision", precision))
 
     artifact = StructuralEmbedderRunner().run(
         structure_input,

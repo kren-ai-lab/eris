@@ -1,3 +1,5 @@
+"""Packing of artifacts into a single indexed dataset."""
+
 from __future__ import annotations
 
 import csv
@@ -5,10 +7,13 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.pipelines.manifest import row_location, write_atomically
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 PACKED_INDEX_FIELDS: tuple[str, ...] = (
     "id",
@@ -30,6 +35,8 @@ class PackIndexError(ValueError):
 
 @dataclass(frozen=True)
 class PackedIndexRow:
+    """One row of a packed dataset index."""
+
     id: str
     artifact_dir: str
     meta_path: str
@@ -42,6 +49,7 @@ class PackedIndexRow:
     shape_summary: str
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the row as a mapping."""
         return {
             "id": self.id,
             "artifact_dir": self.artifact_dir,
@@ -62,6 +70,7 @@ class PackedIndexRow:
         *,
         row_index: int | None = None,
     ) -> PackedIndexRow:
+        """Build a row from an index mapping."""
         return cls(
             id=_required_index_string(row.get("id"), "id", row_index=row_index),
             artifact_dir=_required_locator(
@@ -167,9 +176,10 @@ def _optional_index_count(value: Any, field: str, *, row_index: int | None) -> i
 
 
 def parse_shape_summary(value: str) -> dict[str, Any]:
+    """Decode a shape summary string into a mapping."""
     parsed = json.loads(value)
     if not isinstance(parsed, dict):
-        raise ValueError("shape_summary must decode to an object")
+        raise ValueError("shape_summary must decode to an object")  # noqa: TRY004
     return parsed
 
 
@@ -200,6 +210,7 @@ def _posix_locator(path: Path, anchor: Path) -> str:
 
 
 def resolve_packed_locator(index_path: str | Path, locator: str) -> Path:
+    """Resolve a packed locator relative to the index file."""
     parts = PurePosixPath(locator).parts
     return Path(index_path).parent.joinpath(*parts)
 
@@ -225,6 +236,7 @@ def _artifact_id(
 
 
 def shape_summary_from_metadata(meta: dict[str, Any]) -> str:
+    """Encode the metadata shapes as a canonical JSON string."""
     shapes = meta.get("shapes")
     if not isinstance(shapes, dict):
         shapes = {}
@@ -340,7 +352,7 @@ def _write_index_safely(path: Path, rows: list[PackedIndexRow]) -> None:
     write_atomically(path, write)
 
 
-def _validate_packed_index_header(fieldnames: list[str] | None) -> None:
+def _validate_packed_index_header(fieldnames: Sequence[str] | None) -> None:
     if fieldnames is None:
         raise PackIndexError("Packed index CSV is missing a header")
     missing = [field for field in PACKED_INDEX_FIELDS if field not in fieldnames]
@@ -356,6 +368,7 @@ def _validate_packed_index_header(fieldnames: list[str] | None) -> None:
 
 
 def read_packed_index(path: str | Path) -> list[PackedIndexRow]:
+    """Read and validate a packed dataset index."""
     index_path = Path(path)
     if not index_path.exists():
         raise PackIndexError(f"Packed index does not exist: {index_path}")

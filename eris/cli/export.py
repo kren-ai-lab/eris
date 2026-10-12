@@ -1,3 +1,5 @@
+"""Commands that export artifacts to Torch and PyG."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,8 +14,8 @@ app = typer.Typer(add_completion=False, help="Exports artifacts to torch or PyG.
 
 @app.command("to-torch")
 def to_torch(
-    artifact_dir: Path = typer.Option(..., "--artifact-dir", exists=True, readable=True),
-    out_path: Path | None = typer.Option(None, "--out", help="Output .pt file"),
+    artifact_dir: Path = typer.Option(..., "--artifact-dir", exists=True, readable=True),  # noqa: B008
+    out_path: Path | None = typer.Option(None, "--out", help="Output .pt file"),  # noqa: B008
     device: str | None = typer.Option(None, "--device"),
     matrix_as_channel: bool = typer.Option(True, "--matrix-as-channel"),
     overwrite: bool = typer.Option(False, "--overwrite"),
@@ -37,11 +39,11 @@ def to_torch(
 
 @app.command("to-pyg")
 def to_pyg(
-    artifact_dir: Path = typer.Option(..., "--artifact-dir", exists=True, readable=True),
-    out_path: Path | None = typer.Option(None, "--out", help="Output .pt file"),
+    artifact_dir: Path = typer.Option(..., "--artifact-dir", exists=True, readable=True),  # noqa: B008
+    out_path: Path | None = typer.Option(None, "--out", help="Output .pt file"),  # noqa: B008
     device: str | None = typer.Option(None, "--device"),
     overwrite: bool = typer.Option(False, "--overwrite"),
-):
+) -> None:
     """Convert artifact to PyG format and save it."""
     if out_path is None:
         out_path = artifact_dir / "data_pyg.pt"

@@ -1,3 +1,5 @@
+"""Collation of packed samples into batches."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -445,9 +447,9 @@ def _learned_output_names(sample: Mapping[str, Any]) -> set[str]:
     outputs = sample.get("outputs")
     if isinstance(outputs, Sequence) and not isinstance(outputs, (str, bytes)):
         names = {
-            item.get("name")
+            name
             for item in outputs
-            if isinstance(item, Mapping) and isinstance(item.get("name"), str)
+            if isinstance(item, Mapping) and isinstance((name := item.get("name")), str)
         }
         if names:
             return names

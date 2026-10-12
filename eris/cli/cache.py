@@ -1,3 +1,5 @@
+"""Cache inspection and clearing commands."""
+
 from __future__ import annotations
 
 import shutil
@@ -18,7 +20,9 @@ app = typer.Typer(add_completion=False, help="Cache utilities.")
 console = Console()
 
 
-class CacheClearTarget(str, Enum):
+class CacheClearTarget(str, Enum):  # noqa: UP042  # keep str() output stable
+    """Cache areas that can be cleared."""
+
     ARTIFACTS = "artifacts"
     CHECKPOINTS = "checkpoints"
     ALL = "all"
@@ -124,10 +128,7 @@ def clear_cache(
             for label, namespace in _target_namespaces(cache_root, target)
             if _remove_cache_namespace(cache_root, namespace, label)
         ]
-        if target is CacheClearTarget.ALL:
-            root_removed = _remove_empty_cache_root(cache_root)
-        else:
-            root_removed = False
+        root_removed = _remove_empty_cache_root(cache_root) if target is CacheClearTarget.ALL else False
     except CacheError as error:
         usage_error(str(error))
 

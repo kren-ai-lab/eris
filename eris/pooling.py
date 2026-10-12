@@ -1,3 +1,5 @@
+"""Pooling of node features into global features."""
+
 from __future__ import annotations
 
 import hashlib

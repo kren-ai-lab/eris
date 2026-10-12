@@ -125,6 +125,10 @@ ignore = [
     "TC002",
     "TC003",
 ]
+"eris/features/*/features_*.py" = [
+    "ARG001",  # registry callbacks share one (ctx, data, params) signature
+    "S106",    # `token=` is the feature name, not a secret
+]
 "tests/*" = [
     "ANN",     # test helpers are not part of the typed public surface
     "D",       # docstrings are not required in tests

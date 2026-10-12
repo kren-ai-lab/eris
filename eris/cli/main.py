@@ -1,3 +1,5 @@
+"""Root command-line application."""
+
 from __future__ import annotations
 
 import typer
@@ -19,7 +21,7 @@ app = typer.Typer(add_completion=False)
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(eris.__version__)
-        raise typer.Exit()
+        raise typer.Exit
 
 
 @app.callback()
@@ -32,6 +34,7 @@ def main(
         help="Show the Eris version.",
     ),
 ) -> None:
+    """Eris command-line interface."""
     del version
 
 

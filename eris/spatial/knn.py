@@ -1,3 +1,5 @@
+"""Nearest-neighbor edge construction."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -49,6 +51,7 @@ def _collect_global_neighbor_candidates(pos: np.ndarray) -> list[list[tuple[int,
 def _knn_edges_from_candidates(
     candidates: list[list[tuple[int, float]]],
     k: int,
+    *,
     symmetric: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Build KNN edges from per-node candidate lists.
@@ -92,7 +95,7 @@ def _knn_edges_from_candidates(
         return np.zeros((2, 0), dtype=np.int64), np.zeros((0,), dtype=np.float32)
 
     if symmetric:
-        original_edges = list(zip(edges_i, edges_j, dists))
+        original_edges = list(zip(edges_i, edges_j, dists, strict=False))
         closure = original_edges + [(j, i, dist) for i, j, dist in original_edges]
 
         seen: set[tuple[int, int]] = set()
@@ -127,13 +130,11 @@ def knn_edges(
 ) -> tuple[np.ndarray, np.ndarray]:
     """KNN builder.
 
-    Parameters
-    ----------
-    pos : (N,3)
-    k : int
-    cutoff : optional
-        If provided → uses spatial candidates (optimized)
-        If None → uses global brute force
+    Args:
+        pos: Positions with shape (N, 3).
+        k: Number of nearest neighbors per node.
+        cutoff: If given, use spatial candidates within the cutoff; otherwise brute force.
+        symmetric: Add reverse edges so the graph is undirected.
 
     """
     if cutoff is not None:

@@ -1,20 +1,26 @@
+"""Batch encoding and embedding pipelines."""
+
 from __future__ import annotations
 
-import os
 import shutil
 import tempfile
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import eris
 from eris.core.artifact_schema import compute_config_fingerprint
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import parser_hint_from_source, parser_hint_matches_format
-from eris.core.config import CanonicalRepresentationConfig
 from eris.core.hashing import sha256_file
 from eris.core.io import resolve_structure_input
+from eris.core.learned.execution import (
+    StructuralExecutionConfig,
+    execution_request_cache_identity,
+)
+from eris.core.learned.registry import learned_registry
+from eris.core.learned.runner import _cached_execution_matches, _cached_model_identity
 from eris.core.registry import get_encoder, get_encoder_info, resolve_representation_config
 from eris.core.types import StructureInput
 from eris.exceptions import ConfigError, ExecutionError
@@ -25,6 +31,11 @@ from eris.pipelines.manifest import (
     write_atomically,
     write_manifest,
 )
+
+if TYPE_CHECKING:
+    from eris.core.config import CanonicalRepresentationConfig
+    from eris.core.learned.config import OutputMode
+    from eris.core.learned.execution import Precision
 
 RepresentationFamily = Literal["explicit", "learned"]
 
@@ -45,7 +56,7 @@ class _ResumeIdentity:
     execution: dict[str, str] | None = None
 
 
-def _coerce_bool(value: bool, name: str) -> bool:
+def _coerce_bool(value: bool, name: str) -> bool:  # noqa: FBT001
     if type(value) is not bool:
         raise ConfigError(f"{name} must be a bool")
     return value
@@ -164,18 +175,12 @@ def _learned_resume_identity(
     precision: str,
     chain_ids: tuple[str, ...],
 ) -> _ResumeIdentity:
-    from eris.core.learned.execution import (
-        StructuralExecutionConfig,
-        execution_request_cache_identity,
-    )
-    from eris.core.learned.registry import learned_registry
-
     info = eris.get_embedder_info(representation)
     registry_info = learned_registry.get_info(representation)
     config = registry_info.config_type(
-        representation_name=registry_info.representation_name, output_mode=output_mode
+        representation_name=registry_info.representation_name, output_mode=cast("OutputMode", output_mode)
     )
-    execution = StructuralExecutionConfig(device=device, precision=precision)
+    execution = StructuralExecutionConfig(device=device, precision=cast("Precision", precision))
     parameters = config.to_dict()
     return _ResumeIdentity(
         representation_name=representation,
@@ -201,6 +206,11 @@ def _resolved_row_input(row: StructureManifestRow) -> StructureInput:
     return resolve_structure_input(StructureInput(source=row.path, chain_id=row.chain, model_index=row.model))
 
 
+def _resolved_chain_ids(row: StructureManifestRow) -> tuple[str, ...]:
+    # resolve_structure_input always returns a tuple of selected chains.
+    return cast("tuple[str, ...]", _resolved_row_input(row).chain_id)
+
+
 def _staging_dir(target: Path) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     return Path(tempfile.mkdtemp(prefix=f".{target.name}.tmp-", dir=target.parent))
@@ -219,11 +229,11 @@ def _publish_staging(staging: Path, target: Path) -> None:
     if target.exists() and not target.is_dir():
         raise FileExistsError(f"Existing artifact path is not a directory: {target}")
     if not target.exists():
-        os.replace(staging, target)
+        staging.replace(target)
         return
 
     for filename in ("data.npz", "meta.json"):
-        os.replace(staging / filename, target / filename)
+        (staging / filename).replace(target / filename)
     _cleanup_staging(staging, target)
 
 
@@ -240,7 +250,7 @@ def _save_artifact_safely(artifact: StructureArtifact, target: Path) -> None:
             _cleanup_staging(staging, target)
 
 
-def _write_results_safely(path: Path, rows: list[BatchResultRow]) -> None:
+def _write_results_safely(path: Path, rows: Sequence[BatchResultRow]) -> None:
     write_atomically(path, lambda staging: write_manifest(staging, rows))
 
 
@@ -299,23 +309,19 @@ def _artifact_matches_request(
     )
     if not matches:
         return False
-    if identity.model is not None:
-        from eris.core.learned.runner import _cached_model_identity
-
-        if _cached_model_identity(meta.get("model")) != identity.model:
-            return False
+    if identity.model is not None and _cached_model_identity(meta.get("model")) != identity.model:
+        return False
     if identity.model is None and "model" in meta:
         return False
-    if identity.encoder_implementation is not None:
-        if encoder.get("implementation") != identity.encoder_implementation:
-            return False
-    if identity.encoder_version is not None:
-        if encoder.get("version") != identity.encoder_version:
-            return False
+    if (
+        identity.encoder_implementation is not None
+        and encoder.get("implementation") != identity.encoder_implementation
+    ):
+        return False
+    if identity.encoder_version is not None and encoder.get("version") != identity.encoder_version:
+        return False
     if identity.execution is None:
         return True
-    from eris.core.learned.runner import _cached_execution_matches
-
     return _cached_execution_matches(
         meta.get("provenance"), requested_precision=identity.execution["precision"]
     )
@@ -402,7 +408,7 @@ def _run_batch(
         target = _target_dir(artifact_root, row, representation)
         try:
             if target.exists() and not resume and not overwrite:
-                raise FileExistsError(
+                raise FileExistsError(  # noqa: TRY301
                     f"Output artifact already exists: {target}; use resume=True "
                     "to reuse equivalent artifacts or overwrite=True to replace it"
                 )
@@ -425,7 +431,7 @@ def _run_batch(
 
             artifact = execute(row)
             if not isinstance(artifact, StructureArtifact):
-                raise ExecutionError("public execution did not return StructureArtifact")
+                raise ExecutionError("public execution did not return StructureArtifact")  # noqa: TRY301
             artifact.validate(strict=True)
             _save_artifact_safely(artifact, target)
             results.append(
@@ -494,7 +500,7 @@ def batch_encode(
         identity_factory=lambda row: _explicit_resume_identity(
             representation_name,
             explicit_configs_by_id[row.id],
-            _resolved_row_input(row).chain_id,
+            _resolved_chain_ids(row),
         ),
         execute=lambda row: eris.encode(
             row.path,
@@ -546,7 +552,7 @@ def batch_embed(
             output_mode=output_mode,
             device=device,
             precision=precision,
-            chain_ids=_resolved_row_input(row).chain_id,
+            chain_ids=_resolved_chain_ids(row),
         ),
         execute=lambda row: eris.embed(
             row.path,

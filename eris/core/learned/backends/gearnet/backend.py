@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from eris.core.learned.backends.gearnet.dependencies import import_native_gearnet_torch
 from eris.core.learned.backends.gearnet.loading import (
@@ -19,14 +19,16 @@ from eris.core.learned.backends.gearnet.preprocessing import (
     load_selected_biological_structure,
     select_gearnet_transport_records,
 )
-from eris.core.learned.checkpoints import VerifiedCheckpoint
 from eris.core.learned.config import StructuralEmbedderConfig
-from eris.core.learned.execution import ResolvedExecution
 from eris.core.learned.types import (
     StructuralEmbeddingResult,
 )
 from eris.core.types import StructureInput
 from eris.exceptions import ExecutionError
+
+if TYPE_CHECKING:
+    from eris.core.learned.checkpoints import VerifiedCheckpoint
+    from eris.core.learned.execution import ResolvedExecution
 
 
 def _import_torch() -> Any:
@@ -65,9 +67,10 @@ class GearNetEdgeBackend:
         *,
         execution: ResolvedExecution,
     ) -> Any:
+        """Load the native GearNet-Edge model from a verified checkpoint."""
         _validate_execution(execution)
         _import_torch()
-        from eris.core.learned.backends.gearnet.native_model import load_native_gearnet_edge_model
+        from eris.core.learned.backends.gearnet.native_model import load_native_gearnet_edge_model  # noqa: PLC0415
 
         return load_native_gearnet_edge_model(checkpoint)
 
@@ -79,6 +82,7 @@ class GearNetEdgeBackend:
         config: StructuralEmbedderConfig,
         execution: ResolvedExecution,
     ) -> StructuralEmbeddingResult:
+        """Run inference on one prepared input."""
         if not isinstance(config, StructuralEmbedderConfig):
             raise TypeError("config must be a StructuralEmbedderConfig")
         _validate_execution(execution)

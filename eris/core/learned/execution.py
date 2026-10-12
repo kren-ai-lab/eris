@@ -1,3 +1,5 @@
+"""Execution configuration and device resolution."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,6 +18,7 @@ class StructuralExecutionConfig:
     precision: Precision = "fp32"
 
     def __post_init__(self) -> None:
+        """Validate the requested device and precision."""
         if self.device not in ("auto", "cpu"):
             raise ConfigError(f"device must be one of: auto, cpu (CPU-only backend); got {self.device!r}")
         if self.precision != "fp32":

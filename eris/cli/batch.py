@@ -1,5 +1,8 @@
+"""Batch command-line entry points."""
+
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
 
@@ -17,7 +20,7 @@ def _result_path(artifact_root: Path, results: Path | None) -> Path:
     return results if results is not None else artifact_root / "batch_results.csv"
 
 
-def _summary(rows: list[object], verb: str) -> None:
+def _summary(rows: Sequence[object], verb: str) -> None:
     successes = sum(getattr(row, "status", None) == "success" for row in rows)
     failures = len(rows) - successes
     typer.echo(f"Batch {verb}: {successes} succeeded, {failures} failed")

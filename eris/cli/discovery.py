@@ -1,3 +1,5 @@
+"""Commands that list representations and embedders."""
+
 from __future__ import annotations
 
 import json

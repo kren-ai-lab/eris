@@ -1,3 +1,5 @@
+"""Eris public API."""
+
 from __future__ import annotations
 
 from eris._version import __version__

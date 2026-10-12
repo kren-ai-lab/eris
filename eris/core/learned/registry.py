@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from eris.core.learned.backends.gearnet.config import GearNetEdgeConfig
 from eris.core.learned.backends.gearnet.metadata import (
@@ -12,7 +13,9 @@ from eris.core.learned.backends.gearnet.metadata import (
     GEARNET_EDGE_MODEL_DESCRIPTOR,
     GEARNET_EDGE_REPRESENTATION_NAME,
 )
-from eris.core.learned.checkpoints import StructuralModelDescriptor
+
+if TYPE_CHECKING:
+    from eris.core.learned.checkpoints import StructuralModelDescriptor
 
 
 @dataclass(frozen=True)

@@ -1,3 +1,5 @@
+"""Public discovery of representations and embedders."""
+
 from __future__ import annotations
 
 import json
@@ -5,7 +7,9 @@ import types
 from dataclasses import MISSING, fields
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
-from eris.core.registry import get_encoder_info, list_encoders
+from eris.core.learned.backends.gearnet import dependencies
+from eris.core.learned.registry import learned_registry
+from eris.core.registry import RepresentationInfo, get_encoder_info, list_encoders
 from eris.exceptions import RepresentationNotFoundError
 
 _GRANULARITY_BY_OUTPUT_MODE = {
@@ -77,7 +81,7 @@ def _parameter_schema(config_type: type, *, representation_name: str) -> list[di
     return schema
 
 
-def _get_explicit_registration(name: str):
+def _get_explicit_registration(name: str) -> RepresentationInfo:
     try:
         return get_encoder_info(name)
     except KeyError as error:
@@ -109,16 +113,11 @@ def get_representation_info(name: str) -> dict[str, Any]:
 
 def list_embedders() -> list[str]:
     """Return registered learned representation names without probing availability."""
-    from eris.core.learned.registry import learned_registry
-
     return learned_registry.names()
 
 
 def get_embedder_info(name: str) -> dict[str, Any]:
     """Return JSON-safe public metadata and lazy availability for one embedder."""
-    from eris.core.learned.backends.gearnet import dependencies
-    from eris.core.learned.registry import learned_registry
-
     try:
         info = learned_registry.get_info(name)
     except KeyError as error:

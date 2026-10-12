@@ -157,13 +157,13 @@ class _ReferenceKdTree:
                     if distance < radius_squared:
                         result.append(int(index))
                 return
-            assert node.axis is not None and node.cut is not None
+            assert node.axis is not None and node.cut is not None  # noqa: S101, PT018
             value = query[node.axis]
             if np.float32(2.0) * (value - node.cut) < 0:
                 first, second = node.left, node.right
             else:
                 first, second = node.right, node.left
-            assert first is not None and second is not None
+            assert first is not None and second is not None  # noqa: S101, PT018
             visit(first)
             visit(second)
 
@@ -187,13 +187,13 @@ class _ReferenceKdTree:
                         if len(found) > count:
                             found.pop()
                 return
-            assert node.axis is not None and node.cut is not None
+            assert node.axis is not None and node.cut is not None  # noqa: S101, PT018
             value = query[node.axis]
             if np.float32(2.0) * (value - node.cut) < 0:
                 first, second = node.left, node.right
             else:
                 first, second = node.right, node.left
-            assert first is not None and second is not None
+            assert first is not None and second is not None  # noqa: S101, PT018
             visit(first)
             visit(second)
 
@@ -296,7 +296,7 @@ def _line_graph(
     # Frozen reference line-graph ordering and fp32 angle arithmetic use Torch.
     # Torch remains optional and is imported only when native learned construction runs.
     try:
-        import torch
+        import torch  # noqa: PLC0415
     except ModuleNotFoundError as error:
         raise NativeGearNetGraphError(
             "native GearNet graph construction requires the optional `torch` dependency"
@@ -313,7 +313,7 @@ def _line_graph(
     out_degree = torch.bincount(edge_destination, minlength=positions.shape[0])
     size = out_degree * in_degree
     starts = (size.cumsum(0) - size).repeat_interleave(size)
-    local_index = torch.arange(size.sum(), dtype=torch.long) - starts
+    local_index = torch.arange(int(size.sum()), dtype=torch.long) - starts
     inner_size = in_degree.repeat_interleave(size)
     incoming_offset = (out_degree.cumsum(0) - out_degree).repeat_interleave(size)
     outgoing_offset = (in_degree.cumsum(0) - in_degree).repeat_interleave(size)

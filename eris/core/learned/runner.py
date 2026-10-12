@@ -1,8 +1,10 @@
+"""Runner that executes structural embedders."""
+
 from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from eris.core.artifact_schema import build_input_metadata, compute_config_fingerprint
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
@@ -13,7 +15,10 @@ from eris.core.cache import (
     parser_hint_matches_format,
 )
 from eris.core.hashing import sha256_file
+from eris.core.io import resolve_structure_input
 from eris.core.learned.artifacts import build_learned_artifact
+from eris.core.learned.backends.gearnet import dependencies
+from eris.core.learned.backends.gearnet.backend import GearNetEdgeBackend
 from eris.core.learned.checkpoint_acquisition import acquire_registered_checkpoint
 from eris.core.learned.checkpoint_cache import CheckpointCache
 from eris.core.learned.checkpoints import StructuralModelDescriptor, VerifiedCheckpoint
@@ -49,6 +54,11 @@ _OUTPUT_ORDERS = {
         ("node_embedding", "global_embedding", "node_ids", "chain_id", "valid_mask"),
     ),
 }
+
+
+def _chain_ids(structure_input: StructureInput) -> tuple[str, ...]:
+    # StructureInput normalizes a selected chain to a tuple; callers pass resolved inputs.
+    return cast("tuple[str, ...]", structure_input.chain_id)
 
 
 def _cached_model_identity(model_metadata: object) -> dict[str, object] | None:
@@ -124,8 +134,11 @@ def _matches_cache_identity(
     input_metadata = meta.get("input")
     provenance = meta.get("provenance")
     outputs = meta.get("outputs")
-    if not all(isinstance(value, dict) for value in (encoder, input_metadata, provenance)) or not isinstance(
-        outputs, list
+    if (
+        not isinstance(encoder, dict)
+        or not isinstance(input_metadata, dict)
+        or not isinstance(provenance, dict)
+        or not isinstance(outputs, list)
     ):
         return False
 
@@ -156,7 +169,7 @@ def _matches_cache_identity(
         and provenance.get("config_fingerprint") == config_fingerprint
         and input_metadata.get("source_sha256") == source_sha256
         and input_metadata.get("model_index") == structure_input.model_index
-        and input_metadata.get("chain_ids") == list(structure_input.chain_id)
+        and input_metadata.get("chain_ids") == list(_chain_ids(structure_input))
         and isinstance(input_metadata.get("format"), str)
         and parser_hint_matches_format(parser_hint, input_metadata["format"])
         and _cached_model_identity(meta.get("model")) == model.to_cache_identity()
@@ -179,7 +192,7 @@ def _refresh_input_source(
         source_sha256=source_sha256,
         input_format=artifact.meta["input"]["format"],
         model_index=structure_input.model_index,
-        chain_ids=structure_input.chain_id,
+        chain_ids=_chain_ids(structure_input),
     )
     refreshed = StructureArtifact(data=artifact.data, meta=metadata)
     refreshed.validate(strict=True)
@@ -195,6 +208,7 @@ class StructuralEmbedderRunner:
         artifact_cache: DiskCache | None = None,
         checkpoint_cache: CheckpointCache | None = None,
     ) -> None:
+        """Use the given caches, or the default caches when omitted."""
         self.artifact_cache = artifact_cache
         self.checkpoint_cache = checkpoint_cache
 
@@ -231,6 +245,7 @@ class StructuralEmbedderRunner:
         execution: StructuralExecutionConfig | None = None,
         use_artifact_cache: bool = True,
     ) -> StructureArtifact:
+        """Embed one structure, using the artifact cache when enabled."""
         if not isinstance(structure_input, StructureInput):
             raise TypeError("structure_input must be a StructureInput")
         if not isinstance(config, StructuralEmbedderConfig):
@@ -250,10 +265,8 @@ class StructuralEmbedderRunner:
                 f"Config for '{config.representation_name}' must be an {info.config_type.__name__}"
             )
 
-        from eris.core.io import resolve_structure_input
-
         structure_input = resolve_structure_input(structure_input)
-        if len(structure_input.chain_id) != 1:
+        if len(_chain_ids(structure_input)) != 1:
             raise ExecutionError(
                 "GearNet v0.1 accepts exactly one selected chain; pass chain_id as one string"
             )
@@ -264,7 +277,7 @@ class StructuralEmbedderRunner:
         config_fingerprint = compute_config_fingerprint(
             config.representation_name,
             parameters,
-            chain_ids=structure_input.chain_id,
+            chain_ids=_chain_ids(structure_input),
         )
         parser_hint = parser_hint_from_source(structure_input.source)
         request_execution_identity = execution_request_cache_identity(execution_request)
@@ -276,7 +289,7 @@ class StructuralEmbedderRunner:
             source_sha256=source_sha256,
             parser_hint=parser_hint,
             model_index=structure_input.model_index,
-            chain_ids=structure_input.chain_id,
+            chain_ids=_chain_ids(structure_input),
             model=model.to_cache_identity(),
             execution=request_execution_identity,
         )
@@ -302,16 +315,12 @@ class StructuralEmbedderRunner:
                     source_sha256=source_sha256,
                 )
 
-        from eris.core.learned.backends.gearnet.dependencies import probe_gearnet_availability
-
-        availability = probe_gearnet_availability()
+        availability = dependencies.probe_gearnet_availability()
         if not availability.available:
             raise ExecutionError(
                 f"Embedder '{info.representation_name}' backend '{info.backend_id}' "
                 f"is unavailable: {availability.reason}"
             )
-        from eris.core.learned.backends.gearnet.backend import GearNetEdgeBackend
-
         backend = GearNetEdgeBackend()
         resolved_execution = resolve_execution(execution_request)
 
@@ -328,7 +337,7 @@ class StructuralEmbedderRunner:
             source_sha256=source_sha256,
             input_format=input_format,
             model_index=structure_input.model_index,
-            chain_ids=structure_input.chain_id,
+            chain_ids=_chain_ids(structure_input),
         )
         model_instance = backend.load(
             verified_checkpoint,

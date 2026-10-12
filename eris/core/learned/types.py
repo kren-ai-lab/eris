@@ -1,11 +1,16 @@
+"""Result types for structural embeddings."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from eris.core.learned.config import OutputMode
 from eris.exceptions import ExecutionError
+
+if TYPE_CHECKING:
+    from eris.core.learned.config import OutputMode
 
 
 @dataclass(frozen=True, kw_only=True)

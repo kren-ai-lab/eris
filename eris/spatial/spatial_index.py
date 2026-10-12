@@ -1,17 +1,24 @@
+"""Cell-based spatial indexing."""
+
 from __future__ import annotations
 
-from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _NEIGHBOR_OFFSETS = [(dx, dy, dz) for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)]
 
 
 def cell_index(pos: np.ndarray, cell_size: float) -> np.ndarray:
+    """Return the integer grid cell of each position."""
     return np.floor(pos / float(cell_size)).astype(np.int64)
 
 
 def build_cell_dict(cells: np.ndarray) -> dict[tuple[int, int, int], list[int]]:
+    """Map each grid cell to the indexes of the positions in it."""
     d: dict[tuple[int, int, int], list[int]] = {}
     for i, c in enumerate(cells):
         key = (int(c[0]), int(c[1]), int(c[2]))

@@ -1,3 +1,5 @@
+"""Commands that list learned models and checkpoint status."""
+
 from __future__ import annotations
 
 import typer
@@ -6,7 +8,7 @@ from rich.table import Table
 
 from eris.cli._utils import cache_root, usage_error
 from eris.core.learned.checkpoint_cache import CheckpointCache
-from eris.core.learned.registry import learned_registry
+from eris.core.learned.registry import EmbedderInfo, learned_registry
 from eris.exceptions import CacheError, RepresentationNotFoundError
 
 app = typer.Typer(add_completion=False, help="Inspect registered learned model assets.")
@@ -17,7 +19,7 @@ def _model_names() -> list[str]:
     return [info.representation_name for info in learned_registry.list_info()]
 
 
-def _model_info(name: str):
+def _model_info(name: str) -> EmbedderInfo:
     try:
         info = learned_registry.get_info(name)
     except KeyError as error:
@@ -25,7 +27,7 @@ def _model_info(name: str):
     return info
 
 
-def _checkpoint_cached(info) -> bool:
+def _checkpoint_cached(info: EmbedderInfo) -> bool:
     try:
         checkpoint = CheckpointCache(cache_dir=cache_root()).get(info.model_descriptor.checkpoint)
     except CacheError as error:

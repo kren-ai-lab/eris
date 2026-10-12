@@ -1,13 +1,18 @@
+"""Export of artifacts to Torch tensors."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from eris.core.artifacts import StructureArtifact
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 
 class TorchExportError(ValueError):
@@ -42,9 +47,9 @@ _AUXILIARY_KEYS = (
 )
 
 
-def _torch():
+def _torch() -> ModuleType:
     try:
-        import torch
+        import torch  # noqa: PLC0415
     except ImportError as error:  # pragma: no cover - environment dependent
         raise ImportError(
             "Torch export requires optional dependency 'torch'. Install the Torch/export "
@@ -54,7 +59,7 @@ def _torch():
     return torch
 
 
-def _to_tensor(value: Any):
+def _to_tensor(value: Any) -> Any:
     torch = _torch()
     if isinstance(value, torch.Tensor):
         return value.detach().clone()
@@ -195,7 +200,7 @@ def _vector_to_torch(artifact: StructureArtifact) -> dict[str, Any]:
     return out
 
 
-def _as_flat_python_list(value: Any, *, key: str) -> list[Any]:
+def _as_flat_python_list(value: Any, *, key: str) -> list[Any]:  # noqa: ARG001
     array = np.asarray(value)
     if array.ndim == 0:
         return [array.item()]
@@ -337,6 +342,7 @@ def save_artifact_to_torch(
     device: str | None = None,
     matrix_as_channel: bool = True,
 ) -> None:
+    """Export one artifact directory to a Torch file."""
     torch = _torch()
     artifact = StructureArtifact.load(Path(artifact_dir), strict=True)
     data = to_torch(

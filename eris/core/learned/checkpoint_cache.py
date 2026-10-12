@@ -1,5 +1,8 @@
+"""On-disk cache for verified checkpoints."""
+
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import tempfile
@@ -23,6 +26,7 @@ class CheckpointCache:
     """Content-addressed cache for verified checkpoint bytes."""
 
     def __init__(self, cache_dir: str | Path | None = None) -> None:
+        """Use ``cache_dir``, or the user cache directory for Eris when omitted."""
         self.cache_dir = Path(cache_dir) if cache_dir is not None else Path(user_cache_dir("eris"))
 
     def _entry_dir(self, descriptor: CheckpointDescriptor) -> Path:
@@ -100,7 +104,7 @@ class CheckpointCache:
                 raise
 
             try:
-                os.replace(staged_path, canonical_path)
+                staged_path.replace(canonical_path)
             except OSError as error:
                 raise CacheError(
                     f"Unable to install checkpoint '{descriptor.identifier}' at {canonical_path}: {error}"
@@ -113,10 +117,8 @@ class CheckpointCache:
             )
         finally:
             if staged_path is not None:
-                try:
+                with contextlib.suppress(OSError):
                     staged_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
 
 
 __all__ = ["CheckpointCache"]
