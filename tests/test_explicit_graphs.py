@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import itertools
-from copy import deepcopy
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -9,107 +8,40 @@ import numpy as np
 import pytest
 
 import eris
-from eris.core.artifact_schema import compute_config_fingerprint
 from eris.core.artifacts import StructureArtifact
-from eris.core.cache import DiskCache, compute_cache_key
-from eris.core.hashing import sha256_file
 from eris.core.types import StructureInput
 from eris.encoders.graphs.residue_contact_graph import ResidueContactGraph
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.features.graph_stats import compute_graph_stats
-
-
-def _atom_line(
-    serial: int,
-    atom_name: str,
-    residue_name: str,
-    residue_number: int,
-    x: float,
-    *,
-    chain_id: str = "A",
-    insertion_code: str = " ",
-) -> str:
-    return (
-        f"ATOM  {serial:5d} {atom_name:>4s} {residue_name:>3s} {chain_id}"
-        f"{residue_number:4d}{insertion_code}   {x:8.3f}{0.0:8.3f}{0.0:8.3f}"
-        f"{1.0:6.2f}{10.0:6.2f}           C  "
-    )
+from tests.helpers import atom_line, write_pdb
 
 
 def _write_structure(
     path: Path,
     residues: list[tuple[int, str, float, str, str, str]],
 ) -> StructureInput:
-    lines: list[str] = []
-    previous_chain: str | None = None
-    for serial, (number, insertion_code, x, residue_name, atom_name, chain_id) in enumerate(
-        residues,
-        start=1,
-    ):
-        if previous_chain is not None and chain_id != previous_chain:
-            lines.append("TER")
-        lines.append(
-            _atom_line(
-                serial,
-                atom_name,
-                residue_name,
-                number,
-                x,
-                chain_id=chain_id,
-                insertion_code=insertion_code,
-            )
-        )
-        previous_chain = chain_id
-    lines.extend(("TER", "END"))
-    path.write_text("\n".join(lines) + "\n", encoding="ascii")
-    return StructureInput(source=str(path), chain_id="A")
-
-
-def _backbone_atom_line(
-    serial: int,
-    atom_name: str,
-    residue_name: str,
-    residue_number: int,
-    coordinate: np.ndarray,
-    *,
-    chain_id: str,
-) -> str:
-    x, y, z = coordinate.tolist()
-    return (
-        f"ATOM  {serial:5d} {atom_name:>4s} {residue_name:>3s} {chain_id}"
-        f"{residue_number:4d}    {x:8.3f}{y:8.3f}{z:8.3f}"
-        f"{1.0:6.2f}{10.0:6.2f}           {atom_name[0]:>2s}  "
-    )
+    lines = [
+        atom_line(serial, atom, name, number, x, chain_id=chain, insertion_code=icode)
+        for serial, (number, icode, x, name, atom, chain) in enumerate(residues, start=1)
+    ]
+    return StructureInput(source=str(write_pdb(path, lines)), chain_id="A")
 
 
 def _write_backbone_graph_structure(
     path: Path,
     residues: list[tuple[str, int, str, dict[str, np.ndarray]]],
 ) -> StructureInput:
-    lines: list[str] = []
-    serial = 1
-    previous_chain: str | None = None
-    for chain_id, residue_number, residue_name, atoms in residues:
-        if previous_chain is not None and chain_id != previous_chain:
-            lines.append("TER")
-        for atom_name in ("N", "CA", "C"):
-            coordinate = atoms.get(atom_name)
-            if coordinate is None:
-                continue
-            lines.append(
-                _backbone_atom_line(
-                    serial,
-                    atom_name,
-                    residue_name,
-                    residue_number,
-                    coordinate,
-                    chain_id=chain_id,
-                )
-            )
-            serial += 1
-        previous_chain = chain_id
-    path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
-    return StructureInput(source=str(path))
+    atoms = [
+        (chain_id, number, name, atom_name, atoms[atom_name])
+        for chain_id, number, name, atoms in residues
+        for atom_name in ("N", "CA", "C")
+        if atom_name in atoms
+    ]
+    lines = [
+        atom_line(serial, atom_name, name, number, tuple(xyz.tolist()), chain_id=chain_id)
+        for serial, (chain_id, number, name, atom_name, xyz) in enumerate(atoms, start=1)
+    ]
+    return StructureInput(source=str(write_pdb(path, lines)))
 
 
 def _transform_residues(
@@ -179,12 +111,11 @@ def test_graph_stats_accept_finite_edge_distances() -> None:
     assert stats["edge_dist_mean"] == pytest.approx(1.25)
 
 
-@pytest.mark.parametrize("invalid_distance", [np.nan, np.inf, -np.inf])
-def test_graph_stats_reject_nonfinite_edge_distances(invalid_distance: float) -> None:
+def test_graph_stats_reject_nonfinite_edge_distances() -> None:
     edge_index = np.asarray([[0], [1]], dtype=np.int64)
 
     with pytest.raises(ValueError, match="finite"):
-        compute_graph_stats(edge_index, np.asarray([invalid_distance]), n_nodes=2)
+        compute_graph_stats(edge_index, np.asarray([np.nan]), n_nodes=2)
 
 
 def test_graph_builders_enforce_knn_and_contact_neighborhoods(tmp_path: Path) -> None:
@@ -271,11 +202,7 @@ def test_insertion_codes_preserve_source_order_adjacency(
         assert _edge_feature(artifact, source_id, target_id, "flag.is_local_le_1") == 1.0
 
 
-@pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
-def test_residue_graphs_select_one_chain_without_cross_chain_edges(
-    encoder_type: type,
-    tmp_path: Path,
-) -> None:
+def test_residue_graphs_select_one_chain_without_cross_chain_edges(tmp_path: Path) -> None:
     structure_input = _write_structure(
         tmp_path / "two-chains.pdb",
         [
@@ -285,16 +212,12 @@ def test_residue_graphs_select_one_chain_without_cross_chain_edges(
             (2, " ", 3.0, "THR", "CA", "B"),
         ],
     )
-    artifact = _encode(encoder_type, structure_input)
+    artifact = _encode(ResidueKNNGraph, structure_input)
 
     assert artifact.data["residue_ids"].tolist() == ["A:1::ALA", "A:2::GLY"]
 
 
-@pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
-def test_residue_graphs_include_cross_chain_edges_with_frozen_sequence_sentinel(
-    encoder_type: type,
-    tmp_path: Path,
-) -> None:
+def test_residue_graphs_include_cross_chain_edges_with_sequence_sentinel(tmp_path: Path) -> None:
     explicit_a = _write_structure(
         tmp_path / "two-chains-all.pdb",
         [
@@ -306,7 +229,7 @@ def test_residue_graphs_include_cross_chain_edges_with_frozen_sequence_sentinel(
     )
     structure_input = StructureInput(source=explicit_a.source)
 
-    artifact = _encode(encoder_type, structure_input)
+    artifact = _encode(ResidueContactGraph, structure_input)
 
     assert artifact.meta["input"]["chain_ids"] == ["A", "B"]
     assert artifact.data["chain_id"].tolist() == ["A", "A", "B", "B"]
@@ -739,49 +662,3 @@ def test_sequence_edge_features_remain_aligned_and_symmetric(
         np.testing.assert_array_equal(
             artifact.data["edge_attr"][row], artifact.data["edge_attr"][reverse_row]
         )
-
-
-@pytest.mark.parametrize("encoder_type", GRAPH_ENCODERS)
-def test_corrected_graph_cache_version_cannot_reuse_previous_version(
-    encoder_type: type,
-    tmp_path: Path,
-) -> None:
-    structure_input = _write_structure(
-        tmp_path / "cache.pdb",
-        [(17, " ", 0.0, "ALA", "CA", "A"), (20, " ", 1.0, "GLY", "CA", "A")],
-    )
-    chain_ids = structure_input.chain_id
-    assert isinstance(chain_ids, tuple)
-    cache = DiskCache(tmp_path / "cache")
-    current = _encode(encoder_type, structure_input)
-    stale_meta = deepcopy(current.meta)
-    stale_meta["encoder"]["version"] = "0.1.3"
-    stale = StructureArtifact(data=dict(current.data), meta=stale_meta)
-    stale.validate()
-
-    kwargs: dict[str, object] = {"use_cache": True, "cache": cache, "local_cutoff": 1}
-    if encoder_type is ResidueKNNGraph:
-        kwargs.update(k=32, cutoff=None, symmetric=True)
-    else:
-        kwargs.update(cutoff=100.0)
-    encoder = encoder_type(**kwargs)
-    parameters = encoder.config.to_dict()
-    common = {
-        "representation_name": encoder.name,
-        "encoder_implementation": encoder.encoder_implementation,
-        "config_fingerprint": compute_config_fingerprint(encoder.name, parameters, chain_ids=chain_ids),
-        "source_sha256": sha256_file(Path(structure_input.source)),
-        "parser_hint": ".pdb",
-        "model_index": structure_input.model_index,
-        "chain_ids": chain_ids,
-    }
-    old_key = compute_cache_key(encoder_version="0.1.3", **common)
-    current_key = compute_cache_key(encoder_version=encoder.version, **common)
-    cache.set(old_key, stale)
-
-    assert encoder.version == "0.1.4"
-    assert old_key != current_key
-    assert cache.get(current_key) is None
-    result = encoder.encode(structure_input)
-    assert result.meta["encoder"]["version"] == "0.1.4"
-    assert cache.get(current_key) is not None

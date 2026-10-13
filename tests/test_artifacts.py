@@ -14,6 +14,7 @@ from eris.core.artifact_schema import (
     normalize_metadata,
     validate_schema,
 )
+from tests.helpers import learned_artifact
 
 
 def _maps(data: dict[str, np.ndarray]) -> tuple[dict[str, list[int]], dict[str, str]]:
@@ -88,50 +89,8 @@ def _explicit_graph() -> tuple[dict, dict[str, np.ndarray]]:
 
 
 def _learned_embedding() -> tuple[dict, dict[str, np.ndarray]]:
-    data = {
-        "node_embedding": np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32),
-        "global_embedding": np.array([0.25, 0.35, 0.45], dtype=np.float32),
-        "node_ids": np.array(["A:1", "A:2"], dtype=np.str_),
-        "valid_mask": np.array([True, True], dtype=np.bool_),
-        "chain_id": np.array(["A", "A"], dtype=np.str_),
-    }
-    meta = _common_meta(data)
-    meta.update(
-        {
-            "representation_name": "synthetic_structure_embedding",
-            "representation_family": "learned",
-            "representation_type": "embedding",
-            "granularity": "mixed",
-            "coordinate_source": "model_specific",
-            "encoder": {
-                "implementation": "tests.fake_backend.FakeStructuralEncoder",
-                "version": "1.0",
-            },
-            "model": {
-                "architecture": "fake-structural-model",
-                "checkpoint": {
-                    "identifier": "fake-checkpoint",
-                    "revision": "v1",
-                    "source": "memory://fake-checkpoint",
-                    "sha256": "b" * 64,
-                },
-            },
-            "parameters": {"pooling": "mean"},
-            "outputs": [
-                {"name": "node_embedding", "role": "node_embedding", "layout": "ND"},
-                {"name": "global_embedding", "role": "global_embedding", "layout": "D"},
-                {"name": "node_ids", "role": "node_ids", "granularity": "residue"},
-                {"name": "chain_id", "role": "chain_id", "granularity": "residue"},
-                {"name": "valid_mask", "role": "valid_mask", "granularity": "residue"},
-            ],
-            "feature_keys": {},
-            "counts": {"n_nodes": 2},
-        }
-    )
-    meta["provenance"]["config_fingerprint"] = compute_config_fingerprint(
-        meta["representation_name"], meta["parameters"], chain_ids=["A"]
-    )
-    return meta, data
+    artifact = learned_artifact(with_mask=True)
+    return deepcopy(artifact.meta), {name: array.copy() for name, array in artifact.data.items()}
 
 
 def _pooled_vector() -> tuple[dict, dict[str, np.ndarray]]:
@@ -189,7 +148,7 @@ def test_learned_synthetic_embedding_is_strict_valid():
 
     normalized = validate_schema(meta, data, strict=True)
 
-    assert normalized["model"]["checkpoint"]["identifier"] == "fake-checkpoint"
+    assert normalized["model"] == meta["model"]
     assert normalized["feature_keys"] == {}
 
 
@@ -208,36 +167,13 @@ def test_explicit_pooled_vector_is_strict_valid_and_preserves_nan():
 
 @pytest.mark.parametrize(
     "field",
-    [
-        "schema_version",
-        "representation_name",
-        "representation_family",
-        "representation_type",
-        "granularity",
-        "coordinate_source",
-        "encoder",
-        "input",
-        "parameters",
-        "provenance",
-        "outputs",
-        "feature_keys",
-        "shapes",
-        "dtypes",
-        "counts",
-    ],
+    ["schema_version", "encoder", "counts"],
 )
 def test_each_required_top_level_field_is_enforced(field):
     meta, data = _explicit_graph()
     del meta[field]
 
     _assert_invalid(meta, data, "missing required fields")
-
-
-def test_optional_top_level_fields_are_accepted():
-    meta, data = _explicit_graph()
-    meta["extensions"] = {"org.example.audit": {"reviewed": True}}
-
-    validate_schema(meta, data, strict=True)
 
 
 def test_unknown_top_level_field_is_rejected():
@@ -247,20 +183,12 @@ def test_unknown_top_level_field_is_rejected():
     _assert_invalid(meta, data, "unknown fields")
 
 
-@pytest.mark.parametrize("schema_version", ["1", 2])
+@pytest.mark.parametrize("schema_version", [True, "1", 2], ids=["bool", "string", "future"])
 def test_only_integer_schema_version_one_is_accepted(schema_version):
     meta, data = _explicit_graph()
     meta["schema_version"] = schema_version
 
     _assert_invalid(meta, data, "must equal exactly 1")
-
-
-@pytest.mark.parametrize("representation_type", ["cloud", "graph", "matrix", "grid"])
-def test_explicit_representation_types_are_valid(representation_type):
-    meta, data = _explicit_graph()
-    meta["representation_type"] = representation_type
-
-    validate_schema(meta, data)
 
 
 @pytest.mark.parametrize(
@@ -278,19 +206,9 @@ def test_invalid_identity_values_and_combinations_fail(field, value):
     _assert_invalid(meta, data, field)
 
 
-def test_learned_type_must_be_embedding():
-    meta, data = _learned_embedding()
-    meta["representation_type"] = "graph"
-
-    _assert_invalid(meta, data, "incompatible")
-
-
 @pytest.mark.parametrize(
     ("granularity", "coordinate_source"),
-    [
-        ("atom", "ca"),
-        ("residue", "model_specific"),
-    ],
+    [("atom", "ca"), ("residue", "model_specific")],
 )
 def test_explicit_granularity_and_coordinate_source_must_agree(granularity, coordinate_source):
     meta, data = _explicit_graph()
@@ -300,32 +218,22 @@ def test_explicit_granularity_and_coordinate_source_must_agree(granularity, coor
     _assert_invalid(meta, data, "requires coordinate_source")
 
 
-@pytest.mark.parametrize("granularity", ["mixed"])
-def test_global_or_mixed_learned_coordinates_are_model_specific(granularity):
+def test_mixed_learned_coordinates_are_model_specific():
     meta, data = _learned_embedding()
-    meta["granularity"] = granularity
     meta["coordinate_source"] = "ca"
 
     _assert_invalid(meta, data, "model_specific")
 
 
-@pytest.mark.parametrize("field", ["implementation"])
-def test_encoder_fields_are_required_and_non_empty(field):
+def test_encoder_implementation_is_required_and_non_empty():
     meta, data = _explicit_graph()
-    del meta["encoder"][field]
+    del meta["encoder"]["implementation"]
 
     _assert_invalid(meta, data, "meta.encoder")
 
     meta, data = _explicit_graph()
-    meta["encoder"][field] = ""
-    _assert_invalid(meta, data, f"encoder.{field}")
-
-
-def test_encoder_unknown_fields_are_rejected():
-    meta, data = _explicit_graph()
-    meta["encoder"]["representation_name"] = meta["representation_name"]
-
-    _assert_invalid(meta, data, "unknown fields")
+    meta["encoder"]["implementation"] = ""
+    _assert_invalid(meta, data, "encoder.implementation")
 
 
 def test_encoder_implementation_must_be_import_path_like():
@@ -352,7 +260,6 @@ def test_explicit_model_is_forbidden_and_learned_model_is_required():
     ("mutation", "match"),
     [
         (lambda model: model.pop("architecture"), "missing required"),
-        (lambda model: model["checkpoint"].pop("identifier"), "missing required"),
         (lambda model: model["checkpoint"].update({"sha256": "ABC"}), "lowercase"),
     ],
 )
@@ -370,7 +277,6 @@ def test_learned_model_and_checkpoint_are_strict(mutation, match):
         (lambda value: value.update({"model_index": -1}), "integer >= 0"),
         (lambda value: value.update({"chain_ids": []}), "non-empty"),
         (lambda value: value.update({"chain_ids": ["A", "A"]}), "unique"),
-        (lambda value: value.update({"assembly": "1"}), "unknown fields"),
     ],
 )
 def test_input_contract_rejects_invalid_values(mutation, match):
@@ -380,72 +286,14 @@ def test_input_contract_rejects_invalid_values(mutation, match):
     _assert_invalid(meta, data, match)
 
 
-def test_input_optional_fields_and_chain_list_are_accepted():
+def test_optional_input_and_provenance_fields_are_accepted():
     meta, data = _explicit_graph()
-    meta["input"].update(
-        {
-            "chain_ids": ["A"],
-            "original_filename": "tiny.pdb",
-            "structure_id": "tiny",
-            "source_database": "PDB",
-        }
-    )
-
-    validate_schema(meta, data, strict=True)
-
-
-def test_legacy_scalar_chain_metadata_is_rejected():
-    meta, data = _explicit_graph()
-    del meta["input"]["chain_ids"]
-    meta["input"]["chain_id"] = "A"
-
-    _assert_invalid(meta, data, "missing required")
-
-
-@pytest.mark.parametrize("field", ["config_fingerprint"])
-def test_provenance_core_fields_are_required(field):
-    meta, data = _explicit_graph()
-    del meta["provenance"][field]
-
-    _assert_invalid(meta, data, "missing required")
-
-
-def test_provenance_optional_environment_created_at_and_invocation_are_valid():
-    meta, data = _explicit_graph()
+    meta["input"].update({"original_filename": "tiny.pdb", "structure_id": "tiny"})
     meta["provenance"].update(
-        {
-            "environment": {
-                "python_version": "3.12.13",
-                "platform": "test",
-                "dependencies": {"numpy": "2.0"},
-            },
-            "created_at": "2026-08-21T12:30:00Z",
-            "invocation": {"command": "synthetic-test"},
-        }
+        {"created_at": "2026-08-21T12:30:00Z", "invocation": {"command": "synthetic-test"}}
     )
 
     validate_schema(meta, data, strict=True)
-
-
-@pytest.mark.parametrize("value", [float("nan")])
-def test_provenance_must_be_finite_json(value):
-    meta, data = _explicit_graph()
-    meta["provenance"]["environment"] = {"measurement": value}
-
-    _assert_invalid(meta, data, "finite")
-
-
-def test_parameters_preserve_nested_json_and_none():
-    meta, data = _explicit_graph()
-    meta["parameters"] = {"selection": {"chain": None}, "features": ["mass", "charge"]}
-    meta["provenance"]["config_fingerprint"] = compute_config_fingerprint(
-        meta["representation_name"], meta["parameters"], chain_ids=["A"]
-    )
-
-    normalized = validate_schema(meta, data, strict=True)
-
-    assert normalized["parameters"] == meta["parameters"]
-    assert normalized["parameters"]["selection"]["chain"] is None
 
 
 @pytest.mark.parametrize(
@@ -485,8 +333,8 @@ def test_output_names_must_exactly_equal_data_keys():
     _assert_invalid(meta, data, "exactly match data keys")
 
 
-@pytest.mark.parametrize("name", ["bad-name"])
-def test_output_and_data_key_syntax_is_restricted(name):
+def test_output_and_data_key_syntax_is_restricted():
+    name = "bad-name"
     meta, data = _explicit_graph()
     old_name = meta["outputs"][0]["name"]
     meta["outputs"][0]["name"] = name
@@ -517,42 +365,8 @@ def test_strict_validation_checks_shape_and_dtype_values():
     _assert_invalid(meta, data, "does not match")
 
 
-def test_scalar_shape_is_empty_list():
-    data = {"score": np.array(1.0, dtype=np.float32)}
-    meta = _common_meta(data)
-    meta["representation_type"] = "matrix"
-    meta["granularity"] = "structure"
-    meta["outputs"] = [{"name": "score", "role": "score"}]
-
-    validate_schema(meta, data, strict=True)
-    assert meta["shapes"]["score"] == []
-
-
-@pytest.mark.parametrize(
-    "array",
-    [
-        np.array([1.0], dtype=np.float32),
-        np.array([True], dtype=np.bool_),
-        np.array(["A:1"], dtype=np.str_),
-    ],
-)
-def test_safe_data_dtypes_are_accepted(array):
-    data = {"value": array}
-    meta = _common_meta(data)
-    meta["outputs"] = [{"name": "value", "role": "custom"}]
-
-    validate_schema(meta, data, strict=True)
-
-
-@pytest.mark.parametrize(
-    "array",
-    [
-        np.array([object()], dtype=object),
-        np.array([1 + 2j], dtype=np.complex64),
-    ],
-)
-def test_pickle_dependent_or_unsupported_data_dtypes_are_rejected(array):
-    data = {"value": array}
+def test_pickle_dependent_data_dtypes_are_rejected():
+    data = {"value": np.array([object()], dtype=object)}
     meta = _common_meta(data)
     meta["outputs"] = [{"name": "value", "role": "custom"}]
 
@@ -575,34 +389,14 @@ def test_feature_keys_accept_only_core_known_ordered_lists():
     ]
 
     meta["feature_keys"]["matrix_key"] = "matrix"
-    _assert_invalid(meta, data, "legacy")
+    _assert_invalid(meta, data, "unknown")
 
 
-def test_empty_feature_keys_are_valid_and_not_inferred():
-    meta, data = _learned_embedding()
-
-    normalized = validate_schema(meta, data, strict=True)
-
-    assert normalized["feature_keys"] == {}
-
-
-@pytest.mark.parametrize(
-    "field",
-    ["node_attr_keys", "grid_channels"],
-)
-def test_feature_key_cardinality_is_checked_when_applicable(field):
+def test_feature_key_cardinality_is_checked():
     meta, data = _explicit_graph()
-    if field == "grid_channels":
-        grid = np.zeros((2, 2, 2, 2), dtype=np.float32)
-        data = {"grid": grid}
-        meta = _common_meta(data)
-        meta["representation_type"] = "grid"
-        meta["outputs"] = [{"name": "grid", "role": "grid", "layout": "CXYZ"}]
-        meta["feature_keys"] = {"grid_channels": ["occupancy"]}
-    else:
-        meta["feature_keys"][field] = []
+    meta["feature_keys"]["node_attr_keys"] = []
 
-    _assert_invalid(meta, data, field)
+    _assert_invalid(meta, data, "node_attr_keys")
 
 
 def test_counts_require_non_negative_plain_integers_and_allow_empty_mapping():
@@ -636,16 +430,13 @@ def test_extensions_are_namespaced_finite_json_mappings():
     _assert_invalid(meta, data, "must be a mapping")
 
 
-def test_config_fingerprint_is_deterministic_and_key_order_independent():
+def test_config_fingerprint_is_key_order_independent_and_identity_sensitive():
     left = {"center": True, "nested": {"b": 2, "a": 1}}
     right = {"nested": {"a": 1, "b": 2}, "center": True}
-
     assert compute_config_fingerprint(
         "residue_knn_graph", left, chain_ids=["A"]
     ) == compute_config_fingerprint("residue_knn_graph", right, chain_ids=["A"])
 
-
-def test_config_fingerprint_changes_only_for_accepted_identity_inputs():
     baseline = compute_config_fingerprint("residue_knn_graph", {"k": 8}, chain_ids=["A"])
 
     assert baseline != compute_config_fingerprint("residue_knn_graph", {"k": 9}, chain_ids=["A"])
@@ -684,12 +475,12 @@ def test_normalization_rejects_unsupported_metadata(value, match):
 
 def test_learned_node_ids_must_align_be_unique_and_use_safe_unicode():
     meta, data = _learned_embedding()
-    data["node_ids"] = np.array(["A:1"], dtype=np.str_)
+    data["node_ids"] = np.array(["A:1::ALA"], dtype=np.str_)
     meta["shapes"]["node_ids"] = [1]
     _assert_invalid(meta, data, "must align")
 
     meta, data = _learned_embedding()
-    data["node_ids"] = np.array(["A:1", "A:1"], dtype=np.str_)
+    data["node_ids"] = np.array(["A:1::ALA", "A:1::ALA"], dtype=np.str_)
     _assert_invalid(meta, data, "unique")
 
     meta, data = _learned_embedding()

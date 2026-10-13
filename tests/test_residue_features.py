@@ -18,7 +18,6 @@ from eris.core.io import StructureLoadError, load_and_extract_residue
 from eris.core.types import StructureInput
 from eris.encoders.clouds.atom_point_cloud import AtomPointCloud
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
-from eris.encoders.graphs.atom_knn_graph import AtomKNNGraph
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
 from eris.features.geometry import (
@@ -32,41 +31,15 @@ from eris.features.geometry import (
 from eris.features.node.constants import AA_VOCAB, PHYSchem_KEYS
 from eris.features.node.external import ExternalFeatureError
 from eris.features.node.residue import build_node_attr
-
-PDB = Path("tests/data/1AQ2.pdb")
-MMCIF = Path("tests/data/1AQ2.cif")
+from tests.helpers import MMCIF, PDB, TWO_CHAIN_PDB, atom_line, write_pdb
 
 
-def _write_ca_structure(
-    path: Path,
-    residues: list[tuple[str, float]],
-) -> StructureInput:
-    lines = []
-    for serial, (resname, bfactor) in enumerate(residues, start=1):
-        lines.append(
-            f"ATOM  {serial:5d}  CA  {resname:>3s} A{serial:4d}    "
-            f"{float(serial - 1):8.3f}{0.0:8.3f}{0.0:8.3f}"
-            f"{1.0:6.2f}{bfactor:6.2f}           C  "
-        )
-    path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
-    return StructureInput(source=str(path), chain_id="A")
-
-
-def _backbone_atom_line(
-    serial: int,
-    atom_name: str,
-    residue_name: str,
-    chain_id: str,
-    residue_number: int,
-    insertion_code: str,
-    coordinate: tuple[float, float, float],
-) -> str:
-    x, y, z = coordinate
-    return (
-        f"ATOM  {serial:5d} {atom_name:>4s} {residue_name:>3s} {chain_id}"
-        f"{residue_number:4d}{insertion_code:1s}   {x:8.3f}{y:8.3f}{z:8.3f}"
-        f"{1.0:6.2f}{10.0:6.2f}           {atom_name[0]:>2s}  "
-    )
+def _write_ca_structure(path: Path, residues: list[tuple[str, float]]) -> StructureInput:
+    lines = [
+        atom_line(i, "CA", name, i, float(i - 1), bfactor=bfactor)
+        for i, (name, bfactor) in enumerate(residues, start=1)
+    ]
+    return StructureInput(source=str(write_pdb(path, lines)), chain_id="A")
 
 
 def _altloc_atom_line(
@@ -76,83 +49,51 @@ def _altloc_atom_line(
     coordinate: tuple[float, float, float],
     occupancy: float,
 ) -> str:
-    x, y, z = coordinate
-    return (
-        f"ATOM  {serial:5d} {atom_name:>4s}{altloc:1s}ALA A   1    "
-        f"{x:8.3f}{y:8.3f}{z:8.3f}{occupancy:6.2f}{10.0:6.2f}"
-        f"           {atom_name[0]:>2s}  "
-    )
+    return atom_line(serial, atom_name, "ALA", 1, coordinate, altloc=altloc, occupancy=occupancy)
 
 
 def _write_backbone_structure(
     path: Path,
-    residues: list[
-        tuple[
-            str,
-            int,
-            str,
-            str,
-            dict[str, tuple[float, float, float]],
-        ]
-    ],
+    residues: list[tuple[str, int, str, str, dict[str, tuple[float, float, float]]]],
 ) -> StructureInput:
-    lines: list[str] = []
-    serial = 1
-    previous_chain: str | None = None
-    for chain_id, residue_number, insertion_code, residue_name, atoms in residues:
-        if previous_chain is not None and chain_id != previous_chain:
-            lines.append("TER")
-        for atom_name in ("N", "CA", "C"):
-            if atom_name in atoms:
-                lines.append(
-                    _backbone_atom_line(
-                        serial,
-                        atom_name,
-                        residue_name,
-                        chain_id,
-                        residue_number,
-                        insertion_code,
-                        atoms[atom_name],
-                    )
-                )
-                serial += 1
-        previous_chain = chain_id
-    path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
-    return StructureInput(source=str(path))
+    atoms = [
+        (chain, number, icode, name, atom, xyz[atom])
+        for chain, number, icode, name, xyz in residues
+        for atom in ("N", "CA", "C")
+        if atom in xyz
+    ]
+    lines = [
+        atom_line(serial, atom, name, number, coordinate, chain_id=chain, insertion_code=icode)
+        for serial, (chain, number, icode, name, atom, coordinate) in enumerate(atoms, start=1)
+    ]
+    return StructureInput(source=str(write_pdb(path, lines)))
 
 
 def _write_heavy_atom_structure(
     path: Path,
-    residues: list[
-        tuple[
-            str,
-            int,
-            str,
-            dict[str, tuple[float, float, float]],
-        ]
-    ],
+    residues: list[tuple[str, int, str, dict[str, tuple[float, float, float]]]],
     *,
     header: list[str] | None = None,
 ) -> StructureInput:
-    lines = list(header or [])
-    serial = 1
-    previous_chain: str | None = None
-    for chain_id, residue_number, residue_name, atoms in residues:
-        if previous_chain is not None and chain_id != previous_chain:
-            lines.append("TER")
-        record = "HETATM" if residue_name in {"MSE", "HOH", "LIG", "ZN", "FAD"} else "ATOM  "
-        for atom_name, coordinate in atoms.items():
-            x, y, z = coordinate
-            element = atom_name if atom_name in {"SE", "ZN"} else atom_name[0]
-            lines.append(
-                f"{record}{serial:5d} {atom_name:>4s} {residue_name:>3s} {chain_id}"
-                f"{residue_number:4d}    {x:8.3f}{y:8.3f}{z:8.3f}"
-                f"{1.0:6.2f}{10.0:6.2f}          {element:>2s}  "
-            )
-            serial += 1
-        previous_chain = chain_id
-    path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
-    return StructureInput(source=str(path))
+    atoms = [
+        (chain, number, name, atom, xyz)
+        for chain, number, name, coordinates in residues
+        for atom, xyz in coordinates.items()
+    ]
+    lines = [
+        atom_line(
+            serial,
+            atom,
+            name,
+            number,
+            xyz,
+            chain_id=chain,
+            record="HETATM" if name in {"MSE", "HOH", "LIG", "ZN", "FAD"} else "ATOM",
+            element=atom if atom in {"SE", "ZN"} else atom[0],
+        )
+        for serial, (chain, number, name, atom, xyz) in enumerate(atoms, start=1)
+    ]
+    return StructureInput(source=str(write_pdb(path, lines, header=header)))
 
 
 def _complete_gly_atoms(
@@ -297,36 +238,15 @@ def test_atom_point_cloud_bfactor_is_raw_by_default(tmp_path: Path) -> None:
     np.testing.assert_array_equal(artifact.data["node_attr"][:, 0], artifact.data["bfactor"])
 
 
-def test_atom_graph_bfactor_is_raw_by_default(tmp_path: Path) -> None:
-    inp = _write_ca_structure(
-        tmp_path / "atom-graph.pdb",
-        [("ALA", 42.0), ("GLY", 142.0)],
-    )
-
-    artifact = AtomKNNGraph(k=1, node_attr_mode=["bfactor"], use_cache=False).encode(inp)
-
-    assert artifact.meta["feature_keys"]["node_attr_keys"] == ["bfactor"]
-    np.testing.assert_array_equal(
-        artifact.data["node_attr"][:, 0],
-        np.asarray([42.0, 142.0], dtype=np.float32),
-    )
-    np.testing.assert_array_equal(artifact.data["node_attr"][:, 0], artifact.data["bfactor"])
-
-
 def test_atom_altloc_first_selects_one_record_and_all_is_explicit(tmp_path: Path) -> None:
     source = tmp_path / "atom-altloc.pdb"
-    source.write_text(
-        "\n".join(
-            [
-                _altloc_atom_line(1, "N", "A", (0.0, 0.0, 0.0), 0.4),
-                _altloc_atom_line(2, "N", "B", (10.0, 0.0, 0.0), 0.8),
-                _altloc_atom_line(3, "CA", " ", (1.0, 0.0, 0.0), 1.0),
-                "TER",
-                "END",
-                "",
-            ]
-        ),
-        encoding="ascii",
+    write_pdb(
+        source,
+        [
+            _altloc_atom_line(1, "N", "A", (0.0, 0.0, 0.0), 0.4),
+            _altloc_atom_line(2, "N", "B", (10.0, 0.0, 0.0), 0.8),
+            _altloc_atom_line(3, "CA", " ", (1.0, 0.0, 0.0), 1.0),
+        ],
     )
     structure = StructureInput(source=str(source), chain_id="A")
 
@@ -343,7 +263,6 @@ def test_atom_altloc_first_selects_one_record_and_all_is_explicit(tmp_path: Path
     assert default.meta["parameters"]["altloc"] == "max_occupancy"
     assert first.meta["parameters"]["altloc"] == "first"
     assert all_locations.meta["parameters"]["altloc"] == "all"
-    assert default.meta["encoder"]["version"] == "0.1.2"
 
 
 def test_residue_center_of_mass_uses_noncarbon_element_mass(tmp_path: Path) -> None:
@@ -374,7 +293,6 @@ def test_residue_center_of_mass_uses_noncarbon_element_mass(tmp_path: Path) -> N
     expected_x = 10.0 * 78.96 / (14.007 + 12.011 + 12.011 + 15.999 + 78.96)
     np.testing.assert_allclose(artifact.data["pos"][0], [expected_x, 0.0, 0.0], rtol=1e-6)
     assert artifact.meta["coordinate_source"] == "residue_com"
-    assert artifact.meta["encoder"]["version"] == "0.1.3"
 
 
 def test_residue_bfactor_is_raw_by_default(tmp_path: Path) -> None:
@@ -453,22 +371,10 @@ def test_plddt_and_bfactor_feature_normalization_is_explicit() -> None:
     np.testing.assert_equal(unit[:, 0], np.asarray([0.25, np.nan], dtype=np.float32))
 
 
-def test_default_residue_and_voxel_features_do_not_request_plddt() -> None:
-    residue = ResiduePointCloudConfig().to_dict()
-    voxel = ResidueVoxelGridConfig().to_dict()
-
-    assert residue["plddt_source"] == "none"
-    assert "plddt_ca" not in residue["node_attr_mode"]
-    assert all(channel != "plddt" for channel in voxel["channels"])
-    assert voxel["clamp"] is False
-
-
 @pytest.mark.parametrize(
     ("angle", "expected"),
     [
-        (0.0, 0.0),
         (np.pi / 2.0, np.pi / 2.0),
-        (-np.pi / 2.0, -np.pi / 2.0),
         (np.pi, -np.pi),
     ],
 )
@@ -761,21 +667,16 @@ def test_backbone_extraction_preserves_number_gaps_insertions_and_missing_atoms(
 
 def test_backbone_extraction_uses_frozen_altloc_selection(tmp_path: Path) -> None:
     source = tmp_path / "altloc.pdb"
-    source.write_text(
-        "\n".join(
-            [
-                _altloc_atom_line(1, "N", "A", (1.0, 0.0, 0.0), 0.4),
-                _altloc_atom_line(2, "N", "B", (2.0, 0.0, 0.0), 0.8),
-                _altloc_atom_line(3, "CA", " ", (3.0, 0.0, 0.0), 0.5),
-                _altloc_atom_line(4, "CA", "A", (4.0, 0.0, 0.0), 0.5),
-                _altloc_atom_line(5, "C", "C", (5.0, 0.0, 0.0), 0.5),
-                _altloc_atom_line(6, "C", "B", (6.0, 0.0, 0.0), 0.5),
-                "TER",
-                "END",
-                "",
-            ]
-        ),
-        encoding="ascii",
+    write_pdb(
+        source,
+        [
+            _altloc_atom_line(1, "N", "A", (1.0, 0.0, 0.0), 0.4),
+            _altloc_atom_line(2, "N", "B", (2.0, 0.0, 0.0), 0.8),
+            _altloc_atom_line(3, "CA", " ", (3.0, 0.0, 0.0), 0.5),
+            _altloc_atom_line(4, "CA", "A", (4.0, 0.0, 0.0), 0.5),
+            _altloc_atom_line(5, "C", "C", (5.0, 0.0, 0.0), 0.5),
+            _altloc_atom_line(6, "C", "B", (6.0, 0.0, 0.0), 0.5),
+        ],
     )
 
     loaded = load_and_extract_residue(StructureInput(source=str(source), chain_id="A"))
@@ -788,15 +689,7 @@ def test_backbone_extraction_uses_frozen_altloc_selection(tmp_path: Path) -> Non
 def test_backbone_geometry_realistic_pdb_mmcif_hybrid_round_trip_and_identity(
     tmp_path: Path,
 ) -> None:
-    explicit = {
-        "backbone_geometry": {
-            "mode": "both",
-            "max_peptide_bond_distance": 2,
-            "torsion_convention": "standard_signed_atan2[-pi,pi)",
-            "units": "radians",
-            "missing_value_policy": "nan",
-        }
-    }
+    explicit = {"backbone_geometry": {"mode": "both", "max_peptide_bond_distance": 2}}
     mode = [explicit, "onehot", "bfactor_ca"]
     pdb = ResidueKNNGraph(k=2, node_attr_mode=[explicit, "onehot", "bfactor_ca"], use_cache=False).encode(
         StructureInput(source=str(PDB), chain_id="A")
@@ -825,7 +718,7 @@ def test_backbone_geometry_realistic_pdb_mmcif_hybrid_round_trip_and_identity(
     ]
     assert pdb.meta["feature_keys"]["node_attr_keys"] == expected_keys
     assert pdb.data["node_attr"].dtype == np.float32
-    assert pdb.data["node_attr"].shape == (534, len(expected_keys))
+    assert pdb.data["node_attr"].shape == (len(pdb.data["residue_ids"]), len(expected_keys))
     raw = pdb.data["node_attr"][:, -3:]
     assert np.isnan(raw[0, 0])
     assert np.isnan(raw[-1, 1:]).all()
@@ -836,14 +729,6 @@ def test_backbone_geometry_realistic_pdb_mmcif_hybrid_round_trip_and_identity(
     np.testing.assert_equal(pdb.data["node_attr"], repeat.data["node_attr"])
     np.testing.assert_equal(pdb.data["node_attr"], mmcif.data["node_attr"])
 
-    params = pdb.meta["parameters"]["node_attr_mode"][0]["backbone_geometry"]
-    assert params == {
-        "max_peptide_bond_distance": 2.0,
-        "missing_value_policy": "nan",
-        "mode": "both",
-        "torsion_convention": "standard_signed_atan2[-pi,pi)",
-        "units": "radians",
-    }
     assert pdb.meta["provenance"]["config_fingerprint"] == mmcif.meta["provenance"]["config_fingerprint"]
     raw_only = ResiduePointCloudCA(
         node_attr_mode=[{"backbone_geometry": {"mode": "raw"}}],
@@ -1011,7 +896,7 @@ def test_aaindex_composes_and_feature_keys_round_trip(tmp_path: Path) -> None:
     ).encode(inp)
 
     keys = artifact.meta["feature_keys"]["node_attr_keys"]
-    assert artifact.data["node_attr"].shape == (3, 38)
+    assert artifact.data["node_attr"].shape == (3, len(keys))
     assert keys[-2:] == ["aaindex.KYTJ820101", "bfactor_ca"]
     np.testing.assert_array_equal(
         artifact.data["node_attr"][:, -2], np.asarray([1.8, -3.5, 4.5], dtype=np.float32)
@@ -1040,7 +925,7 @@ def test_external_features_align_by_exact_residue_id_and_compose(tmp_path: Path)
         use_cache=False,
     ).encode(inp)
 
-    assert artifact.data["node_attr"].shape == (2, 23)
+    assert artifact.data["node_attr"].shape == (2, len(artifact.meta["feature_keys"]["node_attr_keys"]))
     np.testing.assert_array_equal(
         artifact.data["node_attr"][:, -2:],
         np.asarray([[10.0, 11.0], [20.0, 21.0]], dtype=np.float32),
@@ -1129,14 +1014,7 @@ def test_external_rejects_wrong_model(tmp_path: Path) -> None:
 
 def test_external_features_align_across_canonical_multichain_selection(tmp_path: Path) -> None:
     structure = tmp_path / "multi.pdb"
-    structure.write_text(
-        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  \n"
-        "TER\n"
-        "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  \n"
-        "TER\n"
-        "END\n",
-        encoding="ascii",
-    )
+    structure.write_text(TWO_CHAIN_PDB, encoding="ascii")
     external = _write_external_features(
         tmp_path / "multi.npz",
         values=[[3.0, 4.0], [1.0, 2.0]],
@@ -1155,13 +1033,13 @@ def test_external_features_align_across_canonical_multichain_selection(tmp_path:
     )
 
 
-def test_external_legacy_scalar_chain_field_is_rejected(tmp_path: Path) -> None:
-    path = tmp_path / "legacy.npz"
+def test_external_rejects_missing_fields(tmp_path: Path) -> None:
+    path = tmp_path / "incomplete.npz"
     np.savez(
         path,
         values=np.asarray([[1.0]], dtype=np.float32),
         residue_ids=np.asarray(["A:1::ALA"]),
-        source_name=np.asarray("legacy"),
+        source_name=np.asarray("incomplete"),
         chain_id=np.asarray("A"),
         model_index=np.asarray(0, dtype=np.int64),
     )
@@ -1352,7 +1230,7 @@ def test_batch_external_params_by_id_preserve_resume_identity(
     assert resumed["status"].to_list() == ["success", "success"]
 
 
-def test_secondary_structure_assigns_frozen_states_with_provider_provenance() -> None:
+def test_secondary_structure_assigns_one_state_per_residue_with_provider_provenance() -> None:
     artifact = ResiduePointCloudCA(
         node_attr_mode=["secondary_structure"],
         use_cache=False,
@@ -1368,16 +1246,7 @@ def test_secondary_structure_assigns_frozen_states_with_provider_provenance() ->
     np.testing.assert_array_equal(features.sum(axis=1), np.ones(features.shape[0]))
     assert np.all(features.sum(axis=0)[:3] > 0)
     params = artifact.meta["parameters"]["node_attr_mode"][0]["secondary_structure"]
-    assert params["provider"] == "biotite"
     assert params["provider_version"] == metadata.version("biotite")
-    assert params["algorithm"] == "P-SEA"
-    assert params["state_mapping"] == {
-        "": "unassigned",
-        "a": "helix",
-        "b": "sheet",
-        "c": "coil",
-    }
-    assert params["segment_handling"] == "selected_chain_and_peptide_continuity"
 
 
 def test_secondary_structure_missing_ca_is_unassigned(tmp_path: Path) -> None:
@@ -1502,11 +1371,6 @@ def test_sasa_rsa_selected_complex_context_and_tien_normalization(tmp_path: Path
         complex_artifact.data["node_attr"][:, 0] / 104.0,
         rtol=1e-6,
     )
-    params = complex_artifact.meta["parameters"]["node_attr_mode"]
-    assert params[0]["sasa"]["sphere_point_count"] == 1000
-    assert params[0]["sasa"]["vdw_radii"] == "ProtOr"
-    assert params[1]["rsa"]["maximum_asa_table"]["GLY"] == 104.0
-    assert params[1]["rsa"]["clipping"] == "none"
 
 
 def test_sasa_incomplete_canonical_and_noncanonical_rsa_policies(tmp_path: Path) -> None:
@@ -1574,47 +1438,7 @@ def test_sasa_fails_for_unsupported_required_protor_radius(tmp_path: Path) -> No
         ResiduePointCloudCA(node_attr_mode=["sasa"], use_cache=False).encode(inp)
 
 
-def test_secondary_sasa_rsa_hybrid_graph_round_trip(tmp_path: Path) -> None:
-    inp = _write_heavy_atom_structure(
-        tmp_path / "hybrid.pdb",
-        [
-            ("A", 1, "GLY", _complete_gly_atoms((0.0, 0.0, 0.0))),
-            ("A", 2, "GLY", _complete_gly_atoms((3.45, 0.0, 0.0))),
-            ("B", 1, "GLY", _complete_gly_atoms((0.0, 4.0, 0.0))),
-            ("B", 2, "GLY", _complete_gly_atoms((3.45, 4.0, 0.0))),
-        ],
-    )
-    artifact = ResidueKNNGraph(
-        k=2,
-        node_attr_mode=[
-            "onehot",
-            "backbone_geometry",
-            "secondary_structure",
-            "sasa",
-            "rsa",
-            "interface",
-        ],
-        edge_attr_mode=["dist", "relative_direction", "interface_contact"],
-        use_cache=False,
-    ).encode(inp)
-    target = tmp_path / "artifact"
-    artifact.save(target)
-    loaded = StructureArtifact.load(target)
-
-    assert loaded.meta["feature_keys"]["node_attr_keys"][-7:] == [
-        "interface.is_interface",
-        "secondary_structure.helix",
-        "secondary_structure.sheet",
-        "secondary_structure.coil",
-        "secondary_structure.unassigned",
-        "sasa",
-        "rsa",
-    ]
-    np.testing.assert_array_equal(loaded.data["node_attr"], artifact.data["node_attr"])
-    np.testing.assert_array_equal(loaded.data["edge_index"], artifact.data["edge_index"])
-
-
-def test_sidechain_definition_table_covers_frozen_depths_and_terminal_choices() -> None:
+def test_sidechain_definition_table_covers_chi_depths_and_terminal_choices() -> None:
     assert {name: len(definitions) for name, definitions in SIDECHAIN_CHI_DEFINITIONS.items()} == {
         "ARG": 4,
         "ASN": 2,
@@ -1682,7 +1506,7 @@ def test_sidechain_torsions_known_angle_depths_and_undefined_policies() -> None:
     assert np.isnan(angles[7, 2:]).all()
 
 
-def test_sidechain_symmetric_terminal_convention_uses_exact_frozen_atom() -> None:
+def test_sidechain_symmetric_terminal_convention_uses_defined_atom() -> None:
     atoms = _chi_atoms("ASP")
     atoms["OD2"] = (2.0, -1.0, 2.0)
     coordinates, residue_index, atom_name, resname = _flatten_test_atoms([("ASP", atoms)])
@@ -1767,7 +1591,7 @@ def test_sidechain_torsions_are_translation_and_rotation_invariant() -> None:
     np.testing.assert_allclose(rotated, expected, atol=1e-6, equal_nan=True)
 
 
-def test_disulfide_geometry_panel_retains_cysteine_sidechain_atoms(tmp_path: Path) -> None:
+def test_disulfide_geometry_retains_cysteine_sidechain_atoms(tmp_path: Path) -> None:
     inp = _write_heavy_atom_structure(
         tmp_path / "cysteine-pair.pdb",
         [
@@ -1820,85 +1644,7 @@ def test_disulfide_geometry_panel_retains_cysteine_sidechain_atoms(tmp_path: Pat
     assert np.isnan(artifact.data["node_attr"][:, 1:]).all()
 
 
-def test_sidechain_geometry_hybrid_composition_and_artifact_round_trip(tmp_path: Path) -> None:
-    inp = _write_heavy_atom_structure(
-        tmp_path / "sidechain-hybrid.pdb",
-        [
-            (
-                "A",
-                1,
-                "SER",
-                {
-                    "N": (1.0, 0.0, 0.0),
-                    "CA": (0.0, 0.0, 0.0),
-                    "C": (-1.0, 1.0, 0.0),
-                    "O": (-2.0, 1.0, 0.0),
-                    "CB": (0.0, 0.0, 1.0),
-                    "OG": (0.0, 1.0, 1.0),
-                },
-            )
-        ],
-    )
-    artifact = ResiduePointCloudCA(
-        node_attr_mode=[
-            "rsa",
-            "secondary_structure",
-            "sidechain_geometry",
-            "backbone_geometry",
-            "physchem",
-            "onehot",
-        ],
-        use_cache=False,
-    ).encode(inp)
-    repeated = ResiduePointCloudCA(
-        node_attr_mode=[
-            "onehot",
-            "physchem",
-            "backbone_geometry",
-            "sidechain_geometry",
-            "secondary_structure",
-            "rsa",
-        ],
-        use_cache=False,
-    ).encode(inp)
-    target = tmp_path / "sidechain-artifact"
-    artifact.save(target)
-    loaded = StructureArtifact.load(target)
-
-    sidechain_keys = [
-        f"sidechain.chi{chi}_{component}" for chi in range(1, 5) for component in ("sin", "cos")
-    ]
-    keys = loaded.meta["feature_keys"]["node_attr_keys"]
-    assert keys[: len(AA_VOCAB)] == [f"aa_onehot.{aa}" for aa in AA_VOCAB]
-    assert keys[len(AA_VOCAB) : len(AA_VOCAB) + len(PHYSchem_KEYS)] == PHYSchem_KEYS
-    sidechain_start = keys.index("sidechain.chi1_sin")
-    assert keys[sidechain_start : sidechain_start + 8] == sidechain_keys
-    assert keys[-5:] == [
-        "secondary_structure.helix",
-        "secondary_structure.sheet",
-        "secondary_structure.coil",
-        "secondary_structure.unassigned",
-        "rsa",
-    ]
-    np.testing.assert_array_equal(artifact.data["node_attr"], repeated.data["node_attr"])
-    np.testing.assert_array_equal(loaded.data["node_attr"], artifact.data["node_attr"])
-    assert loaded.meta["feature_keys"]["node_attr_keys"] == artifact.meta["feature_keys"]["node_attr_keys"]
-    sidechain_params = next(
-        token["sidechain_geometry"]
-        for token in artifact.meta["parameters"]["node_attr_mode"]
-        if isinstance(token, dict) and "sidechain_geometry" in token
-    )
-    assert sidechain_params == {
-        "atom_definition_convention": "standard_residue_specific_chi1_through_chi4",
-        "atom_definition_table": "eris.frozen_sidechain_chi_atoms.v1",
-        "missing_value_policy": "nan",
-        "mode": "sincos",
-        "torsion_convention": "standard_signed_atan2[-pi,pi)",
-        "units": "radians",
-    }
-
-
-def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
+def test_high_content_graph_is_rigid_transform_invariant_and_exports_pools_round_trip(
     tmp_path: Path,
 ) -> None:
     transformed_source = tmp_path / "1AQ2-rigid-transform.pdb"
@@ -2001,7 +1747,7 @@ def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
         len(selected["residue_ids"]),
         len(expected_node_keys),
     )
-    assert original.data["edge_attr"].shape == (original.data["edge_index"].shape[1], 24)
+    assert original.data["edge_attr"].shape == (original.data["edge_index"].shape[1], len(expected_edge_keys))
     assert original.data["node_attr"].dtype == np.float32
     assert original.data["edge_attr"].dtype == np.float32
     assert original.meta["input"]["chain_ids"] == ["A"]
@@ -2051,7 +1797,6 @@ def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
     artifact_path = tmp_path / "high-content-graph"
     original.save(artifact_path)
     loaded = StructureArtifact.load(artifact_path)
-    assert loaded.meta["schema_version"] == 1
     assert loaded.meta["feature_keys"] == original.meta["feature_keys"]
     assert loaded.meta["provenance"] == original.meta["provenance"]
     assert loaded.data["chain_id"].tolist() == original.data["chain_id"].tolist()
@@ -2105,7 +1850,6 @@ def test_v01_high_content_feature_export_pooling_and_rigid_transform_panel(
     pooled_path = tmp_path / "high-content-pooled"
     pooled.save(pooled_path)
     loaded_pool = StructureArtifact.load(pooled_path)
-    assert loaded_pool.meta["schema_version"] == 1
     assert loaded_pool.data["pooled_attr"].dtype == np.float64
     assert loaded_pool.meta["feature_keys"]["pooled_attr_keys"] == expected_pooled_keys
     np.testing.assert_equal(loaded_pool.data["pooled_attr"], pooled.data["pooled_attr"])

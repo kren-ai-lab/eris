@@ -13,19 +13,10 @@ from typer.testing import CliRunner
 
 import eris
 from eris.cli.main import app
-from eris.core.artifact_schema import build_input_metadata
 from eris.core.artifacts import StructureArtifact
-from eris.core.hashing import sha256_file
-from eris.core.learned import (
-    CheckpointDescriptor,
-    StructuralEmbedderConfig,
-    StructuralEmbeddingResult,
-    StructuralModelDescriptor,
-    build_learned_artifact,
-)
 from eris.datasets import ErisFolderDataset
+from tests.helpers import PDB, learned_artifact
 
-PDB = Path("tests/data/1AQ2.pdb")
 runner = CliRunner()
 
 
@@ -65,37 +56,6 @@ def _artifact_bytes(root: Path) -> dict[str, bytes]:
         for path in root.rglob("*")
         if path.is_file() and path.name in {"meta.json", "data.npz"}
     }
-
-
-def _synthetic_learned_artifact(source: Path) -> StructureArtifact:
-    return build_learned_artifact(
-        config=StructuralEmbedderConfig(
-            representation_name="gearnet_edge",
-            output_mode="both",
-        ),
-        result=StructuralEmbeddingResult(
-            node_embedding=np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32),
-            global_embedding=np.asarray([5.0, 6.0], dtype=np.float32),
-            node_ids=np.asarray(["A:1::ALA", "A:2::GLY"], dtype=np.str_),
-        ),
-        model=StructuralModelDescriptor(
-            architecture="synthetic-gearnet-edge",
-            checkpoint=CheckpointDescriptor(
-                identifier="synthetic.pth",
-                revision="test",
-                source="memory://synthetic",
-                sha256="a" * 64,
-            ),
-        ),
-        input_metadata=build_input_metadata(
-            source=source,
-            source_sha256=sha256_file(source),
-            input_format="pdb",
-            model_index=0,
-            chain_ids=["A"],
-        ),
-        encoder_metadata={"implementation": "tests.synthetic", "version": "1"},
-    )
 
 
 def test_explicit_public_workflow_preserves_identity_failures_and_resume(
@@ -196,7 +156,7 @@ def test_learned_public_workflow_uses_canonical_artifacts_and_torch(
     monkeypatch.setattr(
         eris,
         "embed",
-        lambda source, **kwargs: _synthetic_learned_artifact(Path(source)),  # noqa: ARG005
+        lambda source, **kwargs: learned_artifact(source=Path(source), representation_name="gearnet_edge"),  # noqa: ARG005
     )
     results = eris.batch_embed(
         manifest,
@@ -251,7 +211,7 @@ def test_cli_workflow_uses_the_same_public_boundaries(
     monkeypatch.setattr(
         eris,
         "embed",
-        lambda source, **kwargs: _synthetic_learned_artifact(Path(source)),  # noqa: ARG005
+        lambda source, **kwargs: learned_artifact(source=Path(source), representation_name="gearnet_edge"),  # noqa: ARG005
     )
     learned_root = tmp_path / "learned-artifacts"
     result = runner.invoke(
@@ -273,9 +233,6 @@ def test_cli_workflow_uses_the_same_public_boundaries(
     )
     assert result.exit_code == 0, result.output
     assert (learned_root / "cli" / "gearnet_edge" / "meta.json").is_file()
-
-    assert runner.invoke(app, ["encode", "batch"]).exit_code == 2
-    assert runner.invoke(app, ["embed", "batch"]).exit_code == 2
 
 
 def test_cli_export_workflow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

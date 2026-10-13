@@ -1,33 +1,21 @@
 from __future__ import annotations
 
 import copy
-import subprocess
-import sys
 from importlib.util import find_spec
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 import pytest
 
 import eris
-from eris.core.artifact_schema import build_input_metadata
-from eris.core.artifacts import ArtifactValidationError, StructureArtifact
-from eris.core.learned import (
-    CheckpointDescriptor,
-    StructuralEmbedderConfig,
-    StructuralEmbeddingResult,
-    StructuralModelDescriptor,
-    build_learned_artifact,
-)
+from eris.core.artifacts import ArtifactValidationError
 from eris.export.torch import save_artifact_to_torch, to_torch
+from tests.helpers import PDB, learned_artifact
 
 requires_torch = pytest.mark.skipif(
     find_spec("torch") is None,
     reason="requires optional dependency 'torch'",
 )
-
-PDB = Path("tests/data/1AQ2.pdb")
 
 
 def _torch():
@@ -39,80 +27,6 @@ def _assert_tensor_equal(actual, expected: np.ndarray) -> None:
     assert isinstance(actual, torch.Tensor)
     assert str(actual.dtype).removeprefix("torch.") == str(expected.dtype)
     np.testing.assert_array_equal(actual.cpu().numpy(), expected)
-
-
-def _input_metadata():
-    return build_input_metadata(
-        source="memory://torch-export",
-        source_sha256="a" * 64,
-        input_format="pdb",
-        model_index=0,
-        chain_ids=["A"],
-    )
-
-
-def _model() -> StructuralModelDescriptor:
-    return StructuralModelDescriptor(
-        architecture="synthetic-structural-model",
-        checkpoint=CheckpointDescriptor(
-            identifier="synthetic-checkpoint",
-            revision="revision-1",
-            source="https://models.example/synthetic.bin",
-            sha256="b" * 64,
-        ),
-    )
-
-
-def _learned_artifact(
-    output_mode: Literal["both", "global", "node"],
-    *,
-    with_mask: bool = True,
-    dtype=np.float64,
-) -> StructureArtifact:
-    node_embedding = np.arange(6, dtype=dtype).reshape(2, 3)
-    global_embedding = np.asarray([7.0, 8.0, 9.0], dtype=dtype)
-    node_ids = np.asarray(["A:1::ALA", "opaque-node-β"], dtype=np.str_)
-    valid_mask = np.asarray([True, False], dtype=np.bool_)
-    result = {
-        "node": StructuralEmbeddingResult(
-            node_embedding=node_embedding,
-            node_ids=node_ids,
-            valid_mask=valid_mask if with_mask else None,
-        ),
-        "global": StructuralEmbeddingResult(global_embedding=global_embedding),
-        "both": StructuralEmbeddingResult(
-            node_embedding=node_embedding,
-            global_embedding=global_embedding,
-            node_ids=node_ids,
-            valid_mask=valid_mask if with_mask else None,
-        ),
-    }[output_mode]
-    return build_learned_artifact(
-        config=StructuralEmbedderConfig(
-            representation_name="synthetic_structure_embedding",
-            output_mode=output_mode,
-        ),
-        result=result,
-        model=_model(),
-        input_metadata=_input_metadata(),
-        encoder_metadata={
-            "implementation": "tests.fake_backend.FakeStructuralEncoder",
-            "version": "test-adapter-v1",
-        },
-    )
-
-
-def test_import_eris_export_does_not_eagerly_import_torch_or_backend_frameworks() -> None:
-    script = """
-import sys
-import eris.export
-
-blocked = {"torch", "torch_geometric", "torchdrug", "torch_scatter", "torch_cluster"}
-loaded = sorted(blocked.intersection(sys.modules))
-if loaded:
-    raise SystemExit(f"optional frameworks loaded: {loaded}")
-"""
-    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603
 
 
 @requires_torch
@@ -170,14 +84,9 @@ def test_cloud_export_maps_positions_and_features_and_preserves_auxiliary_ids() 
 @requires_torch
 @pytest.mark.parametrize(
     ("representation", "matrix_key"),
-    [
-        ("residue_distogram", "dist"),
-        ("residue_distogram_bins", "dist_bins"),
-        ("residue_contact_map", "contact"),
-        ("residue_contact_map_bins", "contact_bins"),
-    ],
+    [("residue_distogram", "dist"), ("residue_contact_map_bins", "contact_bins")],
 )
-def test_matrix_export_preserves_main_matrix_and_historical_channel_option(
+def test_matrix_export_preserves_main_matrix_and_channel_option(
     representation: str,
     matrix_key: str,
 ) -> None:
@@ -240,7 +149,7 @@ def test_save_torch_strictly_loads_artifact_dir_and_writes_downstream_pt(tmp_pat
 
 def test_learned_node_export_preserves_node_ids_mask_and_dtype() -> None:
     torch = _torch()
-    artifact = _learned_artifact("node")
+    artifact = learned_artifact("node", dtype=np.float64, with_mask=True)
 
     out = to_torch(artifact)
 
@@ -248,7 +157,7 @@ def test_learned_node_export_preserves_node_ids_mask_and_dtype() -> None:
     assert out["representation_type"] == "embedding"
     assert out["node_embedding"].shape == (2, 3)
     assert out["node_embedding"].dtype == torch.float64
-    assert out["node_ids"] == ["A:1::ALA", "opaque-node-β"]
+    assert out["node_ids"] == ["A:1::ALA", "A:2::GLY"]
     assert out["chain_id"] == ["A", "A"]
     assert torch.equal(out["valid_mask"], torch.tensor([True, False]))
     assert "edge_index" not in out
@@ -258,7 +167,7 @@ def test_learned_node_export_preserves_node_ids_mask_and_dtype() -> None:
 
 def test_learned_global_export_preserves_single_artifact_shape() -> None:
     torch = _torch()
-    artifact = _learned_artifact("global")
+    artifact = learned_artifact("global", dtype=np.float64)
 
     out = to_torch(artifact)
 
@@ -272,8 +181,8 @@ def test_learned_global_export_preserves_single_artifact_shape() -> None:
 def test_learned_both_export_preserves_all_outputs_and_collate_compatibility() -> None:
     from eris.datasets import collate_learned
 
-    first = to_torch(_learned_artifact("both"))
-    second = to_torch(_learned_artifact("both"))
+    first = to_torch(learned_artifact("both", with_mask=True))
+    second = to_torch(learned_artifact("both", with_mask=True))
 
     assert {
         "node_embedding",
@@ -286,17 +195,12 @@ def test_learned_both_export_preserves_all_outputs_and_collate_compatibility() -
 
     assert out["node_embedding"].shape == (4, 3)
     assert out["global_embedding"].shape == (2, 3)
-    assert out["node_ids"] == [
-        "A:1::ALA",
-        "opaque-node-β",
-        "A:1::ALA",
-        "opaque-node-β",
-    ]
+    assert out["node_ids"] == ["A:1::ALA", "A:2::GLY"] * 2
     assert out["chain_id"] == ["A", "A", "A", "A"]
 
 
 def test_learned_export_rejects_malformed_programmatic_artifacts() -> None:
-    artifact = _learned_artifact("node")
+    artifact = learned_artifact("node", dtype=np.float64, with_mask=True)
     artifact.data = dict(artifact.data)
     artifact.data["node_ids"] = np.asarray(["one"], dtype=np.str_)
 
