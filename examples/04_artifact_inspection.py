@@ -40,7 +40,7 @@ def _():
     PDB = Path(__file__).resolve().parents[1] / "tests" / "data" / "1AQ2.pdb"
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "artifact"
-        eris.encode(PDB, representation="residue_distogram", output=out)
+        eris.encode(PDB, representation="residue_distogram", output=out, use_cache=False)
         print(sorted(p.name for p in out.iterdir()))
         loaded = StructureArtifact.load(out)
     meta = loaded.meta

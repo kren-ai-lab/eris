@@ -18,7 +18,8 @@ def _(mo):
 
     `eris.to_torch` converts any artifact to tensors. `eris.to_pyg` only
     accepts explicit graph artifacts, because it uses only the topology that
-    is already public in the artifact. Both need the `pyg` extra (`erislib[pyg]`).
+    is already public in the artifact. `to_torch` needs PyTorch (any of the
+    `gearnet` or `pyg` extras); `to_pyg` needs the `pyg` extra.
     """)
     return
 
@@ -30,7 +31,7 @@ def _():
     import eris
 
     PDB = Path(__file__).resolve().parents[1] / "tests" / "data" / "1AQ2.pdb"
-    graph = eris.encode(PDB, representation="residue_knn_graph")
+    graph = eris.encode(PDB, representation="residue_knn_graph", use_cache=False)
     return eris, graph
 
 

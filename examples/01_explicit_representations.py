@@ -47,7 +47,7 @@ def _(eris):
 @app.cell
 def _(PDB, eris):
     artifacts = {
-        name: eris.encode(PDB, representation=name)
+        name: eris.encode(PDB, representation=name, use_cache=False)
         for name in ("residue_knn_graph", "residue_contact_map", "residue_point_cloud")
     }
     for name, art in artifacts.items():
