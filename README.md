@@ -100,10 +100,30 @@ graph = eris.to_pyg(eris.encode("p1.pdb", representation="residue_knn_graph"))
 ```
 
 A manifest is a CSV or JSONL file or a Polars DataFrame with `id` and `path` columns, and optional
-`chain` and `model` (default: all chains of the first model). `batch_encode` and `batch_embed` return one result row per input, record failures without
-stopping (unless `fail_fast=True`) and can resume an interrupted run. `pack` writes a CSV index
-over the artifact directories. `to_torch` converts any artifact to tensors; `to_pyg` only accepts
-graphs with an explicit `edge_index`.
+`chain` and `model` (default: all chains of the first model). `batch_encode` and `batch_embed`
+return one result row per input, record failures without stopping (unless `fail_fast=True`) and
+can resume an interrupted run. `pack` writes a CSV index over the artifact directories.
+`to_torch` converts any artifact to tensors; `to_pyg` only accepts graphs with an explicit
+`edge_index`.
+
+### Feature tables
+
+`feature_table` turns one structure-level vector per artifact into a Polars DataFrame with an `id`
+column and one column per feature, ready for tabular models such as
+[Saber](https://github.com/kren-ai-lab/saber):
+
+```python
+embeddings = eris.batch_embed(manifest, representation="gearnet_edge", artifact_root="emb", output_mode="global")
+eris.pack("emb", "emb/index.csv")
+features = eris.feature_table("emb/index.csv")   # id, p_0 ... p_3071
+
+dataset = saber.DatasetBundle(X=features.drop("id"), y=labels, sample_ids=features["id"])
+```
+
+It reads GearNet global embeddings (`p_0`, `p_1`, …) or `eris.pool(...)` vectors (named after
+their features), or graph statistics with `source="graph_attr"`. It also accepts a mapping from id
+to artifact. Every row must come from the same representation, parameters and model; mixing them
+is an error.
 
 ## Command line
 
@@ -113,6 +133,7 @@ eris encode protein.pdb --representation residue_knn_graph --params '{"k": 8}' -
 eris embed protein.pdb --representation gearnet_edge --out embedding
 eris batch encode manifest.csv --representation residue_contact_map --out artifacts
 eris pack artifacts --out artifacts/index.csv
+eris features emb/index.csv --out features.csv
 eris info validate artifact_knn
 ```
 

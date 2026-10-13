@@ -16,6 +16,8 @@ First public release, published on PyPI as `erislib`.
   provenance and a content-addressed cache.
 - `batch_encode` and `batch_embed` over CSV/JSONL manifests or Polars DataFrames, with resume and
   per-row failure records; `pack` indexes artifacts for `ErisFolderDataset`.
+- `feature_table` collects structure-level vectors (GearNet global embeddings, pooled features,
+  graph statistics) into an `id` + features Polars DataFrame for tabular models.
 - Export with `to_torch` and `to_pyg` (optional extra `erislib[pyg]`), and residue pooling with
   `pool`.
 - The `eris` CLI, with documented exit codes.

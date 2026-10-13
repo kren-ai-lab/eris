@@ -54,6 +54,7 @@ def test_root_exports_documented_public_surface_without_learned_execution():
         "batch_encode",
         "embed",
         "encode",
+        "feature_table",
         "get_embedder_info",
         "get_representation_info",
         "list_embedders",

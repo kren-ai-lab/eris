@@ -16,7 +16,8 @@ Start with the [quickstart](../README.md) to install Eris and encode a structure
 ## Python API help
 
 The public functions live in the package root: `eris.encode`, `eris.embed`, `eris.pool`,
-`eris.batch_encode`, `eris.batch_embed`, `eris.pack`, `eris.to_torch` and `eris.to_pyg`, plus the
+`eris.batch_encode`, `eris.batch_embed`, `eris.pack`, `eris.feature_table`, `eris.to_torch` and
+`eris.to_pyg`, plus the
 discovery helpers `list_representations`, `get_representation_info`, `list_embedders` and
 `get_embedder_info`. Use Python help for the signatures and defaults of your installed version:
 
