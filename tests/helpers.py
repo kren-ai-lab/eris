@@ -91,6 +91,7 @@ def learned_artifact(
     dtype: type = np.float32,
     with_mask: bool = False,
     representation_name: str = "synthetic_structure_embedding",
+    node_ids: tuple[str, str] = ("A:1::ALA", "A:2::GLY"),
 ) -> StructureArtifact:
     """Synthetic learned embedding artifact with two residues and a 3-wide embedding."""
     node = output_mode in {"node", "both"}
@@ -98,7 +99,7 @@ def learned_artifact(
     result = StructuralEmbeddingResult(
         node_embedding=np.arange(6, dtype=dtype).reshape(2, 3) if node else None,
         global_embedding=np.asarray([7.0, 8.0, 9.0], dtype=dtype) if glob else None,
-        node_ids=np.asarray(["A:1::ALA", "A:2::GLY"], dtype=np.str_) if node else None,
+        node_ids=np.asarray(node_ids, dtype=np.str_) if node else None,
         valid_mask=np.asarray([True, False]) if node and with_mask else None,
     )
     return build_learned_artifact(

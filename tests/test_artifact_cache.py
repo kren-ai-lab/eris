@@ -148,6 +148,7 @@ def test_optional_execution_identity_is_precision_sensitive():
 @pytest.mark.parametrize(
     ("field", "value"),
     [
+        ("representation_name", "other_representation"),
         ("encoder_version", "0.2.0"),
         ("config_fingerprint", "c" * 64),
         ("chain_ids", ["B"]),

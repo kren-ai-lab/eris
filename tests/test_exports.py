@@ -149,7 +149,9 @@ def test_save_torch_strictly_loads_artifact_dir_and_writes_downstream_pt(tmp_pat
 
 def test_learned_node_export_preserves_node_ids_mask_and_dtype() -> None:
     torch = _torch()
-    artifact = learned_artifact("node", dtype=np.float64, with_mask=True)
+    artifact = learned_artifact(
+        "node", dtype=np.float64, with_mask=True, node_ids=("A:1::ALA", "opaque-node-β")
+    )
 
     out = to_torch(artifact)
 
@@ -157,7 +159,7 @@ def test_learned_node_export_preserves_node_ids_mask_and_dtype() -> None:
     assert out["representation_type"] == "embedding"
     assert out["node_embedding"].shape == (2, 3)
     assert out["node_embedding"].dtype == torch.float64
-    assert out["node_ids"] == ["A:1::ALA", "A:2::GLY"]
+    assert out["node_ids"] == ["A:1::ALA", "opaque-node-β"]
     assert out["chain_id"] == ["A", "A"]
     assert torch.equal(out["valid_mask"], torch.tensor([True, False]))
     assert "edge_index" not in out

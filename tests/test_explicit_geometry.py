@@ -202,12 +202,12 @@ def test_all_explicit_encoders_return_complete_schema(encoder_type):
     )
 
 
+@pytest.mark.parametrize("representation", ["residue_distogram_bins", "residue_contact_map_bins"])
 @pytest.mark.parametrize(
     ("num_bins", "add_no_contact_class", "fits"),
     [(256, False, True), (256, True, False)],
 )
-def test_binned_class_ids_must_fit_the_output_dtype(num_bins, add_no_contact_class, fits):
-    representation = "residue_distogram_bins"
+def test_binned_class_ids_must_fit_the_output_dtype(representation, num_bins, add_no_contact_class, fits):
     import eris
 
     params = {
@@ -219,7 +219,8 @@ def test_binned_class_ids_must_fit_the_output_dtype(num_bins, add_no_contact_cla
     }
     if fits:
         artifact = eris.encode(PDB, representation=representation, use_cache=False, **params)
-        assert artifact.data["dist_bins"].dtype == np.uint8
+        key = {"residue_distogram_bins": "dist_bins", "residue_contact_map_bins": "contact_bins"}
+        assert artifact.data[key[representation]].dtype == np.uint8
     else:
         with pytest.raises(ValueError, match="cannot represent"):
             eris.encode(PDB, representation=representation, use_cache=False, **params)

@@ -1040,7 +1040,6 @@ def test_external_rejects_missing_fields(tmp_path: Path) -> None:
         values=np.asarray([[1.0]], dtype=np.float32),
         residue_ids=np.asarray(["A:1::ALA"]),
         source_name=np.asarray("incomplete"),
-        chain_id=np.asarray("A"),
         model_index=np.asarray(0, dtype=np.int64),
     )
 
