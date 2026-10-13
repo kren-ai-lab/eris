@@ -1,53 +1,63 @@
-# AGENTS.md — Eris development rules
+# AGENTS.md
 
-## Repository authority
+This file provides guidance to AI agents when working with code in this repository.
 
-- Work on `dev`; `jr_revision` is a frozen historical baseline.
-- Do not create or switch branches unless explicitly requested.
-- `pyproject.toml` controls package metadata, Python compatibility, and dependency groups.
-- Permanent contracts live in `docs/architecture.md`, `docs/structural_features.md`,
-  `docs/artifact_schema.md`, `docs/representation_defaults.md`,
-  `docs/external_residue_features.md`, and `docs/gearnet_edge_backend.md`.
-- Keep changes focused; do not add adjacent features or cleanup.
+## Project Overview
 
-## Git safety
+**Eris** is a Python library that turns **protein structures** (PDB/mmCIF) into explicit
+numerical representations (point clouds, graphs, contact maps, distograms, voxel grids) and
+learned GearNet-Edge embeddings. It sits alongside sibling libraries from the same lab, each with a
+distinct scope:
 
-- Never stage, commit, push, tag, publish, release, merge, or rewrite history unless requested.
-- Before editing, verify the branch, HEAD, and worktree.
-- Preserve unrelated tracked and untracked work; never discard it with destructive commands.
-- At handoff, report `git diff --stat` and `git status --short`.
+- **Roxy** — classical protein sequence descriptors
+- **Sylphy** — sequence encoders, embeddings and dimensionality reductions
+- **Ruddy** — statistical exploratory data analysis (EDA)
+- **Saber** — classical supervised machine learning on prepared numerical features
 
-## Contract guardrails
+Eris does **not** train models or compute sequence features. Its output is a validated
+`StructureArtifact` (`meta.json` plus `data.npz`) that downstream tools consume, optionally through
+`to_torch`, `to_pyg` or `ErisFolderDataset`.
 
-- `import eris` must not eagerly import Torch, TorchDrug, PyG, RDKit, or GearNet numerical code.
-- Persistence is the `StructureArtifact` schema: `meta.json` plus `data.npz`.
-- Do not change the artifact schema, scientific cache identity, or GearNet scientific behavior unless the
-  task explicitly requires it.
-- CLI operations must delegate to the equivalent public Python API.
-- Do not expose registries, runners, backends, descriptors, or cache internals as public API
-  without an explicit contract change.
-- Keep optional dependencies lazy and feature-local. Runtime network access is forbidden except
-  for automatic acquisition of official model checkpoints whose HTTPS acquisition URL and
-  SHA-256 are registered by Eris. Arbitrary user-supplied download URLs are not allowed.
+This project uses `uv` and `taskipy` — see `DEVELOPMENT.md` for setup and task commands.
 
-## Scientific safety
+## Package Layout
 
-- Preserve sample identity, array order, feature order, exact keys, and deterministic behavior.
-- Never silently pad, truncate, resize, normalize, clip, infer topology, invent IDs, drop failed
-  samples, or coerce invalid scientific values.
-- Fail clearly on incompatible scientific inputs.
-- PyG export may use only topology already public in an artifact.
-- Learned embeddings must not expose or reconstruct GearNet-internal topology.
-- Escalate unresolved residue/atom selection, chain, heteroatom, water, alternate-location,
-  topology, or structural-feature semantics for independent scientific review before
+The package is a **flat layout** at `eris/`. `tests/` is flat (`tests/test_*.py`), with structure
+fixtures and GearNet reference data under `tests/data/`. Permanent contracts live in `docs/`:
+`architecture.md`, `structural_features.md`, `artifact_schema.md`, `representation_defaults.md`,
+`external_residue_features.md` and `gearnet_edge_backend.md`. Read the relevant one before
+changing the behavior it describes.
+
+## Development Workflow
+
+Package management is `uv`; task running is `taskipy`. See `DEVELOPMENT.md` for the full command
+list (`uv sync --all-extras`, `uv run task format|lint|lint-fix|test|test-v|test-cov|pyrefly`).
+
+## Scientific Invariants (read before touching any scientific module)
+
+- **No silent changes to data.** Never pad, truncate, resize, normalize, clip, infer topology,
+  invent IDs, drop failed samples or coerce invalid scientific values. Incompatible inputs fail
+  with a clear error.
+- **Deterministic identity.** Preserve sample identity, array order, feature order, exact keys and
+  deterministic behavior.
+- **One artifact schema.** Persistence is the `StructureArtifact` schema. Do not change it, the
+  cache identity or GearNet's scientific behavior unless the task explicitly requires it.
+- **Public topology only.** PyG export uses only topology already public in an artifact; learned
+  embeddings never expose or reconstruct GearNet-internal topology.
+- **Escalate ambiguous semantics.** Residue/atom selection, chains, heteroatoms, water, alternate
+  locations, topology and structural-feature semantics need independent scientific review before
   implementation.
 
-## Implementation and validation
+A change that alters numerical results needs a test that pins the new behavior.
 
-- Reuse canonical configs, validators, serializers, hashes, and registries.
-- Use stable project exception types where available.
-- Run focused tests and relevant regressions; run the full suite for cross-cutting or gate work.
-- Run Ruff check and format checks for affected files plus `git diff --check`.
-- Run `pip check` for dependency, packaging, handoff, or release work.
-- Report changed files, decisions, blockers, validation, diff, worktree status, readiness, and a
-  recommended commit message.
+## Contracts
+
+- `import eris` must not import Torch, TorchDrug, PyG, RDKit or GearNet numerical code. Optional
+  dependencies stay lazy and feature-local (`tests/test_packaging_boundaries.py` checks this).
+- CLI commands delegate to the equivalent public Python API, and map failures to the exit codes
+  documented in the README.
+- Registries, runners, backends, descriptors and cache internals are not public API.
+- No runtime network access, except downloading official model checkpoints whose HTTPS URL and
+  SHA-256 are registered in Eris. Arbitrary user-supplied download URLs are not allowed.
+- Reuse the canonical configs, validators, serializers, hashes and registries, and raise the
+  exception types in `eris.exceptions` (all derive from `ErisError`).

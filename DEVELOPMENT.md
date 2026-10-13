@@ -1,61 +1,97 @@
-# Eris development
+# Development Guide
 
-## Environment
+## Prerequisites
 
-`pyproject.toml` is the authority for package metadata, Python compatibility, and dependencies.
-The supported range is Python `>=3.11,<3.15`. Development uses [uv](https://docs.astral.sh/uv/)
-and the committed `uv.lock`:
+- Python 3.11–3.14
+- [uv](https://docs.astral.sh/uv/) (package manager)
 
-```console
+## Dependencies
+
+Core dependencies are managed via `uv`:
+- **NumPy** holds every artifact array; **gemmi** and **Biotite** read structures and compute
+  structural annotations.
+- **Polars** (`polars>=1.44,<2`) reads manifests and writes batch results and packed indexes.
+- **Typer** and **Rich** power the CLI; **platformdirs** locates the per-user cache.
+- Optional extras: `gearnet` (PyTorch, for GearNet-Edge embeddings and `to_torch`) and `pyg`
+  (PyTorch and PyTorch Geometric, for `to_pyg`). `import eris` must work without them and must not
+  import their runtimes. The `examples` group installs marimo/matplotlib for the notebooks.
+
+## Setup
+
+```bash
+git clone https://github.com/kren-ai-lab/eris
+cd eris
 uv sync --all-extras
+# optional: dependencies for the examples
+uv sync --all-extras --group examples
 ```
 
-The distribution name is `erislib`; the import package and CLI command are `eris`.
+## Common Tasks
 
-## Optional environments
-
-- `gearnet` installs PyTorch. On a checkpoint-cache miss, Eris can acquire the registered official
-  checkpoint over HTTPS and verifies its registered SHA-256 before use. Pass
-  `checkpoint_path` / `--checkpoint` to seed the same cache from a local file or to work offline.
-- `pyg` installs PyTorch and PyTorch Geometric for graph export.
-- `import eris` must work without either optional group and must not import their runtimes.
-
-`uv sync` without `--all-extras` (or with `--extra gearnet` / `--extra pyg`) gives a narrower
-environment. The GearNet CPU installation and checkpoint contract are in
-[`docs/gearnet_edge_backend.md`](docs/gearnet_edge_backend.md).
-
-## Tests and checks
-
-Common tasks run through taskipy:
-
-```console
-uv run task test        # pytest -q
-uv run task format      # sort imports + ruff format
-uv run task lint        # ruff check
-uv run prek run --all-files
-git diff --check
+```bash
+uv run task format    # sort imports + ruff format
+uv run task lint      # ruff check (no fixes)
+uv run task lint-fix  # ruff check --fix
+uv run task test      # pytest -q
+uv run task test-v    # pytest -v
+uv run task test-cov  # pytest + HTML coverage report
+uv run task pyrefly   # pyrefly check
 ```
 
-Run focused tests while developing:
+## Running the CLI
 
-```console
-uv run pytest -q tests/test_residue_features.py
+```bash
+uv run eris --version
+uv run eris --help
 ```
 
-The GearNet numerical-parity test runs only when `ERIS_GEARNET_CHECKPOINT` points at the official
-checkpoint; otherwise it skips. Optional dependency or checkpoint tests may skip when their
-runtime is unavailable. A skip is not certification of that integration.
-`tests/test_packaging_boundaries.py` verifies the core lazy-import boundary.
+## Examples
 
-CI (`.github/workflows/tests.yml`) runs the suite on Python 3.11–3.14, once against the lowest
-declared direct dependencies. Pushing a `v*` tag publishes to
-PyPI through `publish-pypi.yml`.
+The examples under `examples/` are marimo notebooks stored as plain Python files (requires the
+`examples` group):
 
-## Workflow
+```bash
+uv sync --all-extras --group examples
+bash examples/run_ci_examples.sh                              # run them all, as CI does
+uv run marimo edit examples/01_explicit_representations.py    # open one interactively
+```
 
-Development happens on `dev`; `jr_revision` is a frozen historical branch. Do not switch branches
-or modify history as part of ordinary changes. Before editing, inspect the branch, HEAD, and
-worktree. Preserve unrelated tracked and untracked work.
+## Project Structure
 
-Read the relevant contract under `docs/`, make a focused change, run proportionate tests and
-checks, then review `git diff`, `git diff --check`, and `git status --short`.
+The package uses a flat layout:
+
+```text
+eris/        # Flat package layout
+tests/       # Flat test suite; structure fixtures and GearNet references in tests/data/
+examples/    # marimo examples (plain .py)
+docs/        # Technical documentation and permanent contracts
+```
+
+## Making changes
+
+Read [AGENTS.md](AGENTS.md) for the scientific invariants and the contract that matches the
+change under `docs/`. A change to numerical results needs a regression test that pins the new
+behavior. The Python API and the CLI must agree for the same inputs and options.
+
+## Choosing checks
+
+Run `uv run task lint`, `uv run task pyrefly`, and `uv run task test` before submitting code
+changes. Use the test file nearest the affected behavior while iterating:
+
+| Location | What it checks |
+| --- | --- |
+| `tests/test_<area>.py` | Public behavior of the corresponding area |
+| `tests/test_packaging_boundaries.py` | Dependencies and the lazy-import boundary of `import eris` |
+| `tests/test_gearnet_native.py` | GearNet-Edge numerical parity; the parity test runs only when `ERIS_GEARNET_CHECKPOINT` points at the official checkpoint |
+
+Tests that need an optional dependency or the checkpoint skip when it is unavailable; a skip does
+not certify that integration.
+
+CI runs the suite on Python 3.11–3.14 and once against the lowest declared direct dependencies,
+runs the examples, and checks prek hooks. Pushing a `v*` tag publishes to PyPI.
+
+When changing examples or the API they consume, run `bash examples/run_ci_examples.sh`.
+
+For documentation-only changes, verify links, referenced public names, CLI options and runnable
+snippets. The [documentation index](docs/README.md) is the user entry point; examples are
+catalogued only in [examples/README.md](examples/README.md).
