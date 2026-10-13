@@ -258,8 +258,8 @@ A pooled artifact has `representation_name = "residue_pool"`, uses
 `representation_family = "explicit"`, and copies the source artifact's
 coordinate source.
 Its canonical parameters identify the source array and ordered keys, reduction
-mode, NaN policy, and a source-artifact fingerprint covering the selected
-source data. The source artifact remains immutable.
+mode, NaN policy, the source representation (name, encoder and canonical parameters), and a
+source-artifact fingerprint covering the selected source data. The source artifact remains immutable.
 
 All other frozen derived features fit the schema's ordered node/edge attributes
 and declared auxiliary arrays. Exact feature keys, array roles, shapes, units,

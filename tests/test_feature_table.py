@@ -89,3 +89,23 @@ def test_cli_features_writes_the_same_table(tmp_path: Path, capsys: pytest.Captu
     assert code == EXIT_OK
     assert "Wrote 1 rows" in capsys.readouterr().out
     assert pl.read_csv(out).columns == eris.feature_table(index, source="graph_attr").columns
+
+
+def test_pooled_rows_from_different_upstream_configurations_are_rejected() -> None:
+    k8 = eris.encode(PDB, representation="residue_knn_graph", chain_id="A", k=8, use_cache=False)
+    k16 = eris.encode(PDB, representation="residue_knn_graph", chain_id="A", k=16, use_cache=False)
+
+    with pytest.raises(FeatureTableError, match=r"p2: differs from p1 in parameters"):
+        eris.feature_table({"p1": eris.pool(k8), "p2": eris.pool(k16)})
+
+
+def test_packed_pooled_artifacts_reach_the_table_and_the_dataset(tmp_path: Path) -> None:
+    for sample_id, path in (("p1", PDB), ("p2", MULTIMER_PDB)):
+        eris.pool(_graph(path), output=tmp_path / "pooled" / sample_id)
+    index = tmp_path / "index.csv"
+    eris.pack(tmp_path / "pooled", index)
+
+    table = eris.feature_table(index)
+
+    assert table["id"].to_list() == ["p1", "p2"]
+    assert table.columns[1].startswith("pool.mean.")

@@ -99,7 +99,7 @@ class PackedIndexRow:
                 row.get("representation_type"),
                 "representation_type",
                 row_index=row_index,
-                choices={"cloud", "embedding", "graph", "grid", "matrix"},
+                choices={"cloud", "embedding", "graph", "grid", "matrix", "vector"},
             ),
             granularity=_literal_index_value(
                 row.get("granularity"),

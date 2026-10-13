@@ -56,6 +56,7 @@ def _column_names(meta: dict[str, Any], source: str, width: int) -> list[str]:
 def _identity(meta: dict[str, Any], source: str, columns: list[str], dtype: str) -> dict[str, Any]:
     return {
         "representation_name": meta["representation_name"],
+        "coordinate_source": meta["coordinate_source"],
         "encoder": meta["encoder"],
         "parameters": {k: v for k, v in meta["parameters"].items() if k not in _PER_SAMPLE_PARAMETERS},
         "model": meta.get("model"),
