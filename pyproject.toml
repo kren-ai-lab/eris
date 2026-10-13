@@ -74,6 +74,10 @@ dev = [
     "taskipy>=1.14",
     "prek",
 ]
+examples = [
+    "marimo>=0.25.1",
+    "matplotlib>=3.11.2",
+]
 
 [tool.hatch.version]
 path = "eris/_version.py"
@@ -146,6 +150,11 @@ ignore = [
 "examples/*" = [
     "INP001",  # example scripts are intentionally standalone modules
     "T201",    # examples print result snippets by design
+    "D100",    # marimo notebooks are scripts, not documented modules
+    "ANN",     # marimo cells are untyped functions injected by the runtime
+    "PLC0415", # marimo cells must import inside the cell
+    "PLR1711", # marimo cells end with an explicit return
+    "B018",    # a bare trailing expression is how a cell displays a value
 ]
 
 [tool.pyrefly]
