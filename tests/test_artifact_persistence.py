@@ -540,3 +540,10 @@ def test_load_uses_persisted_contract(tmp_path):
 
     assert loaded.meta == artifact.meta
     assert list(loaded.data) == [output["name"] for output in artifact.meta["outputs"]]
+
+
+def test_load_accepts_string_path(tmp_path):
+    target = tmp_path / "artifacts"
+    _explicit_artifact().save(target)
+
+    assert StructureArtifact.load(str(target)).meta["schema_version"] == 1

@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use Eris in your research, please cite it as below."
+title: "Eris: Explicit and Learned Numerical Representations of Protein Structures"
+abstract: "Encodes protein structures into validated explicit representations (point clouds, graphs, contact maps, distograms, voxel grids) and GearNet-Edge embeddings for machine learning."
+type: software
+version: 0.1.0
+license: MIT
+authors:
+  - family-names: Fernández Villegas
+    given-names: Diego
+    affiliation: "Universidad de Magallanes"
+  - family-names: Álvarez Saravia
+    given-names: Diego
+    affiliation: "Universidad de Magallanes"
+    orcid: "https://orcid.org/0000-0003-0753-274X"
+  - family-names: Medina-Ortiz
+    given-names: David
+    affiliation: "Universidad de Magallanes"
+    orcid: "https://orcid.org/0000-0002-8369-5746"
+repository-code: "https://github.com/kren-ai-lab/eris"
+url: "https://github.com/kren-ai-lab/eris"
+keywords:
+  - bioinformatics
+  - protein-structure
+  - structural-biology
+  - geometric-deep-learning
+  - graph-neural-networks
+  - machine-learning
+  - representation-learning
+  - scientific-software
