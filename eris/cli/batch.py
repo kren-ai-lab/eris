@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
 
+import polars as pl
 import typer
 
 import eris
 from eris.cli._utils import parse_json_object
-from eris.pipelines.manifest import ManifestValidationError, StructureManifestRow
+from eris.pipelines.manifest import ManifestValidationError
 
 app = typer.Typer(add_completion=False, help="Run canonical batch encode/embed workflows.")
 
@@ -19,13 +19,13 @@ def _result_path(artifact_root: Path, results: Path | None) -> Path:
     return results if results is not None else artifact_root / "batch_results.csv"
 
 
-def _summary(rows: Sequence[object], verb: str) -> None:
-    successes = sum(getattr(row, "status", None) == "success" for row in rows)
-    failures = len(rows) - successes
+def _summary(results: pl.DataFrame, verb: str) -> None:
+    successes = results.filter(pl.col("status") == "success").height
+    failures = results.height - successes
     typer.echo(f"Batch {verb}: {successes} succeeded, {failures} failed")
 
 
-def _folder_rows(folder: Path, pattern: str, recursive: bool) -> list[StructureManifestRow]:
+def _folder_manifest(folder: Path, pattern: str, recursive: bool) -> pl.DataFrame:
     paths = sorted(
         (folder.rglob(pattern) if recursive else folder.glob(pattern)),
         key=lambda path: path.as_posix(),
@@ -34,15 +34,8 @@ def _folder_rows(folder: Path, pattern: str, recursive: bool) -> list[StructureM
     if not files:
         raise ManifestValidationError(f"No files matching '{pattern}' found in {folder}")
 
-    rows: list[StructureManifestRow] = []
-    seen: set[str] = set()
-    for path in files:
-        sample_id = path.stem
-        if sample_id in seen:
-            raise ManifestValidationError(f"duplicate id '{sample_id}' derived from file stem")
-        seen.add(sample_id)
-        rows.append(StructureManifestRow(id=sample_id, path=str(path)))
-    return rows
+    # Duplicate stems are rejected by manifest validation.
+    return pl.DataFrame({"id": [path.stem for path in files], "path": [str(path) for path in files]})
 
 
 @app.command("encode")
@@ -64,8 +57,8 @@ def encode(
     params: Annotated[str | None, typer.Option("--params", help="JSON representation parameters.")] = None,
 ) -> None:
     """Encode one canonical explicit representation for every manifest row."""
-    rows = eris.batch_encode(
-        manifest_path=manifest,
+    outcome = eris.batch_encode(
+        manifest,
         representation=representation,
         artifact_root=out,
         results_path=_result_path(out, results),
@@ -75,7 +68,7 @@ def encode(
         use_cache=not no_cache,
         params=parse_json_object(params),
     )
-    _summary(rows, "encode")
+    _summary(outcome, "encode")
 
 
 @app.command("embed")
@@ -97,8 +90,8 @@ def embed(
     no_cache: Annotated[bool, typer.Option("--no-cache")] = False,
 ) -> None:
     """Embed one canonical learned representation for every manifest row."""
-    rows = eris.batch_embed(
-        manifest_path=manifest,
+    outcome = eris.batch_embed(
+        manifest,
         representation=representation,
         artifact_root=out,
         output_mode=output_mode,
@@ -111,7 +104,7 @@ def embed(
         fail_fast=fail_fast,
         use_cache=not no_cache,
     )
-    _summary(rows, "embed")
+    _summary(outcome, "embed")
 
 
 @app.command("from-folder")
@@ -135,8 +128,8 @@ def from_folder(
     params: Annotated[str | None, typer.Option("--params", help="JSON representation parameters.")] = None,
 ) -> None:
     """Encode one explicit representation for every matching structure file."""
-    rows = eris.batch_encode(
-        rows=_folder_rows(folder, pattern, recursive),
+    outcome = eris.batch_encode(
+        _folder_manifest(folder, pattern, recursive),
         representation=representation,
         artifact_root=out,
         results_path=_result_path(out, results),
@@ -146,7 +139,7 @@ def from_folder(
         use_cache=not no_cache,
         params=parse_json_object(params),
     )
-    _summary(rows, "encode")
+    _summary(outcome, "encode")
 
 
 __all__ = ["app"]

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import polars as pl
 import pytest
 
 pytest.importorskip("torch")
@@ -23,7 +24,6 @@ from eris.datasets.collate import collate_cloud, collate_graph, collate_grid, co
 from eris.datasets.torch_dataset import DatasetIndexError, ErisFolderDataset
 from eris.exceptions import OptionalDependencyError
 from eris.pipelines.batch_encode import batch_encode
-from eris.pipelines.manifest import StructureManifestRow
 from eris.pipelines.pack import PACKED_INDEX_FIELDS, pack_artifacts
 
 PDB = Path("tests/data/1AQ2.pdb")
@@ -529,12 +529,12 @@ def test_dataset_accepts_mixed_index_without_collating(tmp_path: Path) -> None:
 def test_dataset_batch_pack_dataset_gate(tmp_path: Path) -> None:
     root = tmp_path / "artifacts"
     results = batch_encode(
-        [StructureManifestRow(id="protein", path=str(PDB))],
+        pl.DataFrame({"id": ["protein"], "path": [str(PDB)]}),
         representation="residue_contact_map",
         artifact_root=root,
         use_cache=False,
     )
-    assert results[0].status == "success"
+    assert results["status"][0] == "success"
     index = tmp_path / "index.csv"
     pack_artifacts(root, index)
 

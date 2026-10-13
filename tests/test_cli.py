@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import polars as pl
 import pytest
 from rich.text import Text
 from typer.testing import CliRunner
@@ -254,9 +255,9 @@ def test_batch_from_folder_delegates_sorted_rows(monkeypatch, tmp_path):
     (folder / "a.pdb").write_text("", encoding="ascii")
     captured = {}
 
-    def fake_batch_encode(**kwargs):
-        captured.update(kwargs)
-        return []
+    def fake_batch_encode(manifest, **kwargs):
+        captured.update(kwargs, manifest=manifest)
+        return pl.DataFrame(schema={"status": pl.String})
 
     monkeypatch.setattr(batch_cli.eris, "batch_encode", fake_batch_encode)
 
@@ -278,7 +279,7 @@ def test_batch_from_folder_delegates_sorted_rows(monkeypatch, tmp_path):
     )
 
     assert result.exit_code == 0, result.output
-    assert [row.id for row in captured["rows"]] == ["a", "b"]
+    assert captured["manifest"]["id"].to_list() == ["a", "b"]
     assert captured["representation"] == "residue_knn_graph"
     assert captured["params"] == {"k": 8}
     assert captured["use_cache"] is True

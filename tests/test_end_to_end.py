@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
+import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 from typer.testing import CliRunner
 
 import eris
@@ -22,7 +24,6 @@ from eris.core.learned import (
     build_learned_artifact,
 )
 from eris.datasets import ErisFolderDataset
-from eris.pipelines.manifest import BatchResultRow, read_manifest
 
 PDB = Path("tests/data/1AQ2.pdb")
 runner = CliRunner()
@@ -56,10 +57,6 @@ def _write_structure_manifest(path: Path, rows: list[tuple[str, Path]]) -> None:
         "id,path,chain,model\n" + "".join(f"{sample_id},{source},,0\n" for sample_id, source in rows),
         encoding="utf-8",
     )
-
-
-def _read_rows(path: Path) -> list[BatchResultRow]:
-    return read_manifest(path, BatchResultRow)
 
 
 def _artifact_bytes(root: Path) -> dict[str, bytes]:
@@ -115,19 +112,19 @@ def test_explicit_public_workflow_preserves_identity_failures_and_resume(
     results_path = tmp_path / "results.csv"
 
     results = eris.batch_encode(
-        manifest_path=manifest,
+        manifest,
         representation="residue_contact_graph",
         artifact_root=artifact_root,
         results_path=results_path,
         use_cache=False,
     )
 
-    assert [(row.id, row.status) for row in results] == [
+    assert results.select("id", "status").rows() == [
         ("first", "success"),
         ("second", "success"),
         ("failed", "failed"),
     ]
-    assert _read_rows(results_path) == results
+    assert_frame_equal(pl.read_csv(results_path, infer_schema=False), results)
     assert not (artifact_root / "failed").exists()
     for sample_id in ("first", "second"):
         artifact = StructureArtifact.load(artifact_root / sample_id / "residue_contact_graph")
@@ -137,7 +134,7 @@ def test_explicit_public_workflow_preserves_identity_failures_and_resume(
     before_pack = _artifact_bytes(artifact_root)
     index_path = tmp_path / "index.csv"
     packed_rows = eris.pack(artifact_root, index_path)
-    assert [row.id for row in packed_rows] == ["first", "second"]
+    assert packed_rows["id"].to_list() == ["first", "second"]
     assert _artifact_bytes(artifact_root) == before_pack
 
     resume_manifest = tmp_path / "resume.csv"
@@ -148,13 +145,13 @@ def test_explicit_public_workflow_preserves_identity_failures_and_resume(
 
     monkeypatch.setattr(eris, "encode", must_not_execute)
     resumed = eris.batch_encode(
-        manifest_path=resume_manifest,
+        resume_manifest,
         representation="residue_contact_graph",
         artifact_root=artifact_root,
         resume=True,
         use_cache=False,
     )
-    assert [(row.id, row.status) for row in resumed] == [
+    assert resumed.select("id", "status").rows() == [
         ("first", "success"),
         ("second", "success"),
     ]
@@ -168,7 +165,7 @@ def test_explicit_tensor_and_pyg_workflow(tmp_path: Path, monkeypatch: pytest.Mo
     _write_structure_manifest(manifest, [("sample", PDB)])
     artifact_root = tmp_path / "artifacts"
     eris.batch_encode(
-        manifest_path=manifest,
+        manifest,
         representation="residue_contact_graph",
         artifact_root=artifact_root,
         use_cache=False,
@@ -202,7 +199,7 @@ def test_learned_public_workflow_uses_canonical_artifacts_and_torch(
         lambda source, **kwargs: _synthetic_learned_artifact(Path(source)),  # noqa: ARG005
     )
     results = eris.batch_embed(
-        manifest_path=manifest,
+        manifest,
         representation="gearnet_edge",
         artifact_root=artifact_root,
         output_mode="both",
@@ -211,7 +208,7 @@ def test_learned_public_workflow_uses_canonical_artifacts_and_torch(
         use_cache=False,
     )
 
-    assert [(row.id, row.status, row.representation_family) for row in results] == [
+    assert results.select("id", "status", "representation_family").rows() == [
         ("learned", "success", "learned")
     ]
     artifact_dir = artifact_root / "learned" / "gearnet_edge"

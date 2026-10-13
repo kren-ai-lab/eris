@@ -2,32 +2,36 @@
 
 from __future__ import annotations
 
-import csv
 import json
 import os
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
+
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.exceptions import ErisError
-from eris.pipelines.manifest import row_location, write_atomically
+from eris.pipelines.manifest import read_csv_as_text, row_location, write_atomically
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-PACKED_INDEX_FIELDS: tuple[str, ...] = (
-    "id",
-    "artifact_dir",
-    "meta_path",
-    "representation_name",
-    "representation_family",
-    "representation_type",
-    "granularity",
-    "n_nodes",
-    "n_edges",
-    "shape_summary",
+PACKED_INDEX_SCHEMA = pl.Schema(
+    {
+        "id": pl.String,
+        "artifact_dir": pl.String,
+        "meta_path": pl.String,
+        "representation_name": pl.String,
+        "representation_family": pl.String,
+        "representation_type": pl.String,
+        "granularity": pl.String,
+        "n_nodes": pl.Int64,
+        "n_edges": pl.Int64,
+        "shape_summary": pl.String,
+    }
 )
+PACKED_INDEX_FIELDS: tuple[str, ...] = tuple(PACKED_INDEX_SCHEMA.names())
 
 
 class PackIndexError(ErisError, ValueError):
@@ -338,24 +342,11 @@ def validate_packed_index_rows(rows: list[PackedIndexRow], locator_root: Path) -
     _validate_index_rows(rows, locator_root)
 
 
-def _csv_row(row: PackedIndexRow) -> dict[str, Any]:
-    serialized = row.to_dict()
-    return {field: "" if serialized[field] is None else serialized[field] for field in PACKED_INDEX_FIELDS}
+def _index_frame(rows: list[PackedIndexRow]) -> pl.DataFrame:
+    return pl.DataFrame([row.to_dict() for row in rows], schema=PACKED_INDEX_SCHEMA, orient="row")
 
 
-def _write_index_safely(path: Path, rows: list[PackedIndexRow]) -> None:
-    def write(staging: Path) -> None:
-        with staging.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=PACKED_INDEX_FIELDS)
-            writer.writeheader()
-            writer.writerows(_csv_row(row) for row in rows)
-
-    write_atomically(path, write)
-
-
-def _validate_packed_index_header(fieldnames: Sequence[str] | None) -> None:
-    if fieldnames is None:
-        raise PackIndexError("Packed index CSV is missing a header")
+def _validate_packed_index_header(fieldnames: Sequence[str]) -> None:
     missing = [field for field in PACKED_INDEX_FIELDS if field not in fieldnames]
     if missing:
         joined = ", ".join(missing)
@@ -376,12 +367,14 @@ def read_packed_index(path: str | Path) -> list[PackedIndexRow]:
     if not index_path.is_file():
         raise PackIndexError(f"Packed index is not a file: {index_path}")
 
-    with index_path.open("r", newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        _validate_packed_index_header(reader.fieldnames)
-        rows = [
-            PackedIndexRow.from_dict(dict(row), row_index=index) for index, row in enumerate(reader, start=1)
-        ]
+    try:
+        frame = read_csv_as_text(index_path)
+    except pl.exceptions.PolarsError as error:
+        raise PackIndexError(f"Invalid packed index CSV {index_path}: {error}") from error
+    _validate_packed_index_header(frame.columns)
+    rows = [
+        PackedIndexRow.from_dict(row, row_index=index) for index, row in enumerate(frame.to_dicts(), start=1)
+    ]
     validate_packed_index_rows(rows, index_path.parent)
     return rows
 
@@ -389,7 +382,7 @@ def read_packed_index(path: str | Path) -> list[PackedIndexRow]:
 def pack_artifacts(
     artifact_root: str | Path,
     output_path: str | Path,
-) -> list[PackedIndexRow]:
+) -> pl.DataFrame:
     """Build a canonical metadata-only packed index for strict-valid Artifact Schema directories.
 
     The function never rewrites artifact ``meta.json`` or ``data.npz`` files. ``output_path``
@@ -402,8 +395,9 @@ def pack_artifacts(
     candidates = _candidate_artifact_dirs(root)
     rows = [_row_from_artifact(root, locator_root, candidate) for candidate in candidates]
     _validate_index_rows(rows, locator_root)
-    _write_index_safely(output, rows)
-    return rows
+    index = _index_frame(rows)
+    write_atomically(output, index.write_csv)
+    return index
 
 
 __all__ = [

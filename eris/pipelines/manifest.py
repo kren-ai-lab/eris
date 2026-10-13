@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import csv
 import json
 import os
 import tempfile
-from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar, TypeVar, cast
+from typing import Any
+
+import polars as pl
 
 from eris.exceptions import ErisError
 
@@ -61,15 +61,6 @@ def _required_text_path(value: Any, *, field: str, row_index: int | None = None)
     return _required_string(value, field=field, row_index=row_index)
 
 
-def _optional_string(value: Any, *, field: str, row_index: int | None = None) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        location = row_location(row_index)
-        raise ManifestValidationError(f"{location}: field '{field}' must be a string")
-    return value.strip() or None
-
-
 def _chain_selection(value: Any, *, field: str, row_index: int | None = None) -> tuple[str, ...] | None:
     if value is None or (isinstance(value, str) and not value.strip()):
         return None
@@ -101,14 +92,6 @@ def _chain_selection(value: Any, *, field: str, row_index: int | None = None) ->
     return chains
 
 
-def _optional_text_path(value: Any, *, field: str, row_index: int | None = None) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, os.PathLike):
-        value = os.fspath(value)
-    return _optional_string(value, field=field, row_index=row_index)
-
-
 def _model(value: Any, *, field: str, row_index: int | None = None) -> int:
     if value is None:
         return 0
@@ -131,192 +114,57 @@ def _model(value: Any, *, field: str, row_index: int | None = None) -> int:
     return model
 
 
-def _literal(
-    value: Any,
-    *,
-    field: str,
-    row_index: int | None = None,
-    choices: set[str],
-) -> str:
-    text = _required_string(value, field=field, row_index=row_index)
-    if text not in choices:
-        location = row_location(row_index)
-        expected = ", ".join(sorted(choices))
-        raise ManifestValidationError(f"{location}: field '{field}' must be one of: {expected}")
-    return text
+STRUCTURE_MANIFEST_FIELDS = ("id", "path", "chain", "model")
+BATCH_RESULT_SCHEMA = pl.Schema(
+    {
+        "id": pl.String,
+        "representation_name": pl.String,
+        "representation_family": pl.String,
+        "artifact_dir": pl.String,
+        "status": pl.String,
+        "error_type": pl.String,
+        "error_message": pl.String,
+    }
+)
+_FORMATS = "use .csv or .jsonl"
 
 
-@dataclass
-class BaseManifestRow(ABC):
-    """Base class for manifest rows."""
+@dataclass(frozen=True)
+class StructureManifestRow:
+    """One validated input structure in a batch manifest."""
 
     id: str
-
-    field_order: ClassVar[tuple[str, ...]]
-
-    @classmethod
-    @abstractmethod
-    def from_dict(cls, d: Mapping[str, Any], *, row_index: int | None = None) -> BaseManifestRow:
-        """Build a row from a mapping."""
-        raise NotImplementedError("Manifest from_dict not implemented.")
-
-    @abstractmethod
-    def to_dict(self) -> dict[str, Any]:
-        """Return the row as a mapping."""
-        raise NotImplementedError("Manifest to_dict not implemented.")
-
-
-@dataclass
-class StructureManifestRow(BaseManifestRow):
-    """One input structure in a batch manifest."""
-
     path: str
-    chain: str | Sequence[str] | None = None
+    chain: tuple[str, ...] | None = None
     model: int = 0
-
-    field_order: ClassVar[tuple[str, ...]] = ("id", "path", "chain", "model")
-
-    def __post_init__(self) -> None:
-        """Validate the row fields."""
-        self.id = _required_string(self.id, field="id")
-        self.path = _required_text_path(self.path, field="path")
-        self.chain = _chain_selection(self.chain, field="chain")
-        self.model = _model(self.model, field="model")
 
     @classmethod
     def from_dict(cls, d: Mapping[str, Any], *, row_index: int | None = None) -> StructureManifestRow:
         """Build a row from a mapping, rejecting unexpected fields."""
-        unexpected = sorted(set(d) - set(cls.field_order))
+        unexpected = sorted(set(d) - set(STRUCTURE_MANIFEST_FIELDS))
         if unexpected:
             location = row_location(row_index)
-            fields = ", ".join(cls.field_order)
+            fields = ", ".join(STRUCTURE_MANIFEST_FIELDS)
             raise ManifestValidationError(
                 f"{location}: unexpected field(s) {', '.join(unexpected)!r}; use canonical fields: {fields}"
             )
-        sid = _required_string(d.get("id"), field="id", row_index=row_index)
-        path = _required_text_path(d.get("path"), field="path", row_index=row_index)
-        chain = _chain_selection(d.get("chain"), field="chain", row_index=row_index)
-        model = _model(d.get("model"), field="model", row_index=row_index)
-
-        return cls(id=sid, path=path, chain=chain, model=model)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return the row as a mapping."""
-        return {
-            "id": self.id,
-            "path": self.path,
-            "chain": None if self.chain is None else list(self.chain),
-            "model": self.model,
-        }
-
-
-@dataclass
-class BatchResultRow(BaseManifestRow):
-    """Outcome of processing one manifest row."""
-
-    representation_name: str
-    representation_family: str
-    artifact_dir: str | None
-    status: str
-    error_type: str | None = None
-    error_message: str | None = None
-
-    field_order: ClassVar[tuple[str, ...]] = (
-        "id",
-        "representation_name",
-        "representation_family",
-        "artifact_dir",
-        "status",
-        "error_type",
-        "error_message",
-    )
-
-    def __post_init__(self) -> None:
-        """Validate the row fields."""
-        self.id = _required_string(self.id, field="id")
-        self.representation_name = _required_string(self.representation_name, field="representation_name")
-        self.representation_family = _literal(
-            self.representation_family,
-            field="representation_family",
-            choices={"explicit", "learned"},
+        return cls(
+            id=_required_string(d.get("id"), field="id", row_index=row_index),
+            path=_required_text_path(d.get("path"), field="path", row_index=row_index),
+            chain=_chain_selection(d.get("chain"), field="chain", row_index=row_index),
+            model=_model(d.get("model"), field="model", row_index=row_index),
         )
-        self.artifact_dir = _optional_text_path(self.artifact_dir, field="artifact_dir")
-        self.status = _literal(self.status, field="status", choices={"success", "failed"})
-        self.error_type = _optional_string(self.error_type, field="error_type")
-        self.error_message = _optional_string(self.error_message, field="error_message")
-
-        if self.status == "success":
-            if self.artifact_dir is None:
-                raise ManifestValidationError(
-                    "manifest row: field 'artifact_dir' must be non-empty for success"
-                )
-            if self.error_type is not None or self.error_message is not None:
-                raise ManifestValidationError("manifest row: success rows must not include error metadata")
-        else:
-            if self.error_type is None:
-                raise ManifestValidationError("manifest row: field 'error_type' must be non-empty for failed")
-            if self.error_message is None:
-                raise ManifestValidationError(
-                    "manifest row: field 'error_message' must be non-empty for failed"
-                )
-
-    @classmethod
-    def from_dict(cls, d: Mapping[str, Any], *, row_index: int | None = None) -> BatchResultRow:
-        """Build a row from a mapping."""
-        try:
-            return cls(
-                id=_required_string(d.get("id"), field="id", row_index=row_index),
-                representation_name=_required_string(
-                    d.get("representation_name"),
-                    field="representation_name",
-                    row_index=row_index,
-                ),
-                representation_family=_literal(
-                    d.get("representation_family"),
-                    field="representation_family",
-                    row_index=row_index,
-                    choices={"explicit", "learned"},
-                ),
-                artifact_dir=_optional_text_path(
-                    d.get("artifact_dir"), field="artifact_dir", row_index=row_index
-                ),
-                status=_literal(
-                    d.get("status"),
-                    field="status",
-                    row_index=row_index,
-                    choices={"success", "failed"},
-                ),
-                error_type=_optional_string(d.get("error_type"), field="error_type", row_index=row_index),
-                error_message=_optional_string(
-                    d.get("error_message"), field="error_message", row_index=row_index
-                ),
-            )
-        except ManifestValidationError as error:
-            message = str(error)
-            if message.startswith("manifest row:") and row_index is not None:
-                message = message.replace("manifest row:", row_location(row_index) + ":", 1)
-                raise ManifestValidationError(message) from error
-            raise
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return the row as a mapping."""
-        return {
-            "id": self.id,
-            "representation_name": self.representation_name,
-            "representation_family": self.representation_family,
-            "artifact_dir": self.artifact_dir,
-            "status": self.status,
-            "error_type": self.error_type,
-            "error_message": self.error_message,
-        }
 
 
-T = TypeVar("T", bound=BaseManifestRow)
+def read_csv_as_text(path: Path) -> pl.DataFrame:
+    """Read a CSV keeping every cell as text, with empty cells as empty strings.
 
-
-def _read_csv(path: Path) -> list[dict[str, Any]]:
-    with path.open("r", newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
+    Blank lines are skipped, as the ``csv`` module does; Polars reads them as all-empty rows.
+    """
+    frame = pl.read_csv(path, infer_schema=False, empty_string_is_null=False, raise_if_empty=False)
+    if frame.width == 0:
+        return frame
+    return frame.filter(~pl.all_horizontal(pl.all() == ""))
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -333,42 +181,33 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _read_json(path: Path) -> list[dict[str, Any]]:
-    obj = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(obj, list):
-        raise ManifestValidationError("JSON manifest must be a list of objects")
-    for index, item in enumerate(obj, start=1):
-        if not isinstance(item, dict):
-            raise ManifestValidationError(f"row {index}: JSON manifest entries must be objects")
-    return obj
+def read_manifest(manifest: str | Path | pl.DataFrame) -> list[StructureManifestRow]:
+    """Validate a structure manifest given as a CSV/JSONL path or a DataFrame.
 
-
-def read_manifest(path: Path, row_cls: type[T]) -> list[T]:
-    """Read a canonical manifest.
-
-    Supported containers are CSV, JSONL, and JSON list-of-objects. Structure manifests
-    use canonical fields ``id,path,chain,model``. Batch result manifests use canonical
-    fields ``id,representation_name,representation_family,artifact_dir,status,error_type,
-    error_message``.
+    Canonical fields are ``id,path,chain,model``. CSV cells are read as text, so no
+    value is type-inferred or coerced before validation.
     """
-    path = Path(path)
-    suffix = path.suffix.lower()
-
-    if suffix == ".csv":
-        raw_rows = _read_csv(path)
-    elif suffix == ".jsonl":
-        raw_rows = _read_jsonl(path)
-    elif suffix == ".json":
-        raw_rows = _read_json(path)
+    if isinstance(manifest, pl.DataFrame):
+        raw_rows = manifest.to_dicts()
+        source: object = "DataFrame"
     else:
-        raise ManifestValidationError(
-            f"Unsupported manifest format: {path.suffix} (use .csv, .jsonl, or .json)"
-        )
+        path = Path(manifest)
+        source = path
+        suffix = path.suffix.lower()
+        if suffix == ".csv":
+            try:
+                raw_rows = read_csv_as_text(path).to_dicts()
+            except pl.exceptions.PolarsError as error:
+                raise ManifestValidationError(f"Invalid CSV manifest {path}: {error}") from error
+        elif suffix == ".jsonl":
+            raw_rows = _read_jsonl(path)
+        else:
+            raise ManifestValidationError(f"Unsupported manifest format: {path.suffix} ({_FORMATS})")
 
     if not raw_rows:
-        raise ManifestValidationError(f"Empty manifest: {path}")
+        raise ManifestValidationError(f"Empty manifest: {source}")
 
-    rows = [row_cls.from_dict(raw, row_index=index) for index, raw in enumerate(raw_rows, 1)]
+    rows = [StructureManifestRow.from_dict(raw, row_index=index) for index, raw in enumerate(raw_rows, 1)]
     seen: dict[str, int] = {}
     for index, row in enumerate(rows, 1):
         if row.id in seen:
@@ -376,63 +215,24 @@ def read_manifest(path: Path, row_cls: type[T]) -> list[T]:
                 f"row {index}: duplicate id '{row.id}' first seen at row {seen[row.id]}"
             )
         seen[row.id] = index
-    return cast("list[T]", rows)
+    return rows
 
 
-def _csv_row(row: BaseManifestRow) -> dict[str, Any]:
-    serialized = row.to_dict()
-    return {
-        field: (
-            ""
-            if serialized[field] is None
-            else json.dumps(serialized[field])
-            if isinstance(serialized[field], list)
-            else serialized[field]
-        )
-        for field in row.field_order
-    }
-
-
-def write_manifest(path: Path, rows: Sequence[BaseManifestRow]) -> None:
-    """Write manifest rows with deterministic canonical fields for CSV, JSONL, or JSON."""
-    path = Path(path)
-    if not rows:
-        raise ManifestValidationError("Cannot write an empty manifest")
-
-    row_cls = type(rows[0])
-    if any(type(row) is not row_cls for row in rows):
-        raise ManifestValidationError("Cannot mix manifest row types")
-
+def write_results(path: Path, results: pl.DataFrame) -> None:
+    """Write a batch-result frame as CSV or JSONL, chosen by the file suffix."""
     suffix = path.suffix.lower()
-    field_order = rows[0].field_order
-
     if suffix == ".csv":
-        with path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=field_order)
-            writer.writeheader()
-            writer.writerows(_csv_row(row) for row in rows)
-        return
-
-    if suffix == ".jsonl":
-        with path.open("w", encoding="utf-8") as handle:
-            for row in rows:
-                handle.write(json.dumps(row.to_dict(), allow_nan=False))
-                handle.write("\n")
-        return
-
-    if suffix == ".json":
-        payload = [row.to_dict() for row in rows]
-        path.write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n", encoding="utf-8")
-        return
-
-    raise ManifestValidationError(f"Unsupported manifest format: {path.suffix} (use .csv, .jsonl, or .json)")
+        results.write_csv(path)
+    elif suffix == ".jsonl":
+        results.write_ndjson(path)
+    else:
+        raise ManifestValidationError(f"Unsupported results format: {path.suffix} ({_FORMATS})")
 
 
 __all__ = [
-    "BaseManifestRow",
-    "BatchResultRow",
+    "BATCH_RESULT_SCHEMA",
     "ManifestValidationError",
     "StructureManifestRow",
     "read_manifest",
-    "write_manifest",
+    "write_results",
 ]
