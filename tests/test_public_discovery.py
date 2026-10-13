@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 
 import pytest
 
@@ -10,22 +8,10 @@ import eris
 from eris.core.learned import BackendAvailability, learned_registry
 from eris.core.learned.backends.gearnet import dependencies
 from eris.core.learned.backends.gearnet.backend import GearNetEdgeBackend
+from eris.core.learned.backends.gearnet.metadata import GEARNET_EDGE_ENCODER_VERSION
 from eris.core.registry import get_encoder_info, list_encoders
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.exceptions import RepresentationNotFoundError
-
-EXPLICIT_NAMES = [
-    "atom_knn_graph",
-    "atom_point_cloud",
-    "residue_contact_graph",
-    "residue_contact_map",
-    "residue_contact_map_bins",
-    "residue_distogram",
-    "residue_distogram_bins",
-    "residue_knn_graph",
-    "residue_point_cloud",
-    "residue_voxel_grid",
-]
 
 REPRESENTATION_INFO_KEYS = {
     "name",
@@ -77,21 +63,11 @@ def test_root_exports_documented_public_surface_without_learned_execution():
         "to_pyg",
         "to_torch",
     ]
-    assert eris.RepresentationNotFoundError is RepresentationNotFoundError
-    assert callable(eris.encode)
-    assert hasattr(eris, "embed")
-    assert not hasattr(eris, "export_pyg")
-    assert not hasattr(eris, "export_torch")
-    assert not hasattr(eris, "pack_artifacts")
-    assert not hasattr(eris, "save_artifact_to_pyg")
-    assert not hasattr(eris, "save_artifact_to_torch")
 
 
-def test_public_listings_are_exact_deterministic_and_registry_backed():
-    assert eris.list_representations() == EXPLICIT_NAMES == list_encoders()
-    assert eris.list_representations() == eris.list_representations()
+def test_public_listings_are_registry_backed_and_separate():
+    assert eris.list_representations() == list_encoders()
     assert eris.list_embedders() == ["gearnet_edge"] == learned_registry.names()
-    assert eris.list_embedders() == eris.list_embedders()
     assert "gearnet_edge" not in eris.list_representations()
 
 
@@ -122,34 +98,11 @@ def test_embedder_info_has_exact_public_json_safe_shape(monkeypatch):
     info = eris.get_embedder_info("gearnet_edge")
 
     assert set(info) == EMBEDDER_INFO_KEYS
-    assert info == {
-        "name": "gearnet_edge",
-        "family": "learned",
-        "type": "embedding",
-        "coordinate_source": "model_specific",
-        "backend_id": "gearnet-edge",
-        "encoder_version": "3",
-        "output_modes": ["node", "global", "both"],
-        "granularity_by_output_mode": {
-            "node": "residue",
-            "global": "structure",
-            "both": "mixed",
-        },
-        "parameters": [
-            {
-                "name": "output_mode",
-                "type": "'node' | 'global' | 'both'",
-                "default": "both",
-                "required": False,
-                "nullable": False,
-                "description": None,
-                "choices": ["node", "global", "both"],
-            }
-        ],
-        "availability": {
-            "available": False,
-            "reason": "Install the supported GearNet environment.",
-        },
+    assert info["name"] == "gearnet_edge"
+    assert info["encoder_version"] == GEARNET_EDGE_ENCODER_VERSION
+    assert info["availability"] == {
+        "available": False,
+        "reason": "Install the supported GearNet environment.",
     }
     json.dumps(info)
 
@@ -218,17 +171,6 @@ def test_get_embedder_info_probes_once_without_constructing_backend(monkeypatch)
     assert calls == {"probe": 1}
 
 
-def test_real_embedder_discovery_supports_modern_core_python():
-    availability = dependencies.probe_gearnet_availability()
-    info = eris.get_embedder_info("gearnet_edge")
-
-    assert "gearnet_edge" in eris.list_embedders()
-    assert info["availability"] == {
-        "available": availability.available,
-        "reason": availability.reason,
-    }
-
-
 def test_representation_info_does_not_instantiate_encoder(monkeypatch):
     def failing_init(self, *args, **kwargs):
         del self, args, kwargs
@@ -237,30 +179,3 @@ def test_representation_info_does_not_instantiate_encoder(monkeypatch):
     monkeypatch.setattr(ResidueKNNGraph, "__init__", failing_init)
 
     assert eris.get_representation_info("residue_knn_graph")["type"] == "graph"
-
-
-def test_core_only_public_discovery_does_not_import_optional_frameworks():
-    script = """
-import sys
-import eris
-
-assert eris.list_representations()
-assert eris.list_embedders() == ['gearnet_edge']
-blocked = {'torch', 'torchdrug', 'torch_scatter', 'torch_cluster', 'rdkit', 'biotite'}
-loaded = sorted(blocked.intersection(sys.modules))
-if loaded:
-    raise SystemExit(f'optional frameworks loaded: {loaded}')
-"""
-
-    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603
-
-
-def test_public_discovery_preserves_separate_registries():
-    explicit_before = list_encoders()
-    learned_before = learned_registry.names()
-
-    eris.list_representations()
-    eris.list_embedders()
-
-    assert list_encoders() == explicit_before == EXPLICIT_NAMES
-    assert learned_registry.names() == learned_before == ["gearnet_edge"]

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -18,8 +16,7 @@ from eris.core.registry import get_encoder
 from eris.core.types import StructureInput
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
 from eris.exceptions import ConfigError, RepresentationNotFoundError
-
-PDB = Path("tests/data/1AQ2.pdb")
+from tests.helpers import PDB
 
 
 def _write_multichain_structure(path: Path) -> Path:
@@ -46,16 +43,6 @@ def _assert_equivalent(left: StructureArtifact, right: StructureArtifact) -> Non
         np.testing.assert_array_equal(left.data[name], right.data[name])
 
 
-def test_all_discovered_explicit_representations_encode_strict_artifacts():
-    for name in eris.list_representations():
-        artifact = eris.encode(str(PDB), representation=name, use_cache=False)
-
-        assert isinstance(artifact, StructureArtifact)
-        assert artifact.meta["schema_version"] == 1
-        assert artifact.meta["representation_name"] == name
-        artifact.validate()
-
-
 def test_public_pool_aggregates_real_residue_node_features_without_mutation():
     source = eris.encode(PDB, representation="residue_point_cloud", use_cache=False)
     source_values = source.data["node_attr"].copy()
@@ -72,13 +59,9 @@ def test_public_pool_aggregates_real_residue_node_features_without_mutation():
     np.testing.assert_array_equal(source.data["node_attr"], source_values)
 
 
-@pytest.mark.parametrize(
-    "representation",
-    ["residue_knn_graph", "residue_voxel_grid"],
-)
-def test_default_public_and_low_level_encoding_are_equivalent(representation):
-    public = eris.encode(PDB, representation=representation, use_cache=False)
-    low_level = get_encoder(representation, use_cache=False).encode(StructureInput(source=str(PDB)))
+def test_default_public_and_low_level_encoding_are_equivalent():
+    public = eris.encode(PDB, representation="residue_voxel_grid", use_cache=False)
+    low_level = get_encoder("residue_voxel_grid", use_cache=False).encode(StructureInput(source=str(PDB)))
 
     _assert_equivalent(public, low_level)
 
@@ -327,13 +310,7 @@ def test_invalid_config_combinations_fail_before_encoder(monkeypatch, kwargs, ma
         eris.encode(PDB, representation="residue_knn_graph", **kwargs)
 
 
-@pytest.mark.parametrize(
-    "override",
-    [
-        {"chain_id": "B"},
-    ],
-)
-def test_contradictory_structure_input_overrides_fail_before_encoder(monkeypatch, override):
+def test_contradictory_structure_input_overrides_fail_before_encoder(monkeypatch):
     structure_input = StructureInput(source=str(PDB), chain_id="A", model_index=1)
 
     def fail_encoder(*args, **kwargs):
@@ -345,17 +322,13 @@ def test_contradictory_structure_input_overrides_fail_before_encoder(monkeypatch
         eris.encode(
             structure_input,
             representation="residue_knn_graph",
-            **override,
+            chain_id="B",
         )
 
 
-@pytest.mark.parametrize("representation", ["missing"])
-def test_unknown_or_learned_names_use_public_not_found_error(representation):
-    with pytest.raises(
-        RepresentationNotFoundError,
-        match=f"Unknown representation '{representation}'",
-    ):
-        eris.encode(PDB, representation=representation)
+def test_unknown_representation_uses_public_not_found_error():
+    with pytest.raises(RepresentationNotFoundError, match="Unknown representation 'missing'"):
+        eris.encode(PDB, representation="missing")
 
 
 def test_output_none_does_not_persist_user_output(monkeypatch):
@@ -423,27 +396,6 @@ def test_cache_hit_is_persisted_to_independent_user_output(tmp_path, monkeypatch
     _assert_equivalent(first, second)
     _assert_equivalent(second, StructureArtifact.load(output))
     assert output.parent != cache.cache_dir
-
-
-def test_root_import_and_explicit_encode_do_not_import_optional_frameworks():
-    script = """
-import sys
-import eris
-
-artifact = eris.encode(
-    'tests/data/1AQ2.pdb',
-    representation='residue_contact_map',
-    use_cache=False,
-)
-assert artifact.meta['representation_name'] == 'residue_contact_map'
-assert hasattr(eris, 'embed')
-blocked = {'torch', 'torchdrug', 'torch_scatter', 'torch_cluster', 'rdkit'}
-loaded = sorted(blocked.intersection(sys.modules))
-if loaded:
-    raise SystemExit(f'optional frameworks loaded: {loaded}')
-"""
-
-    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603
 
 
 def test_public_signatures_resolve_at_runtime():

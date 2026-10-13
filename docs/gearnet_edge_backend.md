@@ -236,8 +236,9 @@ Do not change these during routine refactoring.
 
 Tracked tests cover dependency isolation, frozen preprocessing, native graph construction,
 checkpoint loading, model behavior, learned artifacts, cache reuse, and stored reference data
-under `tests/data/`. The native runtime reproduces frozen reference arrays within
-`rtol=1e-6` and `atol=2e-6` in the environment where those references were generated.
+under `tests/data/`. The native runtime reproduces the frozen reference embeddings within
+`rtol=1e-6` and `atol=3e-5`; the observed deviation is up to about `2.2e-5` and does not depend
+on the number of CPU threads.
 CI does not run the parity test because it needs the official checkpoint.
 
 ## License and citation

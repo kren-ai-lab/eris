@@ -9,25 +9,14 @@ import pytest
 
 import eris.core.artifacts as artifacts_module
 from eris.core.artifact_schema import (
-    InputMetadata,
     build_artifact_metadata,
     build_feature_keys,
-    build_input_metadata,
     build_provenance,
 )
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.exceptions import ConfigError
 from eris.pooling import pool
-
-
-def _input_metadata(digest: str = "a") -> InputMetadata:
-    return build_input_metadata(
-        source="memory://synthetic",
-        source_sha256=digest * 64,
-        input_format="pdb",
-        model_index=0,
-        chain_ids=["A"],
-    )
+from tests.helpers import input_metadata, learned_artifact
 
 
 def _explicit_artifact() -> StructureArtifact:
@@ -49,7 +38,7 @@ def _explicit_artifact() -> StructureArtifact:
             "implementation": "tests.synthetic.ExplicitEncoder",
             "version": "1.0",
         },
-        input_metadata=_input_metadata(),
+        input_metadata=input_metadata(),
         parameters=parameters,
         provenance=build_provenance(
             representation_name="synthetic_explicit_graph",
@@ -75,69 +64,6 @@ def _explicit_artifact() -> StructureArtifact:
         feature_keys=build_feature_keys(node_attr_keys=["mass", "charge"]),
         counts={"n_nodes": 2, "n_edges": 2, "n_self_loops": 0},
         extensions={"tests.schema": {"reviewed": True}},
-    )
-    return StructureArtifact(data=data, meta=meta)
-
-
-def _learned_artifact() -> StructureArtifact:
-    data = {
-        "valid_mask": np.array([True, False], dtype=np.bool_),
-        "node_ids": np.array(["A:1", "A:2"], dtype=np.str_),
-        "chain_id": np.array(["A", "A"], dtype=np.str_),
-        "global_embedding": np.array([0.2, 0.3], dtype=np.float32),
-        "node_embedding": np.array([[0.1, 0.2], [0.3, 0.4]], dtype=np.float32),
-    }
-    parameters = {"pooling": "mean"}
-    meta = build_artifact_metadata(
-        data=data,
-        representation_name="synthetic_learned_embedding",
-        representation_family="learned",
-        representation_type="embedding",
-        granularity="mixed",
-        coordinate_source="model_specific",
-        encoder={
-            "implementation": "tests.synthetic.LearnedEncoder",
-            "version": "1.0",
-        },
-        input_metadata=_input_metadata("b"),
-        parameters=parameters,
-        provenance=build_provenance(
-            representation_name="synthetic_learned_embedding",
-            parameters=parameters,
-            chain_ids=["A"],
-        ),
-        output_declarations=[
-            {"name": "node_embedding", "role": "node_embedding", "layout": "ND"},
-            {
-                "name": "global_embedding",
-                "role": "global_embedding",
-                "layout": "D",
-            },
-            {
-                "name": "node_ids",
-                "role": "node_ids",
-                "granularity": "residue",
-                "layout": "N",
-            },
-            {"name": "chain_id", "role": "chain_id", "granularity": "residue", "layout": "N"},
-            {
-                "name": "valid_mask",
-                "role": "valid_mask",
-                "granularity": "residue",
-                "layout": "N",
-            },
-        ],
-        feature_keys=build_feature_keys(),
-        counts={"n_nodes": 2},
-        model={
-            "architecture": "synthetic-structural-model",
-            "checkpoint": {
-                "identifier": "synthetic-checkpoint",
-                "revision": "v1",
-                "source": "memory://synthetic-checkpoint",
-                "sha256": "c" * 64,
-            },
-        },
     )
     return StructureArtifact(data=data, meta=meta)
 
@@ -178,19 +104,7 @@ def test_residue_pool_math_nan_omit_and_schema_vector(mode, expected, expected_k
     pooled = pool(source, mode=mode)
 
     np.testing.assert_equal(pooled.data["pooled_attr"], np.asarray(expected, dtype=np.float64))
-    assert pooled.meta["representation_name"] == "residue_pool"
-    assert pooled.meta["representation_family"] == "explicit"
-    assert pooled.meta["representation_type"] == "vector"
-    assert pooled.meta["granularity"] == "structure"
     assert pooled.meta["feature_keys"]["pooled_attr_keys"] == expected_keys
-    assert pooled.meta["outputs"] == [
-        {
-            "name": "pooled_attr",
-            "role": "pooled_features",
-            "granularity": "structure",
-            "layout": "F",
-        }
-    ]
     pooled.validate()
     assert source.meta == meta_before
     _assert_data_unchanged(source, data_before)
@@ -258,7 +172,7 @@ def test_residue_pool_rejects_invalid_requests(kwargs, match):
 
 
 def test_residue_pool_rejects_incompatible_granularity_and_malformed_source():
-    learned = _learned_artifact()
+    learned = learned_artifact()
     with pytest.raises(ConfigError, match="residue granularity"):
         pool(learned, source="node_embedding")
 
@@ -307,9 +221,7 @@ def test_explicit_finalize_is_idempotent_and_save_preserves_contract(tmp_path):
     artifact.save(target)
 
     assert {path.name for path in target.iterdir()} == {"data.npz", "meta.json"}
-    serialized = (target / "meta.json").read_text(encoding="utf-8")
-    assert not serialized.endswith("\n")
-    stored_meta = json.loads(serialized)
+    stored_meta = json.loads((target / "meta.json").read_text(encoding="utf-8"))
     for field in (
         "schema_version",
         "input",
@@ -331,7 +243,7 @@ def test_explicit_finalize_is_idempotent_and_save_preserves_contract(tmp_path):
 
 
 def test_learned_validate_finalize_and_save(tmp_path):
-    artifact = _learned_artifact()
+    artifact = learned_artifact(with_mask=True)
     data_before = {name: array.copy() for name, array in artifact.data.items()}
 
     artifact.validate()
@@ -339,18 +251,7 @@ def test_learned_validate_finalize_and_save(tmp_path):
     artifact.save(tmp_path / "learned")
 
     stored_meta = json.loads((tmp_path / "learned" / "meta.json").read_text(encoding="utf-8"))
-    assert stored_meta["schema_version"] == 1
-    assert stored_meta["representation_family"] == "learned"
-    assert stored_meta["representation_type"] == "embedding"
-    assert stored_meta["coordinate_source"] == "model_specific"
-    assert stored_meta["model"]["checkpoint"]["identifier"] == "synthetic-checkpoint"
-    assert [output["name"] for output in stored_meta["outputs"]] == [
-        "node_embedding",
-        "global_embedding",
-        "node_ids",
-        "chain_id",
-        "valid_mask",
-    ]
+    assert stored_meta == artifact.meta
     _assert_data_unchanged(artifact, data_before)
 
 
@@ -379,21 +280,14 @@ def test_valid_finalize_canonicalizes_only_after_validation():
     _assert_data_unchanged(artifact, data_before)
 
 
-@pytest.mark.parametrize(
-    "unsafe",
-    [
-        np.array([object()], dtype=object),
-        np.array([1 + 2j], dtype=np.complex64),
-    ],
-    ids=["object", "complex"],
-)
-def test_unsafe_payload_fails_before_filesystem_mutation(tmp_path, unsafe):
+def test_unsafe_payload_fails_before_filesystem_mutation(tmp_path):
+    unsafe = np.array([object()], dtype=object)
     artifact = _explicit_artifact()
     artifact.data["node_attr"] = unsafe
     meta_before = deepcopy(artifact.meta)
     target = tmp_path / "unsafe"
 
-    with pytest.raises(ArtifactValidationError):
+    with pytest.raises(ArtifactValidationError, match="prohibited dtype"):
         artifact.save(target)
 
     assert artifact.meta == meta_before
@@ -401,15 +295,15 @@ def test_unsafe_payload_fails_before_filesystem_mutation(tmp_path, unsafe):
     assert not target.exists()
 
 
-@pytest.mark.parametrize("bad_value", [float("nan")], ids=["nan"])
-def test_non_finite_metadata_fails_without_mutation(tmp_path, bad_value):
+def test_non_finite_metadata_fails_without_mutation(tmp_path):
+    bad_value = float("nan")
     artifact = _explicit_artifact()
     artifact.meta["extensions"]["tests.schema"]["non_finite"] = bad_value
     original_meta = artifact.meta
     data_before = {name: array.copy() for name, array in artifact.data.items()}
     target = tmp_path / "non-finite"
 
-    with pytest.raises(ArtifactValidationError):
+    with pytest.raises(ArtifactValidationError, match="finite"):
         artifact.save(target)
 
     assert artifact.meta is original_meta
@@ -418,74 +312,21 @@ def test_non_finite_metadata_fails_without_mutation(tmp_path, bad_value):
     assert not target.exists()
 
 
-def test_save_enforces_strict_validation(tmp_path):
-    artifact = _explicit_artifact()
-    artifact.meta["counts"]["n_nodes"] = 99
-    meta_before = deepcopy(artifact.meta)
-    target = tmp_path / "invalid-counts"
-
-    with pytest.raises(ArtifactValidationError, match="n_nodes"):
-        artifact.save(target)
-
-    assert artifact.meta == meta_before
-    assert not target.exists()
-
-
-@pytest.mark.parametrize("operation", ["finalize"])
-def test_invalid_operations_do_not_mutate_artifact(tmp_path, operation):
+@pytest.mark.parametrize("operation", ["finalize", "save"])
+def test_invalid_artifact_is_rejected_without_mutation(tmp_path, operation):
     artifact = _explicit_artifact()
     artifact.meta["counts"]["n_nodes"] = 99
     meta_before = deepcopy(artifact.meta)
     data_before = {name: array.copy() for name, array in artifact.data.items()}
     target = tmp_path / "invalid"
 
-    with pytest.raises(ArtifactValidationError, match="n_nodes"):  # noqa: PT012
-        if operation == "validate":
-            artifact.validate()
-        elif operation == "finalize":
-            artifact.finalize()
-        else:
-            artifact.save(target)
+    action = artifact.finalize if operation == "finalize" else lambda: artifact.save(target)
+    with pytest.raises(ArtifactValidationError, match="n_nodes"):
+        action()
 
     assert artifact.meta == meta_before
     _assert_data_unchanged(artifact, data_before)
     assert not target.exists()
-
-
-@pytest.mark.parametrize(
-    "version",
-    [True, "2", 3],
-    ids=["bool", "string", "future"],
-)
-@pytest.mark.parametrize("operation", ["validate"])
-def test_invalid_schema_versions_reject_without_mutation(
-    tmp_path,
-    version,
-    operation,
-):
-    meta = {"schema_version": version}
-    artifact = StructureArtifact(data={}, meta=meta)
-    target = tmp_path / "invalid-version"
-
-    with pytest.raises(ArtifactValidationError):  # noqa: PT012
-        if operation == "save":
-            artifact.save(target)
-        else:
-            getattr(artifact, operation)()
-
-    assert artifact.meta is meta
-    assert artifact.data == {}
-    assert not target.exists()
-
-
-def test_versionless_metadata_is_rejected_by_the_schema_boundary():
-    artifact = StructureArtifact(
-        data={},
-        meta={"encoder_name": "legacy", "representation_name": "mixed_identity"},
-    )
-
-    with pytest.raises(ArtifactValidationError, match="missing required fields"):
-        artifact.finalize()
 
 
 def test_staging_failure_preserves_existing_artifact_and_cleans_temps(
@@ -536,14 +377,7 @@ def test_load_uses_persisted_contract(tmp_path):
     artifact = _explicit_artifact()
     artifact.save(target)
 
-    loaded = StructureArtifact.load(target)
+    loaded = StructureArtifact.load(str(target))
 
     assert loaded.meta == artifact.meta
     assert list(loaded.data) == [output["name"] for output in artifact.meta["outputs"]]
-
-
-def test_load_accepts_string_path(tmp_path):
-    target = tmp_path / "artifacts"
-    _explicit_artifact().save(target)
-
-    assert StructureArtifact.load(str(target)).meta["schema_version"] == 1

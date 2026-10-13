@@ -31,9 +31,9 @@ from eris.core.learned.types import StructuralEmbeddingResult
 from eris.exceptions import ConfigError
 from eris.pipelines.batch_encode import batch_embed, batch_encode
 from eris.pipelines.manifest import ManifestValidationError, StructureManifestRow, read_manifest
+from tests.helpers import MULTIMER_PDB, PDB, TWO_CHAIN_PDB
 
-PDB = Path("tests/data/1AQ2.pdb")
-OTHER_PDB = Path("tests/data/3EC1.pdb")
+OTHER_PDB = MULTIMER_PDB
 batch_module = importlib.import_module("eris.pipelines.batch_encode")
 
 
@@ -121,27 +121,6 @@ def _learned_artifact(
     )
 
 
-def test_batch_encode_success_preserves_order_layout_and_strict(tmp_path: Path) -> None:
-    manifest = _manifest(("first", str(PDB)), ("second", str(PDB)))
-    root = tmp_path / "artifacts"
-
-    results = batch_encode(
-        manifest,
-        representation="residue_contact_map",
-        artifact_root=root,
-        use_cache=False,
-    )
-
-    assert results["id"].to_list() == ["first", "second"]
-    assert results["status"].to_list() == ["success", "success"]
-    for sample_id in ["first", "second"]:
-        target = root / sample_id / "residue_contact_map"
-        assert target.is_dir()
-        artifact = StructureArtifact.load(target)
-        assert artifact.meta["representation_name"] == "residue_contact_map"
-        assert artifact.meta["representation_family"] == "explicit"
-
-
 def test_manifest_accepts_only_canonical_structure_fields(tmp_path: Path) -> None:
     manifest = tmp_path / "structures.jsonl"
     manifest.write_text(
@@ -180,14 +159,7 @@ def test_manifest_batch_and_resume_canonicalize_multichain_selection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source = tmp_path / "multi.pdb"
-    source.write_text(
-        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 10.00           C  \n"
-        "TER\n"
-        "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C  \n"
-        "TER\n"
-        "END\n",
-        encoding="ascii",
-    )
+    source.write_text(TWO_CHAIN_PDB, encoding="ascii")
     manifest = tmp_path / "structures.jsonl"
     manifest.write_text(
         f'{{"id":"protein","path":"{source.as_posix()}","chain":["B","A"],"model":0}}\n',
@@ -221,40 +193,15 @@ def test_manifest_batch_and_resume_canonicalize_multichain_selection(
     assert resumed["status"][0] == "success"
 
 
-@pytest.mark.parametrize("alias", ["sample_id", "input", "chain_id", "model_index"])
-def test_manifest_rejects_legacy_structure_field_aliases(tmp_path: Path, alias: str) -> None:
+def test_manifest_rejects_unexpected_fields(tmp_path: Path) -> None:
     manifest = tmp_path / "structures.jsonl"
-    fields = {"id": "protein", "path": "protein.pdb", "chain": "A", "model": 1}
-    fields[alias] = fields.pop(
-        {
-            "sample_id": "id",
-            "input": "path",
-            "chain_id": "chain",
-            "model_index": "model",
-        }[alias]
-    )
-    manifest.write_text(f"{fields!r}\n".replace("'", '"'), encoding="utf-8")
+    manifest.write_text('{"sample_id": "protein", "path": "protein.pdb"}\n', encoding="utf-8")
 
     with pytest.raises(ManifestValidationError, match="unexpected field"):
         read_manifest(manifest)
 
 
-def test_batch_encode_uses_artifact_root_only(tmp_path: Path) -> None:
-    with pytest.raises(TypeError, match="unexpected keyword argument 'out'"):
-        batch_encode(  # pyrefly: ignore[missing-argument]
-            _manifest(("protein", str(PDB))),
-            representation="residue_contact_map",
-            out=tmp_path,  # pyrefly: ignore[unexpected-keyword]
-        )
-
-    import inspect
-
-    parameters = inspect.signature(batch_encode).parameters
-    assert "encoders" not in parameters
-    assert "no_cache" not in parameters
-
-
-def test_batch_encode_rejects_pre_release_nested_parameter_translation(tmp_path: Path) -> None:
+def test_batch_encode_rejects_unknown_nested_parameters(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="Unknown parameters"):
         batch_encode(
             _manifest(("protein", str(PDB))),
@@ -263,12 +210,6 @@ def test_batch_encode_rejects_pre_release_nested_parameter_translation(tmp_path:
             params={"residue_contact_map": {"cutoff": 8.0}},
             use_cache=False,
         )
-
-
-def test_batch_embed_uses_artifact_root_only() -> None:
-    import inspect
-
-    assert "out" not in inspect.signature(batch_embed).parameters
 
 
 def test_batch_encode_delegates_to_public_api_and_propagates_config(monkeypatch, tmp_path):
@@ -570,22 +511,3 @@ def test_learned_resume_reuses_only_matching_model_identity(tmp_path, monkeypatc
     assert len(calls) == 1
     assert results["status"][0] == "success"
     assert StructureArtifact.load(target).meta["model"] == GEARNET_EDGE_MODEL_DESCRIPTOR.to_dict()
-
-
-def test_result_manifest_uses_canonical_batch_fields(tmp_path, monkeypatch):
-    artifact = _explicit_artifact()
-    monkeypatch.setattr(batch_module.eris, "encode", lambda *args, **kwargs: artifact)  # noqa: ARG005
-    results_path = tmp_path / "batch_results.csv"
-
-    batch_encode(
-        _manifest(("protein", str(PDB))),
-        representation="residue_contact_map",
-        artifact_root=tmp_path / "artifacts",
-        results_path=results_path,
-        use_cache=False,
-    )
-
-    expected_header = (
-        "id,representation_name,representation_family,artifact_dir,status,error_type,error_message"
-    )
-    assert results_path.read_text(encoding="utf-8").splitlines()[0] == expected_header

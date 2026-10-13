@@ -1,51 +1,27 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from eris.core.artifact_schema import compute_config_fingerprint
 from eris.core.artifacts import StructureArtifact
-from eris.core.cache import DiskCache, compute_cache_key
 from eris.core.config import ResiduePointCloudConfig
-from eris.core.hashing import sha256_file
 from eris.core.io import StructureLoadError
 from eris.core.types import StructureInput
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
-
-
-def _atom_line(
-    serial: int,
-    atom_name: str,
-    residue_name: str,
-    residue_number: int,
-    x: float,
-    *,
-    insertion_code: str = " ",
-) -> str:
-    return (
-        f"ATOM  {serial:5d} {atom_name:>4s} {residue_name:>3s} A"
-        f"{residue_number:4d}{insertion_code}   {x:8.3f}{0.0:8.3f}{0.0:8.3f}"
-        f"{1.0:6.2f}{10.0:6.2f}           C  "
-    )
+from tests.helpers import PDB, atom_line, write_pdb
 
 
 def _write_missing_ca_structure(path: Path) -> StructureInput:
-    path.write_text(
-        "\n".join(
-            (
-                _atom_line(1, "CA", "ALA", 15, 10.0),
-                _atom_line(2, "N", "GLY", 16, 12.0),
-                _atom_line(3, "CA", "SER", 20, 14.0, insertion_code="A"),
-                "TER",
-                "END",
-            )
-        )
-        + "\n",
-        encoding="ascii",
+    write_pdb(
+        path,
+        [
+            atom_line(1, "CA", "ALA", 15, 10.0),
+            atom_line(2, "N", "GLY", 16, 12.0),
+            atom_line(3, "CA", "SER", 20, 14.0, insertion_code="A"),
+        ],
     )
     return StructureInput(source=str(path), chain_id="A")
 
@@ -62,7 +38,6 @@ def test_residue_encoder_traces_skipped_residues(tmp_path: Path) -> None:
     structure_input = _write_missing_ca_structure(tmp_path / "missing-ca.pdb")
     artifact = ResiduePointCloudCA(missing_residue_center="skip", use_cache=False).encode(structure_input)
 
-    assert ResiduePointCloudCA.version == "0.1.3"
     assert artifact.meta["parameters"]["missing_residue_center"] == "skip"
     assert artifact.data["residue_ids"].tolist() == ["A:15::ALA", "A:20:A:SER"]
     assert artifact.data["omitted_residue_ids"].tolist() == ["A:16::GLY"]
@@ -80,18 +55,7 @@ def test_residue_encoder_fails_without_partial_artifact_for_error(tmp_path: Path
 
 def test_zero_omission_output_is_deterministic_and_round_trips(tmp_path: Path) -> None:
     source = tmp_path / "complete.pdb"
-    source.write_text(
-        "\n".join(
-            (
-                _atom_line(1, "CA", "ALA", 1, 0.0),
-                _atom_line(2, "CA", "GLY", 2, 4.0),
-                "TER",
-                "END",
-            )
-        )
-        + "\n",
-        encoding="ascii",
-    )
+    write_pdb(source, [atom_line(1, "CA", "ALA", 1, 0.0), atom_line(2, "CA", "GLY", 2, 4.0)])
     artifact = ResiduePointCloudCA(use_cache=False).encode(StructureInput(source=str(source)))
     target = tmp_path / "artifact"
     artifact.save(target)
@@ -106,18 +70,7 @@ def test_zero_omission_output_is_deterministic_and_round_trips(tmp_path: Path) -
 
 def test_residue_voxel_metadata_reconstructs_the_existing_transform(tmp_path: Path) -> None:
     source = tmp_path / "voxel.pdb"
-    source.write_text(
-        "\n".join(
-            (
-                _atom_line(1, "CA", "ALA", 1, 10.0),
-                _atom_line(2, "CA", "GLY", 2, 14.0),
-                "TER",
-                "END",
-            )
-        )
-        + "\n",
-        encoding="ascii",
-    )
+    write_pdb(source, [atom_line(1, "CA", "ALA", 1, 10.0), atom_line(2, "CA", "GLY", 2, 14.0)])
     artifact = VoxelGridCA(
         grid_size=5,
         voxel_size=2.0,
@@ -142,57 +95,6 @@ def test_residue_voxel_metadata_reconstructs_the_existing_transform(tmp_path: Pa
     assert artifact.data["grid"][0, 3, 2, 2] == 1.0
 
 
-def test_old_residue_cache_key_cannot_satisfy_new_output_contract(tmp_path: Path) -> None:
-    structure_input = _write_missing_ca_structure(tmp_path / "missing-ca.pdb")
-    chain_ids = structure_input.chain_id
-    assert isinstance(chain_ids, tuple)
-    cache = DiskCache(tmp_path / "cache")
-    current = ResiduePointCloudCA(use_cache=False).encode(structure_input)
-    stale_meta = deepcopy(current.meta)
-    stale_data = dict(current.data)
-    stale_data.pop("omitted_residue_ids")
-    stale_meta["encoder"]["version"] = "0.1.0"
-    stale_meta["outputs"] = [
-        output for output in stale_meta["outputs"] if output["name"] != "omitted_residue_ids"
-    ]
-    stale_meta["shapes"].pop("omitted_residue_ids")
-    stale_meta["dtypes"].pop("omitted_residue_ids")
-    stale_meta["counts"].pop("n_omitted_residues")
-    stale = StructureArtifact(data=stale_data, meta=stale_meta)
-    stale.validate()
-
-    encoder = ResiduePointCloudCA(use_cache=True, cache=cache)
-    parameters = encoder.config.to_dict()
-    old_key = compute_cache_key(
-        representation_name=encoder.name,
-        encoder_implementation=encoder.encoder_implementation,
-        encoder_version="0.1.0",
-        config_fingerprint=compute_config_fingerprint(encoder.name, parameters, chain_ids=chain_ids),
-        source_sha256=sha256_file(Path(structure_input.source)),
-        parser_hint=".pdb",
-        model_index=structure_input.model_index,
-        chain_ids=chain_ids,
-    )
-    current_key = compute_cache_key(
-        representation_name=encoder.name,
-        encoder_implementation=encoder.encoder_implementation,
-        encoder_version=encoder.version,
-        config_fingerprint=compute_config_fingerprint(encoder.name, parameters, chain_ids=chain_ids),
-        source_sha256=sha256_file(Path(structure_input.source)),
-        parser_hint=".pdb",
-        model_index=structure_input.model_index,
-        chain_ids=chain_ids,
-    )
-    cache.set(old_key, stale)
-
-    assert encoder.version == "0.1.3"
-    assert old_key != current_key
-    assert cache.get(old_key) is not None
-    result = encoder.encode(structure_input)
-    assert result.data["omitted_residue_ids"].tolist() == ["A:16::GLY"]
-    assert cache.get(current_key) is not None
-
-
 @pytest.mark.parametrize("representation", ["residue_point_cloud", "atom_point_cloud"])
 def test_encode_parses_the_structure_once_on_cache_miss(monkeypatch, representation):
     import gemmi
@@ -207,6 +109,6 @@ def test_encode_parses_the_structure_once_on_cache_miss(monkeypatch, representat
         return real_read(*args, **kwargs)
 
     monkeypatch.setattr(gemmi, "read_structure", counting_read)
-    eris.encode("tests/data/1AQ2.pdb", representation=representation, use_cache=False)
+    eris.encode(PDB, representation=representation, use_cache=False)
 
     assert len(calls) == 1

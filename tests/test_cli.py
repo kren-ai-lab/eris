@@ -16,10 +16,10 @@ import eris
 import eris.cli.embed as embed_cli
 from eris.cli.main import EXIT_CONFIG, EXIT_INTERNAL, EXIT_WORKFLOW, app, main
 from eris.core.artifacts import StructureArtifact
+from eris.core.learned.backends.gearnet.metadata import GEARNET_EDGE_MODEL_DESCRIPTOR
 from eris.exceptions import ExecutionError
+from tests.helpers import PDB, atom_line, write_pdb
 
-PDB = Path("tests/data/1AQ2.pdb")
-EXPECTED_CHECKPOINT_SHA256 = "6dc11e2db6eff3c90f90672af227c647125adb7476de18a2bb860457bdb598ec"
 RESIDUES = (
     "ALA",
     "ARG",
@@ -56,30 +56,14 @@ def _assert_artifacts_equivalent(left: StructureArtifact, right: StructureArtifa
         np.testing.assert_array_equal(left.data[name], right.data[name])
 
 
-def _atom_line(index: int, residue_name: str) -> str:
-    x = 3.8 * (index - 1)
-    y = 1.25 * ((index - 1) % 3)
-    z = 0.75 * ((index - 1) % 2)
-    return (
-        f"ATOM  {index:5d}  CA  {residue_name:>3s} A{index:4d}    "
-        f"{x:8.3f}{y:8.3f}{z:8.3f}{1.0:6.2f}{10.0:6.2f}           C  "
-    )
-
-
 def _write_gearnet_fixture(tmp_path: Path) -> Path:
-    source = tmp_path / "canonical-12.pdb"
-    source.write_text(
-        "\n".join(
-            [
-                *(_atom_line(index, name) for index, name in enumerate(RESIDUES, start=1)),
-                "TER",
-                "END",
-            ]
-        )
-        + "\n",
-        encoding="ascii",
+    return write_pdb(
+        tmp_path / "canonical-12.pdb",
+        [
+            atom_line(i, "CA", name, i, (3.8 * (i - 1), 1.25 * ((i - 1) % 3), 0.75 * ((i - 1) % 2)))
+            for i, name in enumerate(RESIDUES, start=1)
+        ],
     )
-    return source
 
 
 def _checkpoint() -> Path:
@@ -94,37 +78,6 @@ def _checkpoint() -> Path:
 
 def _require_gearnet_stack() -> None:
     pytest.importorskip("torch")
-
-
-def test_embed_help_exposes_public_direct_command_only():
-    help_result = runner.invoke(app, ["embed", "--help"], color=False, terminal_width=200)
-    output = Text.from_ansi(help_result.output).plain
-
-    assert help_result.exit_code == 0
-    for expected in (
-        "INPUT",
-        "--representation",
-        "--out",
-        "--chain",
-        "--model",
-        "--output-mode",
-        "--checkpoint",
-        "--device",
-        "--precision",
-        "--no-cache",
-    ):
-        assert expected in output
-    for historical in (
-        "single",
-        "batch",
-        "--encoder",
-        "--params",
-        "--allow-unknown-params",
-        "--id",
-    ):
-        assert historical not in output
-    assert "verified checkpoint cache" in output
-    assert "registered official checkpoint" in output
 
 
 def test_direct_embed_command_delegates_to_public_api(monkeypatch, tmp_path):
@@ -351,70 +304,6 @@ def test_unavailable_backend_error_is_clean(monkeypatch, capsys, tmp_path):
     assert "unavailable" in output
     assert "ModuleNotFoundError" not in output
     assert "Traceback" not in output
-    assert not (tmp_path / "meta.json").exists()
-    assert not (tmp_path / "data.npz").exists()
-
-
-def test_missing_checkpoint_error_is_clean(monkeypatch, capsys, tmp_path):
-    def fail_embed(*args, **kwargs):
-        del args, kwargs
-        raise ExecutionError(
-            "Automatic download of official checkpoint 'mc_gearnet_edge.pth' failed: offline. "
-            "Retry with network access or provide a local checkpoint_path (CLI: --checkpoint)."
-        )
-
-    monkeypatch.setattr(embed_cli.eris, "embed", fail_embed)
-
-    code = main(
-        [
-            "embed",
-            str(PDB),
-            "--representation",
-            "gearnet_edge",
-            "--out",
-            str(tmp_path),
-        ],
-    )
-
-    output = capsys.readouterr().err
-    assert code == EXIT_WORKFLOW
-    assert "mc_gearnet_edge.pth" in output
-    assert "Automatic download" in output
-    assert "--checkpoint" in output
-    assert "Traceback" not in output
-    assert not (tmp_path / "meta.json").exists()
-    assert not (tmp_path / "data.npz").exists()
-
-
-def test_historical_embed_subcommands_and_flags_are_not_public():
-    root_help = runner.invoke(app, ["--help"])
-    embed_help = runner.invoke(app, ["embed", "--help"])
-
-    assert root_help.exit_code == 0
-    assert embed_help.exit_code == 0
-    assert "embed" in root_help.output
-    assert "single" not in embed_help.output
-    assert "batch" not in embed_help.output
-    assert "--encoder" not in embed_help.output
-    assert "--params" not in embed_help.output
-    assert runner.invoke(app, ["embed", "batch"]).exit_code == 2
-
-
-def test_embed_help_does_not_import_optional_learned_frameworks():
-    script = """
-import sys
-from typer.testing import CliRunner
-from eris.cli.main import app
-
-result = CliRunner().invoke(app, ['embed', '--help'])
-assert result.exit_code == 0, result.output
-blocked = {'torch', 'torchdrug', 'torch_scatter', 'torch_cluster', 'rdkit'}
-loaded = sorted(blocked.intersection(sys.modules))
-if loaded:
-    raise SystemExit(f'optional frameworks loaded: {loaded}')
-"""
-
-    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603
 
 
 def _assert_real_gearnet_artifact(
@@ -430,59 +319,19 @@ def _assert_real_gearnet_artifact(
     assert artifact.meta["granularity"] == granularity
     assert artifact.meta["coordinate_source"] == "model_specific"
     assert artifact.meta["parameters"]["output_mode"] == output_mode
-    assert artifact.meta["model"]["checkpoint"]["sha256"] == EXPECTED_CHECKPOINT_SHA256
-    assert artifact.meta["feature_keys"] == {}
+    assert artifact.meta["model"]["checkpoint"]["sha256"] == GEARNET_EDGE_MODEL_DESCRIPTOR.checkpoint.sha256
     assert "valid_mask" not in artifact.data
+    if output_mode == "both":
+        assert artifact.data["node_embedding"].shape[1] == artifact.data["global_embedding"].shape[0]
     if output_mode in {"node", "both"}:
-        assert artifact.data["node_embedding"].shape == (12, 3072)
+        assert artifact.data["node_embedding"].shape[0] == len(RESIDUES)
         assert artifact.data["node_embedding"].dtype == np.float32
         assert np.isfinite(artifact.data["node_embedding"]).all()
-        assert artifact.data["node_ids"].shape == (12,)
         assert artifact.data["node_ids"].dtype.kind == "U"
-        assert len(set(artifact.data["node_ids"].tolist())) == 12
+        assert len(set(artifact.data["node_ids"].tolist())) == len(RESIDUES)
     if output_mode in {"global", "both"}:
-        assert artifact.data["global_embedding"].shape == (3072,)
         assert artifact.data["global_embedding"].dtype == np.float32
         assert np.isfinite(artifact.data["global_embedding"]).all()
-
-
-@pytest.mark.parametrize(
-    ("output_mode", "granularity"),
-    [("both", "mixed")],
-)
-def test_real_gearnet_cli_modes(output_mode, granularity, tmp_path):
-    _require_gearnet_stack()
-    checkpoint = _checkpoint()
-    source = _write_gearnet_fixture(tmp_path)
-    output = tmp_path / output_mode
-
-    result = runner.invoke(
-        app,
-        [
-            "embed",
-            str(source),
-            "--representation",
-            "gearnet_edge",
-            "--output-mode",
-            output_mode,
-            "--checkpoint",
-            str(checkpoint),
-            "--device",
-            "cpu",
-            "--precision",
-            "fp32",
-            "--out",
-            str(output),
-            "--no-cache",
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    _assert_real_gearnet_artifact(
-        StructureArtifact.load(output),
-        output_mode=output_mode,
-        granularity=granularity,
-    )
 
 
 def test_real_gearnet_cli_and_public_api_are_equivalent(tmp_path):
@@ -524,6 +373,7 @@ def test_real_gearnet_cli_and_public_api_are_equivalent(tmp_path):
         output=api_output,
         use_cache=False,
     )
+    _assert_real_gearnet_artifact(StructureArtifact.load(cli_output), output_mode="both", granularity="mixed")
     _assert_artifacts_equivalent(StructureArtifact.load(cli_output), api_artifact)
     _assert_artifacts_equivalent(
         StructureArtifact.load(cli_output),

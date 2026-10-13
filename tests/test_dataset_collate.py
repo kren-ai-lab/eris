@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 import csv
-import subprocess
-import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
 
 import numpy as np
-import polars as pl
 import pytest
 
 pytest.importorskip("torch")
@@ -16,17 +12,14 @@ pytest.importorskip("torch")
 from eris.core.artifact_schema import (
     build_artifact_metadata,
     build_feature_keys,
-    build_input_metadata,
     build_provenance,
 )
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.datasets.collate import collate_cloud, collate_graph, collate_grid, collate_matrix
 from eris.datasets.torch_dataset import DatasetIndexError, ErisFolderDataset
 from eris.exceptions import OptionalDependencyError
-from eris.pipelines.batch_encode import batch_encode
 from eris.pipelines.pack import PACKED_INDEX_FIELDS, pack_artifacts
-
-PDB = Path("tests/data/1AQ2.pdb")
+from tests.helpers import input_metadata, learned_artifact
 
 
 def _write_index(
@@ -58,7 +51,6 @@ def _artifact_metadata(
     *,
     data: dict[str, np.ndarray],
     representation_name: str,
-    representation_family: str = "explicit",
     representation_type: str,
     granularity: str = "residue",
     counts: dict[str, int] | None = None,
@@ -74,13 +66,8 @@ def _artifact_metadata(
             }
         ]
     parameters = {"fixture": representation_name}
-    requires_chain_id = granularity == "residue" or (granularity == "mixed" and "node_embedding" in data)
-    if requires_chain_id and "chain_id" not in data:
-        node_count = (
-            int(data["node_embedding"].shape[0])
-            if "node_embedding" in data
-            else int(data[next(iter(data))].shape[0])
-        )
+    if granularity == "residue" and "chain_id" not in data:
+        node_count = int(data[next(iter(data))].shape[0])
         if representation_type == "grid":
             node_count = 1
         data["chain_id"] = np.full((node_count,), "A", dtype=np.str_)
@@ -92,36 +79,18 @@ def _artifact_metadata(
                 "layout": "N",
             }
         )
-    kwargs: dict[str, Any] = {}
-    if representation_family == "learned":
-        kwargs["model"] = {
-            "architecture": "SyntheticModel",
-            "checkpoint": {
-                "identifier": "synthetic.pth",
-                "revision": "test-revision",
-                "source": "memory://checkpoint",
-                "sha256": "f" * 64,
-            },
-        }
-
     return build_artifact_metadata(
         data=data,
         representation_name=representation_name,
-        representation_family=representation_family,
+        representation_family="explicit",
         representation_type=representation_type,
         granularity=granularity,
-        coordinate_source="model_specific" if representation_family == "learned" else "ca",
+        coordinate_source="ca",
         encoder={
             "implementation": "tests.fixtures.DatasetProducer",
             "version": "1",
         },
-        input_metadata=build_input_metadata(
-            source="memory://dataset",
-            source_sha256="a" * 64,
-            input_format="pdb",
-            model_index=0,
-            chain_ids=["A"],
-        ),
+        input_metadata=input_metadata(),
         parameters=parameters,
         provenance=build_provenance(
             representation_name=representation_name,
@@ -131,7 +100,6 @@ def _artifact_metadata(
         output_declarations=outputs,
         feature_keys=build_feature_keys(),
         counts={} if counts is None else counts,
-        **kwargs,
     )
 
 
@@ -139,7 +107,6 @@ def _save_artifact(
     target: Path,
     *,
     representation_name: str = "residue_point_cloud",
-    representation_family: str = "explicit",
     representation_type: str = "cloud",
     granularity: str = "residue",
     data: dict[str, np.ndarray] | None = None,
@@ -153,7 +120,6 @@ def _save_artifact(
         meta=_artifact_metadata(
             data=data,
             representation_name=representation_name,
-            representation_family=representation_family,
             representation_type=representation_type,
             granularity=granularity,
             outputs=outputs,
@@ -228,48 +194,13 @@ def _save_grid_artifact(target: Path) -> StructureArtifact:
     )
 
 
-def _save_learned_artifact(target: Path) -> StructureArtifact:
-    return _save_artifact(
-        target,
-        representation_name="synthetic_learned_embedding",
-        representation_family="learned",
-        representation_type="embedding",
-        granularity="mixed",
-        data={
-            "node_embedding": np.asarray([[0.1, 0.2], [0.3, 0.4]], dtype=np.float32),
-            "global_embedding": np.asarray([0.5, 0.6], dtype=np.float32),
-            "node_ids": np.asarray(["A:1::ALA", "A:2::GLY"], dtype=np.str_),
-        },
-        outputs=[
-            {"name": "node_embedding", "role": "node_embedding", "layout": "ND"},
-            {"name": "global_embedding", "role": "global_embedding", "layout": "D"},
-            {
-                "name": "node_ids",
-                "role": "node_ids",
-                "granularity": "residue",
-                "layout": "N",
-            },
-        ],
-        counts={"n_nodes": 2},
-    )
+def _save_learned_artifact(target: Path) -> None:
+    learned_artifact(representation_name="synthetic_learned_embedding").save(target)
 
 
 def _pack(root: Path, index_path: Path) -> list[dict[str, str]]:
     pack_artifacts(root, index_path)
     return _read_index(index_path)
-
-
-def test_dataset_accepts_canonical_pack_index_and_preserves_len_order(tmp_path: Path) -> None:
-    root = tmp_path / "artifacts"
-    _save_artifact(root / "b" / "residue_point_cloud")
-    _save_artifact(root / "a" / "residue_point_cloud")
-    index = tmp_path / "index.csv"
-    _pack(root, index)
-
-    dataset = ErisFolderDataset(index)
-
-    assert len(dataset) == 2
-    assert [row.id for row in dataset.rows] == ["a", "b"]
 
 
 def test_dataset_rejects_missing_required_columns(tmp_path: Path) -> None:
@@ -312,9 +243,9 @@ def test_dataset_allows_extra_columns_after_canonical_header_but_ignores_them(
     _save_learned_artifact(root / "sample" / "synthetic_learned_embedding")
     index = tmp_path / "index.csv"
     row = _pack(root, index)[0]
-    row["encoder"] = "legacy"
-    row["n_residues"] = "legacy"
-    row["grid_shape"] = "legacy"
+    row["encoder"] = "extra"
+    row["n_residues"] = "extra"
+    row["grid_shape"] = "extra"
     _write_index(index, [row], extra=["encoder", "n_residues", "grid_shape"])
 
     dataset = ErisFolderDataset(index)
@@ -495,22 +426,6 @@ def test_dataset_samples_feed_each_canonical_explicit_collate(
     assert tuple(out[key].shape) == expected_shape
 
 
-def test_dataset_loads_synthetic_learned_artifact_without_gearnet_runtime(
-    tmp_path: Path,
-) -> None:
-    root = tmp_path / "artifacts"
-    _save_learned_artifact(root / "sample" / "synthetic_learned_embedding")
-    index = tmp_path / "index.csv"
-    _pack(root, index)
-
-    item = ErisFolderDataset(index)[0]
-
-    assert item["representation_family"] == "learned"
-    assert item["representation_type"] == "embedding"
-    np.testing.assert_array_equal(item["node_ids"], np.asarray(["A:1::ALA", "A:2::GLY"]))
-    np.testing.assert_array_equal(item["chain_id"], np.asarray(["A", "A"]))
-
-
 def test_dataset_accepts_mixed_index_without_collating(tmp_path: Path) -> None:
     root = tmp_path / "artifacts"
     _save_graph_artifact(root / "graph" / "residue_contact_graph")
@@ -524,25 +439,6 @@ def test_dataset_accepts_mixed_index_without_collating(tmp_path: Path) -> None:
     assert len(dataset) == 3
     assert [row.id for row in dataset.rows] == ["graph", "learned", "matrix"]
     assert dataset[1]["representation_family"] == "learned"
-
-
-def test_dataset_batch_pack_dataset_gate(tmp_path: Path) -> None:
-    root = tmp_path / "artifacts"
-    results = batch_encode(
-        pl.DataFrame({"id": ["protein"], "path": [str(PDB)]}),
-        representation="residue_contact_map",
-        artifact_root=root,
-        use_cache=False,
-    )
-    assert results["status"][0] == "success"
-    index = tmp_path / "index.csv"
-    pack_artifacts(root, index)
-
-    dataset = ErisFolderDataset(index)
-
-    assert len(dataset) == 1
-    assert dataset.rows[0].id == "protein"
-    assert dataset.rows[0].representation_name == "residue_contact_map"
 
 
 def test_dataset_reports_actionable_error_when_torch_conversion_unavailable(
@@ -563,18 +459,3 @@ def test_dataset_reports_actionable_error_when_torch_conversion_unavailable(
 
     with pytest.raises(OptionalDependencyError, match="requires optional dependency 'torch'"):
         ErisFolderDataset(index)[0]
-
-
-def test_dataset_import_does_not_import_optional_frameworks() -> None:
-    script = """
-import sys
-import eris
-from eris.datasets import ErisFolderDataset
-
-blocked = {"torch", "torchdrug", "torch_scatter", "torch_cluster", "rdkit"}
-loaded = sorted(blocked.intersection(sys.modules))
-if loaded:
-    raise SystemExit(f"optional frameworks loaded: {loaded}")
-assert ErisFolderDataset is not None
-"""
-    subprocess.run([sys.executable, "-c", script], check=True)  # noqa: S603

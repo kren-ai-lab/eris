@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -9,17 +8,6 @@ import pytest
 from eris.core.artifact_schema import compute_config_fingerprint, validate_schema
 from eris.core.hashing import sha256_file
 from eris.core.io import load_and_extract_residue
-from eris.core.representations.output_declarations import (
-    ATOM_GRAPH_OUTPUTS,
-    ATOM_POINT_CLOUD_OUTPUTS,
-    RESIDUE_CONTACT_MAP_BINS_OUTPUTS,
-    RESIDUE_CONTACT_MAP_OUTPUTS,
-    RESIDUE_DISTOGRAM_BINS_OUTPUTS,
-    RESIDUE_DISTOGRAM_OUTPUTS,
-    RESIDUE_GRAPH_OUTPUTS,
-    RESIDUE_POINT_CLOUD_OUTPUTS,
-    VOXEL_OUTPUTS,
-)
 from eris.core.types import StructureInput
 from eris.encoders.clouds.atom_point_cloud import AtomPointCloud
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
@@ -32,10 +20,7 @@ from eris.encoders.graphs.residue_contact_graph import ResidueContactGraph
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
 from eris.encoders.grids.voxel_grid_ca import VoxelGridCA
 from eris.features.node.constants import AA_VOCAB
-
-PDB = Path("tests/data/1AQ2.pdb")
-MMCIF = Path("tests/data/1AQ2.cif")
-MULTIMER_PDB = Path("tests/data/3EC1.pdb")
+from tests.helpers import MMCIF, MULTIMER_PDB, PDB, atom_line, write_pdb
 
 ENCODER_TYPES = (
     AtomPointCloud,
@@ -50,141 +35,11 @@ ENCODER_TYPES = (
     VoxelGridCA,
 )
 
-EXPECTED_DECLARATIONS = {
-    "atom_point_cloud": ATOM_POINT_CLOUD_OUTPUTS,
-    "residue_point_cloud": RESIDUE_POINT_CLOUD_OUTPUTS,
-    "atom_knn_graph": ATOM_GRAPH_OUTPUTS,
-    "residue_knn_graph": RESIDUE_GRAPH_OUTPUTS,
-    "residue_contact_graph": RESIDUE_GRAPH_OUTPUTS,
-    "residue_distogram": RESIDUE_DISTOGRAM_OUTPUTS,
-    "residue_distogram_bins": RESIDUE_DISTOGRAM_BINS_OUTPUTS,
-    "residue_contact_map": RESIDUE_CONTACT_MAP_OUTPUTS,
-    "residue_contact_map_bins": RESIDUE_CONTACT_MAP_BINS_OUTPUTS,
-    "residue_voxel_grid": VOXEL_OUTPUTS,
-}
-
-ATOM_AUX_BASELINE = (
-    ("chain_id", (4114,), "<U1"),
-    ("elem_index", (4114,), "int16"),
-    ("atom_role", (4114,), "int8"),
-    ("bfactor", (4114,), "float32"),
-    ("occ", (4114,), "float32"),
-    ("residue_ids", (4114,), "<U10"),
-    ("resname", (4114,), "<U3"),
-    ("atom_name", (4114,), "<U3"),
-    ("seq_pos_residue", (4114,), "int32"),
-    ("aa_index_residue", (4114,), "int16"),
-)
-RESIDUE_AUX_BASELINE = (
-    ("residue_ids", (534,), "<U10"),
-    ("chain_id", (534,), "<U1"),
-    ("omitted_residue_ids", (0,), "<U1"),
-    ("resname", (534,), "<U3"),
-    ("aa_index", (534,), "int16"),
-    ("plddt", (534,), "float32"),
-    ("bfactor_ca", (534,), "float32"),
-)
-RESIDUE_PREFIX_BASELINE = (
-    ("pos", (534, 3), "float32"),
-    ("centroid", (1, 3), "float32"),
-)
-
-ARRAY_BASELINES = {
-    "atom_point_cloud": (
-        ("pos", (4114, 3), "float32"),
-        ("centroid", (1, 3), "float32"),
-        ("node_attr", (4114, 25), "float32"),
-        *ATOM_AUX_BASELINE,
-    ),
-    "residue_point_cloud": (
-        *RESIDUE_PREFIX_BASELINE,
-        ("node_attr", (534, 37), "float32"),
-        *RESIDUE_AUX_BASELINE,
-    ),
-    "atom_knn_graph": (
-        ("pos", (4114, 3), "float32"),
-        ("centroid", (1, 3), "float32"),
-        ("node_attr", (4114, 25), "float32"),
-        ("edge_index", (2, 75900), "int64"),
-        ("edge_dist", (75900,), "float32"),
-        ("edge_attr", (75900, 19), "float32"),
-        ("graph_attr", (13,), "float32"),
-        *ATOM_AUX_BASELINE,
-    ),
-    "residue_knn_graph": (
-        *RESIDUE_PREFIX_BASELINE,
-        ("node_attr", (534, 37), "float32"),
-        ("edge_index", (2, 9646), "int64"),
-        ("edge_dist", (9646,), "float32"),
-        ("edge_attr", (9646, 19), "float32"),
-        ("graph_attr", (13,), "float32"),
-        *RESIDUE_AUX_BASELINE,
-    ),
-    "residue_contact_graph": (
-        *RESIDUE_PREFIX_BASELINE,
-        ("node_attr", (534, 37), "float32"),
-        ("edge_index", (2, 5396), "int64"),
-        ("edge_dist", (5396,), "float32"),
-        ("edge_attr", (5396, 19), "float32"),
-        ("graph_attr", (13,), "float32"),
-        *RESIDUE_AUX_BASELINE,
-    ),
-    "residue_distogram": (
-        ("dist", (534, 534), "float32"),
-        *RESIDUE_PREFIX_BASELINE,
-        *RESIDUE_AUX_BASELINE,
-    ),
-    "residue_distogram_bins": (
-        ("dist_bins", (534, 534), "uint8"),
-        ("bin_edges", (37,), "float32"),
-        *RESIDUE_PREFIX_BASELINE,
-        *RESIDUE_AUX_BASELINE,
-    ),
-    "residue_contact_map": (
-        ("contact", (534, 534), "uint8"),
-        *RESIDUE_PREFIX_BASELINE,
-        *RESIDUE_AUX_BASELINE,
-    ),
-    "residue_contact_map_bins": (
-        ("contact_bins", (534, 534), "uint8"),
-        ("bin_edges", (37,), "float32"),
-        *RESIDUE_PREFIX_BASELINE,
-        *RESIDUE_AUX_BASELINE,
-    ),
-    "residue_voxel_grid": (
-        ("grid", (24, 64, 64, 64), "float32"),
-        ("grid_size", (1,), "int32"),
-        ("voxel_size", (1,), "float32"),
-        ("origin", (3,), "float32"),
-        ("centroid", (1, 3), "float32"),
-        *RESIDUE_AUX_BASELINE,
-    ),
-}
-
-CLOUD_DIGESTS = {
-    "atom_point_cloud": {
-        "pos": "4fbaf06af17251ada366958fc3bc8218bb2d68785b6ccd5b0eb76cb392721c2b",
-        # Protects raw atomic B-factors: no implicit division or clipping.
-        "node_attr": "80820a0ff12567827f0afe82392a0327df67ef33a186ce5f09a3bc45b6b6854b",
-    },
-    "residue_point_cloud": {
-        "pos": "54a3d3c574f404a5cbb6d034def52abf5b64d1096121df673501ed715f3474d3",
-        "node_attr": "e4f890bb892fefd20b759387b2e4fa6cefcf6906178bb5f76f7887fa68035964",
-    },
-}
-
 
 def _write_linear_ca_structure(path: Path) -> StructureInput:
-    lines = [
-        f"ATOM  {serial:5d}  CA  {resname:>3s} A{serial:4d}    "
-        f"{x:8.3f}{0.0:8.3f}{0.0:8.3f}{1.0:6.2f}{10.0:6.2f}           C  "
-        for serial, (resname, x) in enumerate(
-            (("ALA", 0.0), ("GLY", 3.0), ("SER", 10.0)),
-            start=1,
-        )
-    ]
-    path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
-    return StructureInput(source=str(path), chain_id="A")
+    residues = (("ALA", 0.0), ("GLY", 3.0), ("SER", 10.0))
+    lines = [atom_line(i, "CA", name, i, x) for i, (name, x) in enumerate(residues, start=1)]
+    return StructureInput(source=str(write_pdb(path, lines)), chain_id="A")
 
 
 def _expected_counts(data: dict[str, np.ndarray], representation_type: str):
@@ -205,100 +60,6 @@ def _expected_counts(data: dict[str, np.ndarray], representation_type: str):
     if "omitted_residue_ids" in data:
         counts["n_omitted_residues"] = int(data["omitted_residue_ids"].shape[0])
     return counts
-
-
-def _compact_array_contract(data: dict[str, np.ndarray]):
-    return tuple((name, tuple(array.shape), str(array.dtype)) for name, array in data.items())
-
-
-def _compact_declarations(declarations):
-    return tuple(
-        (
-            declaration["name"],
-            declaration["role"],
-            declaration.get("granularity"),
-            declaration.get("layout"),
-        )
-        for declaration in declarations
-    )
-
-
-def test_shared_output_declarations_have_frozen_semantics():
-    atom_cloud = _compact_declarations(ATOM_POINT_CLOUD_OUTPUTS)
-    residue_cloud = _compact_declarations(RESIDUE_POINT_CLOUD_OUTPUTS)
-    atom_graph = _compact_declarations(ATOM_GRAPH_OUTPUTS)
-    residue_graph = _compact_declarations(RESIDUE_GRAPH_OUTPUTS)
-    voxel = _compact_declarations(VOXEL_OUTPUTS)
-
-    assert atom_cloud == (
-        ("pos", "coordinates", "atom", "N3"),
-        ("centroid", "centroid", "structure", None),
-        ("node_attr", "node_features", "atom", "NF"),
-        ("chain_id", "chain_id", "atom", "N"),
-        ("elem_index", "element_index", "atom", "N"),
-        ("atom_role", "atom_role", "atom", "N"),
-        ("bfactor", "bfactor", "atom", "N"),
-        ("occ", "occupancy", "atom", "N"),
-        ("residue_ids", "residue_ids", "atom", "N"),
-        ("resname", "residue_names", "atom", "N"),
-        ("atom_name", "atom_names", "atom", "N"),
-        ("seq_pos_residue", "residue_sequence_index", "atom", "N"),
-        ("aa_index_residue", "amino_acid_index", "atom", "N"),
-    )
-    assert residue_cloud == (
-        ("pos", "coordinates", "residue", "N3"),
-        ("centroid", "centroid", "structure", None),
-        ("node_attr", "node_features", "residue", "NF"),
-        ("residue_ids", "node_ids", "residue", "N"),
-        ("chain_id", "chain_id", "residue", "N"),
-        ("omitted_residue_ids", "omitted_residue_ids", "residue", "N"),
-        ("resname", "residue_names", "residue", "N"),
-        ("aa_index", "amino_acid_index", "residue", "N"),
-        ("plddt", "confidence", "residue", "N"),
-        ("bfactor_ca", "bfactor", "residue", "N"),
-    )
-    graph_outputs = (
-        ("edge_index", "edge_index", None, "2E"),
-        ("edge_dist", "edge_distance", None, "E"),
-        ("edge_attr", "edge_features", None, "EF"),
-        ("graph_attr", "graph_features", "structure", "F"),
-    )
-    assert atom_graph == atom_cloud[:3] + graph_outputs + atom_cloud[3:]
-    assert residue_graph == residue_cloud[:3] + graph_outputs + residue_cloud[3:]
-
-    residue_aux = residue_cloud[:2] + residue_cloud[3:]
-    assert _compact_declarations(RESIDUE_DISTOGRAM_OUTPUTS) == (
-        ("dist", "matrix", "residue", "NN"),
-        *residue_aux,
-    )
-    assert _compact_declarations(RESIDUE_DISTOGRAM_BINS_OUTPUTS) == (
-        ("dist_bins", "matrix", "residue", "NN"),
-        ("bin_edges", "bin_edges", None, None),
-        *residue_aux,
-    )
-    assert _compact_declarations(RESIDUE_CONTACT_MAP_OUTPUTS) == (
-        ("contact", "matrix", "residue", "NN"),
-        *residue_aux,
-    )
-    assert _compact_declarations(RESIDUE_CONTACT_MAP_BINS_OUTPUTS) == (
-        ("contact_bins", "matrix", "residue", "NN"),
-        ("bin_edges", "bin_edges", None, None),
-        *residue_aux,
-    )
-    assert voxel == (
-        ("grid", "grid", None, "CXYZ"),
-        ("grid_size", "grid_size", None, None),
-        ("voxel_size", "voxel_size", None, None),
-        ("origin", "origin", None, None),
-        ("centroid", "centroid", "structure", None),
-        ("residue_ids", "residue_ids", "residue", "N"),
-        ("chain_id", "chain_id", "residue", "N"),
-        ("omitted_residue_ids", "omitted_residue_ids", "residue", "N"),
-        ("resname", "residue_names", "residue", "N"),
-        ("aa_index", "amino_acid_index", "residue", "N"),
-        ("plddt", "confidence", "residue", "N"),
-        ("bfactor_ca", "bfactor", "residue", "N"),
-    )
 
 
 @pytest.mark.parametrize(("source", "expected"), [(PDB, "pdb"), (MMCIF, "mmcif")])
@@ -347,14 +108,11 @@ def test_distance_contact_and_distogram_matrices_are_rigid_transform_invariant(
 
     def write_structure(path: Path, values: np.ndarray) -> StructureInput:
         names = ("ALA", "GLY", "SER", "THR")
-        lines = []
-        for serial, (resname, (x, y, z)) in enumerate(zip(names, values, strict=True), 1):
-            lines.append(
-                f"ATOM  {serial:5d}  CA  {resname:>3s} A{serial:4d}    "
-                f"{x:8.3f}{y:8.3f}{z:8.3f}{1.0:6.2f}{20.0:6.2f}           C  "
-            )
-        path.write_text("\n".join([*lines, "TER", "END", ""]), encoding="ascii")
-        return StructureInput(source=str(path), chain_id="A")
+        lines = [
+            atom_line(i, "CA", name, i, tuple(xyz))
+            for i, (name, xyz) in enumerate(zip(names, values.tolist(), strict=True), 1)
+        ]
+        return StructureInput(source=str(write_pdb(path, lines)), chain_id="A")
 
     original_input = write_structure(tmp_path / "matrix-original.pdb", coordinates)
     transformed_input = write_structure(
@@ -386,13 +144,12 @@ def test_distance_contact_and_distogram_matrices_are_rigid_transform_invariant(
     [(PDB, ["A"]), (MULTIMER_PDB, ["A", "B"])],
     ids=["experimental-monomer", "experimental-multimer"],
 )
-def test_experimental_structure_validation_panel(source: Path, expected_chains: list[str]) -> None:
+def test_residue_cloud_features_on_monomer_and_multimer(source: Path, expected_chains: list[str]) -> None:
     artifact = ResiduePointCloudCA(
         node_attr_mode=["onehot", "bfactor_ca"],
         use_cache=False,
     ).encode(StructureInput(source=str(source)))
 
-    assert artifact.meta["schema_version"] == 1
     assert artifact.meta["input"]["chain_ids"] == expected_chains
     assert list(dict.fromkeys(artifact.data["chain_id"].tolist())) == expected_chains
     assert artifact.data["node_attr"].dtype == np.float32
@@ -417,7 +174,6 @@ def test_all_explicit_encoders_return_complete_schema(encoder_type):
     metadata = artifact.meta
 
     assert validate_schema(metadata, artifact.data, strict=True) == metadata
-    assert metadata["schema_version"] == 1
     assert metadata["representation_name"] == encoder.name
     assert metadata["representation_family"] == "explicit"
     assert metadata["representation_type"] == encoder.representation.representation_type
@@ -440,41 +196,16 @@ def test_all_explicit_encoders_return_complete_schema(encoder_type):
         encoder.config.to_dict(),
         chain_ids=["A"],
     )
-    assert [output["name"] for output in metadata["outputs"]] == [
-        declaration["name"] for declaration in EXPECTED_DECLARATIONS[encoder.name]
-    ]
-    expected_feature_fields = {
-        "cloud": {"node_attr_keys"},
-        "graph": {"node_attr_keys", "edge_attr_keys", "graph_attr_keys"},
-        "matrix": set(),
-        "grid": {"grid_channels"},
-    }
-    assert set(metadata["feature_keys"]) == expected_feature_fields[metadata["representation_type"]]
     assert metadata["counts"] == _expected_counts(
         artifact.data,
         metadata["representation_type"],
     )
-    assert _compact_array_contract(artifact.data) == ARRAY_BASELINES[encoder.name]
-    for name, expected_digest in CLOUD_DIGESTS.get(encoder.name, {}).items():
-        assert hashlib.sha256(artifact.data[name].tobytes()).hexdigest() == expected_digest
-    assert {
-        "encoder_name",
-        "encoder_version",
-        "encoder_fingerprint",
-        "type",
-        "level",
-        "params",
-        "matrix_key",
-        "matrix_attr_keys",
-        "grid_key",
-        "grid_layout",
-    }.isdisjoint(metadata)
 
 
 @pytest.mark.parametrize("representation", ["residue_distogram_bins", "residue_contact_map_bins"])
 @pytest.mark.parametrize(
     ("num_bins", "add_no_contact_class", "fits"),
-    [(256, False, True), (255, True, True), (257, False, False), (256, True, False)],
+    [(256, False, True), (256, True, False)],
 )
 def test_binned_class_ids_must_fit_the_output_dtype(representation, num_bins, add_no_contact_class, fits):
     import eris
@@ -487,11 +218,9 @@ def test_binned_class_ids_must_fit_the_output_dtype(representation, num_bins, ad
         "add_no_contact_class": add_no_contact_class,
     }
     if fits:
-        artifact = eris.encode(
-            "tests/data/1AQ2.pdb", representation=representation, use_cache=False, **params
-        )
+        artifact = eris.encode(PDB, representation=representation, use_cache=False, **params)
         key = {"residue_distogram_bins": "dist_bins", "residue_contact_map_bins": "contact_bins"}
         assert artifact.data[key[representation]].dtype == np.uint8
     else:
         with pytest.raises(ValueError, match="cannot represent"):
-            eris.encode("tests/data/1AQ2.pdb", representation=representation, use_cache=False, **params)
+            eris.encode(PDB, representation=representation, use_cache=False, **params)

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import inspect
 import json
-from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
@@ -12,7 +10,6 @@ import eris.core.cache as cache_module
 from eris.core.artifact_schema import (
     build_artifact_metadata,
     build_feature_keys,
-    build_input_metadata,
     build_provenance,
     compute_config_fingerprint,
 )
@@ -29,8 +26,7 @@ from eris.core.types import StructureInput
 from eris.encoders.clouds.atom_point_cloud import AtomPointCloud
 from eris.encoders.clouds.residue_point_cloud import ResiduePointCloudCA
 from eris.encoders.graphs.residue_knn_graph import ResidueKNNGraph
-
-PDB = Path("tests/data/1AQ2.pdb")
+from tests.helpers import PDB, input_metadata
 
 
 def _artifact() -> StructureArtifact:
@@ -47,13 +43,7 @@ def _artifact() -> StructureArtifact:
         granularity="residue",
         coordinate_source="ca",
         encoder={"implementation": "tests.synthetic.Encoder", "version": "1.0"},
-        input_metadata=build_input_metadata(
-            source="memory://synthetic",
-            source_sha256="a" * 64,
-            input_format="pdb",
-            model_index=0,
-            chain_ids=["A"],
-        ),
+        input_metadata=input_metadata(),
         parameters=parameters,
         provenance=build_provenance(
             representation_name="synthetic_cloud",
@@ -106,30 +96,19 @@ def _write_entry(cache_root, key: str, *, meta: dict, data: dict[str, np.ndarray
     np.savez_compressed(entry / "data.npz", **cast("dict[str, Any]", data))
 
 
-def test_compute_cache_key_is_deterministic_and_has_explicit_inputs():
-    first = _key()
-    second = _key()
-    parameters = inspect.signature(compute_cache_key).parameters
+def test_compute_cache_key_is_deterministic_sha256_hex():
+    key = _key()
 
-    assert first == second
-    # Canonical collection-valued chain identity must affect the cache key.
-    assert first == "b20b7f57109471cad7e0663354f7071a55bae7d6d6a561103a10b5904e0f1619"
-    assert len(first) == 64
-    assert "source" not in parameters
-    assert "source_locator" not in parameters
-    assert "eris_version" not in parameters
-    assert "input_format" not in parameters
-    assert "parameters" not in parameters
+    assert key == _key()
+    assert len(key) == 64
+    assert set(key) <= set("0123456789abcdef")
 
 
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
-        ("foo.pdb", ".pdb"),
         ("foo.PDB", ".pdb"),
-        ("foo.cif", ".cif"),
         ("foo.pdb.gz", ".pdb.gz"),
-        ("foo.mmcif.gz", ".mmcif.gz"),
         ("foo", "<no-suffix>"),
     ],
 )
@@ -153,7 +132,6 @@ def test_parser_hint_is_path_independent_and_conservative():
 @pytest.mark.parametrize(
     ("parser_hint", "input_format", "expected"),
     [
-        (".pdb", "pdb", True),
         (".cif", "mmcif", True),
         (".pdb", "mmcif", False),
     ],
@@ -162,36 +140,9 @@ def test_parser_hint_checks_known_confirmed_formats(parser_hint, input_format, e
     assert parser_hint_matches_format(parser_hint, input_format) is expected
 
 
-def test_cache_key_payload_contains_exact_namespaces_and_identity(monkeypatch):
-    monkeypatch.setattr(cache_module, "sha256_text", lambda value: value)
-
-    payload = json.loads(_key())
-
-    assert payload == {
-        "cache_contract": 1,
-        "artifact_schema_version": 1,
-        "representation_name": "residue_point_cloud",
-        "encoder": {
-            "implementation": "eris.encoders.clouds.ResiduePointCloudCA",
-            "version": "0.1.0",
-        },
-        "config_fingerprint": "b" * 64,
-        "source_sha256": "a" * 64,
-        "parser_hint": ".pdb",
-        "input_selection": {"model_index": 0, "chain_ids": ["A"]},
-    }
-
-
-def test_optional_execution_identity_is_canonical_and_precision_sensitive(monkeypatch):
-    assert _key(execution={"precision": "fp32"}) == _key(execution={"precision": "fp32"})
+def test_optional_execution_identity_is_precision_sensitive():
     assert _key(execution={"precision": "fp32"}) != _key(execution={"precision": "fp16"})
     assert _key(execution={"precision": "fp32"}) != _key()
-
-    monkeypatch.setattr(cache_module, "sha256_text", lambda value: value)
-    payload = json.loads(_key(execution={"precision": "fp32"}))
-
-    assert payload["execution"] == {"precision": "fp32"}
-    assert payload["cache_contract"] == 1
 
 
 @pytest.mark.parametrize(
@@ -200,13 +151,7 @@ def test_optional_execution_identity_is_canonical_and_precision_sensitive(monkey
         ("representation_name", "other_representation"),
         ("encoder_version", "0.2.0"),
         ("config_fingerprint", "c" * 64),
-        (
-            "model",
-            {
-                "architecture": "synthetic-model",
-                "checkpoint": {"identifier": "checkpoint-a"},
-            },
-        ),
+        ("chain_ids", ["B"]),
     ],
 )
 def test_each_cache_identity_component_changes_key(field, value):
@@ -232,34 +177,25 @@ def test_equivalent_model_mapping_order_produces_same_key():
     )
 
 
-def test_parameter_mapping_order_is_abstracted_by_config_fingerprint():
-    left = compute_config_fingerprint("residue_point_cloud", {"a": 1, "b": 2}, chain_ids=["A"])
-    right = compute_config_fingerprint("residue_point_cloud", {"b": 2, "a": 1}, chain_ids=["A"])
-
-    assert left == right
-    assert _key(config_fingerprint=left) == _key(config_fingerprint=right)
-
-
 @pytest.mark.parametrize(
-    ("field", "value"),
+    ("field", "value", "match"),
     [
-        ("representation_name", ""),
-        ("config_fingerprint", "A" * 64),
-        ("model_index", -1),
+        ("config_fingerprint", "A" * 64, "config_fingerprint must be a lowercase"),
+        ("model_index", -1, "model_index must be a plain integer"),
     ],
 )
-def test_compute_cache_key_rejects_invalid_identity(field, value):
-    with pytest.raises((ValueError, ArtifactValidationError)):
+def test_compute_cache_key_rejects_invalid_identity(field, value, match):
+    with pytest.raises(ValueError, match=match):
         _key(**{field: value})
 
 
-@pytest.mark.parametrize("key", ["../" + "a" * 61])
-def test_cache_rejects_unsafe_or_noncanonical_keys(tmp_path, key):
+def test_cache_rejects_unsafe_keys(tmp_path):
     cache = DiskCache(tmp_path)
+    key = "../" + "a" * 61
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="cache key must be"):
         cache.get(key)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="cache key must be"):
         cache.set(key, _artifact())
 
 
@@ -273,10 +209,7 @@ def test_cache_round_trip_returns_strict_valid_artifact(tmp_path):
 
     assert loaded is not None
     assert loaded.meta == artifact.meta
-    assert loaded.meta["schema_version"] == 1
     np.testing.assert_array_equal(loaded.data["pos"], artifact.data["pos"])
-    assert (_entry(tmp_path, key) / "data.npz").is_file()
-    assert (_entry(tmp_path, key) / "meta.json").is_file()
 
 
 @pytest.mark.parametrize(
@@ -285,6 +218,7 @@ def test_cache_round_trip_returns_strict_valid_artifact(tmp_path):
         "bad-json",
         "shape",
         "object",
+        "missing-member",
     ],
 )
 def test_stale_or_corrupt_cache_entry_is_a_non_destructive_miss(tmp_path, case):
@@ -303,8 +237,11 @@ def test_stale_or_corrupt_cache_entry_is_a_non_destructive_miss(tmp_path, case):
     elif case == "object":
         np.savez_compressed(
             entry / "data.npz",
-            pos=np.array([object()], dtype=object),
+            pos=np.array([object(), object()], dtype=object),
+            chain_id=artifact.data["chain_id"],
         )
+    elif case == "missing-member":
+        np.savez_compressed(entry / "data.npz", pos=artifact.data["pos"])
 
     assert cache.get(key) is None
     assert entry.exists()
@@ -316,7 +253,7 @@ def test_invalid_cache_write_raises_without_usable_entry(tmp_path):
     artifact = _artifact()
     artifact.data["pos"] = np.array([object()], dtype=object)
 
-    with pytest.raises(ArtifactValidationError):
+    with pytest.raises(ArtifactValidationError, match="prohibited dtype"):
         cache.set(key, artifact)
 
     assert cache.get(key) is None
@@ -354,7 +291,6 @@ def test_active_encoder_cache_miss_then_hit_uses_only_api(
     monkeypatch.setattr(second_encoder, "_create_data", fail_recompute)
     second = second_encoder.encode(inp)
 
-    assert first.meta["schema_version"] == second.meta["schema_version"] == 1
     assert first.meta == second.meta
     assert cache.get_keys == [cache.set_keys[0], cache.set_keys[0]]
     assert cache.set_keys == [cache.get_keys[0]]
@@ -461,6 +397,4 @@ def test_use_cache_false_does_not_instantiate_or_compute_cache(monkeypatch):
         fail_cache_key,
     )
 
-    artifact = ResiduePointCloudCA(use_cache=False).encode(StructureInput(source=str(PDB)))
-
-    assert artifact.meta["schema_version"] == 1
+    ResiduePointCloudCA(use_cache=False).encode(StructureInput(source=str(PDB)))

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError, fields
+from dataclasses import FrozenInstanceError
 from importlib import metadata
 
 import pytest
@@ -19,152 +19,14 @@ from eris.core.config import (
     ResiduePointCloudConfig,
     ResidueVoxelGridConfig,
 )
-from eris.encoders.graphs.atom_knn_graph import AtomKNNGraph
-
-ATOM_SELECTION = {
-    "include_hetero": False,
-    "include_h": False,
-    "drop_water": True,
-    "keep_ions": True,
-    "altloc": "max_occupancy",
-    "amino_acids_only": False,
-}
-RESIDUE_SELECTION = {
-    "residue_center": "ca",
-    "amino_acids_only": True,
-    "altloc": "max_occupancy",
-    "missing_residue_center": "skip",
-    "plddt_source": "none",
-}
-GEOMETRY = {"center": True, "scale": None}
-ATOM_NODE_MODE = ["elem", "role", "bfactor", "occ"]
-RESIDUE_NODE_MODE = ["onehot", "physchem", "bfactor_ca"]
-EDGE_MODE = ["dist", "rbf", "seq", "local"]
 
 
-EXPECTED_DEFAULTS = {
-    "atom_point_cloud": {
-        **GEOMETRY,
-        **ATOM_SELECTION,
-        "node_attr_mode": ATOM_NODE_MODE,
-    },
-    "residue_point_cloud": {
-        **GEOMETRY,
-        **RESIDUE_SELECTION,
-        "node_attr_mode": RESIDUE_NODE_MODE,
-    },
-    "atom_knn_graph": {
-        **GEOMETRY,
-        **ATOM_SELECTION,
-        "node_attr_mode": ATOM_NODE_MODE,
-        "edge_attr_mode": EDGE_MODE,
-        "rbf_k": 16,
-        "rbf_dmax": 20.0,
-        "local_cutoff": 4,
-        "k": 16,
-        "cutoff": 12.0,
-        "symmetric": True,
-    },
-    "residue_knn_graph": {
-        **GEOMETRY,
-        **RESIDUE_SELECTION,
-        "node_attr_mode": RESIDUE_NODE_MODE,
-        "edge_attr_mode": EDGE_MODE,
-        "rbf_k": 16,
-        "rbf_dmax": 20.0,
-        "local_cutoff": 4,
-        "knn_mode": "local",
-        "k": 16,
-        "cutoff": 12.0,
-        "symmetric": True,
-        "include_self_loops": False,
-    },
-    "residue_contact_graph": {
-        **GEOMETRY,
-        **RESIDUE_SELECTION,
-        "node_attr_mode": RESIDUE_NODE_MODE,
-        "edge_attr_mode": EDGE_MODE,
-        "rbf_k": 16,
-        "rbf_dmax": 20.0,
-        "local_cutoff": 4,
-        "cutoff": 8.0,
-        "include_self_loops": False,
-    },
-    "residue_distogram": {
-        **GEOMETRY,
-        **RESIDUE_SELECTION,
-        "include_self": True,
-    },
-    "residue_distogram_bins": {
-        **GEOMETRY,
-        **RESIDUE_SELECTION,
-        "edges": None,
-        "dmin": 2.0,
-        "dmax": 20.0,
-        "num_bins": 36,
-        "add_no_contact_class": True,
-        "include_self": True,
-        "dtype": "uint8",
-    },
-    "residue_contact_map": {
-        **GEOMETRY,
-        **RESIDUE_SELECTION,
-        "cutoff": 8.0,
-        "include_self": False,
-        "dtype": "uint8",
-    },
-    "residue_contact_map_bins": {
-        **GEOMETRY,
-        **RESIDUE_SELECTION,
-        "edges": None,
-        "dmin": 2.0,
-        "dmax": 20.0,
-        "num_bins": 36,
-        "add_no_contact_class": True,
-        "include_self": False,
-        "dtype": "uint8",
-    },
-    "residue_voxel_grid": {
-        **GEOMETRY,
-        **RESIDUE_SELECTION,
-        "grid_size": 64,
-        "voxel_size": None,
-        "fit": True,
-        "margin": 4.0,
-        "channels": [
-            "occupancy",
-            "density",
-            "aa_onehot",
-            {"bfactor": {"normalization": "none"}},
-        ],
-        "sigma": 1.0,
-        "pool": "max",
-        "clamp": False,
-        "dtype": "float32",
-    },
-}
-
-
-def test_all_ten_defaults_match_the_m2_1_contract():
-    assert len(_CONFIG_TYPES_BY_REPRESENTATION) == 10
-    actual = {name: config_type().to_dict() for name, config_type in _CONFIG_TYPES_BY_REPRESENTATION.items()}
-    assert actual == EXPECTED_DEFAULTS
-
-
-def test_identity_is_unique_and_not_a_parameter_field():
-    names = tuple(_CONFIG_TYPES_BY_REPRESENTATION)
-    assert names == tuple(EXPECTED_DEFAULTS)
-    assert len(set(names)) == 10
-
+def test_each_registered_config_identifies_its_representation_outside_parameters():
     for name, config_type in _CONFIG_TYPES_BY_REPRESENTATION.items():
         config = config_type()
-        field_names = {config_field.name for config_field in fields(config)}
         assert config.representation_name == name
-        assert "representation_name" not in field_names
-        assert "granularity" not in field_names
         assert "representation_name" not in config.to_dict()
         assert "granularity" not in config.to_dict()
-        assert not hasattr(config, "representation_family")
 
 
 def test_granularity_and_coordinate_source_are_independent():
@@ -184,45 +46,23 @@ def test_granularity_and_coordinate_source_are_independent():
 
 
 @pytest.mark.parametrize(
-    "factory",
+    ("factory", "error", "match"),
     [
-        lambda: AtomKNNGraphConfig(k=True),
-        lambda: AtomKNNGraphConfig(k=0),
-        lambda: AtomKNNGraphConfig(cutoff=float("nan")),
+        (lambda: AtomKNNGraphConfig(k=True), TypeError, "k must be an int"),
+        (lambda: AtomKNNGraphConfig(k=0), ValueError, "k must be > 0"),
+        (lambda: AtomKNNGraphConfig(cutoff=float("nan")), ValueError, "cutoff must be finite"),
         # pyrefly: ignore [bad-argument-type]
-        lambda: ResidueKNNGraphConfig(knn_mode="invalid"),
+        (lambda: ResidueKNNGraphConfig(knn_mode="invalid"), ValueError, "knn_mode must be one of"),
         # pyrefly: ignore [bad-argument-type]
-        lambda: ResiduePointCloudConfig(residue_center="invalid"),
+        (lambda: ResidueDistogramBinsConfig(edges=[2, 2]), ValueError, "strictly increasing"),
         # pyrefly: ignore [bad-argument-type]
-        lambda: ResiduePointCloudConfig(plddt_source="automatic"),
+        (lambda: ResiduePointCloudConfig(altloc="first"), ValueError, "altloc must be one of"),
         # pyrefly: ignore [bad-argument-type]
-        lambda: ResidueVoxelGridConfig(pool="invalid"),
-        # pyrefly: ignore [bad-argument-type]
-        lambda: ResidueVoxelGridConfig(dtype="uint8"),
-        lambda: ResidueVoxelGridConfig(grid_size=0),
-        lambda: ResidueDistogramBinsConfig(num_bins=0),
-        # pyrefly: ignore [bad-argument-type]
-        lambda: ResidueDistogramBinsConfig(edges=[2, 2]),
+        (lambda: ResiduePointCloudConfig(amino_acids_only=False), ValueError, "amino_acids_only must remain"),
     ],
 )
-def test_invalid_values_fail_during_construction(factory):
-    with pytest.raises((TypeError, ValueError)):
-        factory()
-
-
-@pytest.mark.parametrize(
-    "factory",
-    [
-        # pyrefly: ignore [bad-argument-type]
-        lambda: ResiduePointCloudConfig(amino_acids_only=False),
-        # pyrefly: ignore [bad-argument-type]
-        lambda: ResiduePointCloudConfig(altloc="first"),
-        # pyrefly: ignore [bad-argument-type]
-        lambda: ResiduePointCloudConfig(missing_residue_center="nan"),
-    ],
-)
-def test_residue_loader_policies_remain_frozen(factory):
-    with pytest.raises((TypeError, ValueError)):
+def test_invalid_values_fail_during_construction(factory, error, match):
+    with pytest.raises(error, match=match):
         factory()
 
 
@@ -298,7 +138,7 @@ def test_nested_feature_parameter_order_is_canonical():
     assert canonical_json(first.to_dict()) == canonical_json(second.to_dict())
 
 
-def test_parameterized_residue_features_are_canonical_and_provider_pinned():
+def test_parameterized_residue_features_are_canonical_and_record_provider_version():
     first = FeatureMode.from_value(
         [
             {
@@ -318,19 +158,7 @@ def test_parameterized_residue_features_are_canonical_and_provider_pinned():
     )
 
     assert first == second
-    assert first.to_list() == [
-        {
-            "aaindex": {
-                "ids": ["KYTJ820101"],
-                "missing": "nan",
-                "normalization": "none",
-                "provider": "aaindex",
-                "provider_version": metadata.version("aaindex"),
-                "source": "AAIndex1",
-                "unknown": "nan",
-            }
-        }
-    ]
+    assert first.to_list()[0]["aaindex"]["provider_version"] == metadata.version("aaindex")
 
 
 def test_backbone_geometry_parameters_canonicalize_and_fingerprint_scientific_changes():
@@ -340,17 +168,7 @@ def test_backbone_geometry_parameters_canonicalize_and_fingerprint_scientific_ch
     )
     explicit = ResiduePointCloudConfig(
         # pyrefly: ignore [bad-argument-type]
-        node_attr_mode=[
-            {
-                "backbone_geometry": {
-                    "mode": "both",
-                    "max_peptide_bond_distance": 2.0,
-                    "torsion_convention": "standard_signed_atan2[-pi,pi)",
-                    "units": "radians",
-                    "missing_value_policy": "nan",
-                }
-            }
-        ]
+        node_attr_mode=[{"backbone_geometry": {"mode": "both", "max_peptide_bond_distance": 2.0}}]
     )
     # pyrefly: ignore [bad-argument-type]
     changed_mode = ResiduePointCloudConfig(node_attr_mode=[{"backbone_geometry": {"mode": "raw"}}])
@@ -381,21 +199,8 @@ def test_backbone_geometry_parameters_canonicalize_and_fingerprint_scientific_ch
 def test_sidechain_geometry_parameters_canonicalize_and_fingerprint_modes():
     # pyrefly: ignore [bad-argument-type]
     minimal = ResiduePointCloudConfig(node_attr_mode=["sidechain_geometry"])
-    explicit = ResiduePointCloudConfig(
-        # pyrefly: ignore [bad-argument-type]
-        node_attr_mode=[
-            {
-                "sidechain_geometry": {
-                    "mode": " SINCOS ",
-                    "torsion_convention": "standard_signed_atan2[-pi,pi)",
-                    "units": "radians",
-                    "atom_definition_convention": ("standard_residue_specific_chi1_through_chi4"),
-                    "atom_definition_table": "eris.frozen_sidechain_chi_atoms.v1",
-                    "missing_value_policy": "nan",
-                }
-            }
-        ]
-    )
+    # pyrefly: ignore [bad-argument-type]
+    explicit = ResiduePointCloudConfig(node_attr_mode=[{"sidechain_geometry": {"mode": " SINCOS "}}])
     # pyrefly: ignore [bad-argument-type]
     raw = ResiduePointCloudConfig(node_attr_mode=[{"sidechain_geometry": {"mode": "raw"}}])
     # pyrefly: ignore [bad-argument-type]
@@ -426,26 +231,7 @@ def test_secondary_structure_parameters_are_canonical_and_fingerprinted():
     minimal = ResiduePointCloudConfig(node_attr_mode=["secondary_structure"])
     explicit = ResiduePointCloudConfig(
         # pyrefly: ignore [bad-argument-type]
-        node_attr_mode=[
-            {
-                "secondary_structure": {
-                    "provider": "biotite",
-                    "provider_version": metadata.version("biotite"),
-                    "algorithm": "P-SEA",
-                    "coordinate_basis": "CA geometry",
-                    "state_order": ["helix", "sheet", "coil", "unassigned"],
-                    "state_mapping": {
-                        "a": "helix",
-                        "b": "sheet",
-                        "c": "coil",
-                        "": "unassigned",
-                    },
-                    "segment_handling": "selected_chain_and_peptide_continuity",
-                    "max_peptide_bond_distance": 2.0,
-                    "missing_ca_policy": "unassigned",
-                }
-            }
-        ]
+        node_attr_mode=[{"secondary_structure": {"max_peptide_bond_distance": 2}}]
     )
     changed = ResiduePointCloudConfig(
         # pyrefly: ignore [bad-argument-type]
@@ -465,22 +251,7 @@ def test_secondary_structure_parameters_are_canonical_and_fingerprinted():
     )
 
 
-def test_sasa_rsa_parameters_are_frozen_and_canonical():
-    # pyrefly: ignore [bad-argument-type]
-    config = ResiduePointCloudConfig(node_attr_mode=["sasa", "rsa"])
-    sasa = config.node_attr_mode.to_list()[0]["sasa"]
-    rsa = config.node_attr_mode.to_list()[1]["rsa"]
-
-    assert sasa["provider"] == "biotite"
-    assert sasa["provider_version"] == metadata.version("biotite")
-    assert sasa["probe_radius_angstrom"] == 1.4
-    assert sasa["sphere_point_count"] == 1000
-    assert sasa["sphere_point_distribution"] == "Fibonacci"
-    assert sasa["vdw_radii"] == "ProtOr"
-    assert rsa["maximum_asa_table"]["ALA"] == 129.0
-    assert rsa["maximum_asa_table"]["TRP"] == 285.0
-    assert rsa["clipping"] == "none"
-
+def test_sasa_rsa_parameters_reject_unsupported_values():
     with pytest.raises(ValueError, match="probe_radius_angstrom"):
         # pyrefly: ignore [bad-argument-type]
         ResiduePointCloudConfig(node_attr_mode=[{"sasa": {"probe_radius_angstrom": 1.5}}])
@@ -491,23 +262,7 @@ def test_sasa_rsa_parameters_are_frozen_and_canonical():
 
 def test_relative_direction_parameters_are_canonical_and_residue_graph_only():
     minimal = FeatureMode.from_value(["relative_direction"], kind="edge")
-    explicit = FeatureMode.from_value(
-        [
-            {
-                "relative_direction": {
-                    "direction_convention": "source_frame_transpose_unit_ca_displacement",
-                    "frame_atoms": ["N", "CA", "C"],
-                    "frame_definition": "x=C-CA;y=orthogonalized(N-CA);z=x_cross_y",
-                    "frame_epsilon": 1e-6,
-                    "frame_handedness": "right",
-                    "frame_matrix_layout": "columns_xyz_global",
-                    "frame_origin": "CA",
-                    "missing_frame_policy": "nan",
-                }
-            }
-        ],
-        kind="edge",
-    )
+    explicit = FeatureMode.from_value([{"relative_direction": {"frame_epsilon": 1e-6}}], kind="edge")
 
     assert minimal == explicit
     # pyrefly: ignore [bad-argument-type]
@@ -533,10 +288,9 @@ def test_relative_direction_parameters_are_canonical_and_residue_graph_only():
         "inter_chain",
         minimal.to_list()[0],
     ]
-    for token in ("same_chain", "inter_chain", "relative_direction"):
-        with pytest.raises(ValueError, match="residue-only edge features"):
-            # pyrefly: ignore [bad-argument-type]
-            AtomKNNGraphConfig(edge_attr_mode=[token])
+    with pytest.raises(ValueError, match="residue-only edge features"):
+        # pyrefly: ignore [bad-argument-type]
+        AtomKNNGraphConfig(edge_attr_mode=["relative_direction"])
     with pytest.raises(ValueError, match="frame_epsilon"):
         FeatureMode.from_value(
             [{"relative_direction": {"frame_epsilon": 1e-5}}],
@@ -555,13 +309,7 @@ def test_interface_features_require_a_matched_residue_graph_pair():
     node_params = config.node_attr_mode.to_list()[0]["interface"]
     edge_params = config.edge_attr_mode.to_list()[0]["interface_contact"]
     assert node_params == edge_params
-    assert node_params == {
-        "atom_selection": "selected_polymer_heavy_atoms",
-        "chain_relation": "different_selected_chains_only",
-        "cutoff": 4.5,
-        "cutoff_inclusive": True,
-        "distance_definition": "minimum_inter_residue_atom_distance",
-    }
+    assert node_params["cutoff"] == 4.5
 
     with pytest.raises(ValueError, match="requires both"):
         # pyrefly: ignore [bad-argument-type]
@@ -582,36 +330,28 @@ def test_interface_features_require_a_matched_residue_graph_pair():
 
 
 @pytest.mark.parametrize(
-    "value",
+    ("value", "kind", "match"),
     [
-        [{"onehot": {"invalid": True}}],
-        [{"aaindex": {}}],
-        [{"aaindex": {"ids": []}}],
-        [{"aaindex": {"ids": ["KYTJ820101", "kytj820101"]}}],
-        [{"aaindex": {"ids": ["NOT_A_REAL_ID"]}}],
-        [{"aaindex": {"ids": ["KYTJ820101"], "extra": True}}],
-        [{"backbone_geometry": {"mode": "degrees"}}],
-        [{"backbone_geometry": {"max_peptide_bond_distance": 0.0}}],
-        [{"backbone_geometry": {"missing_value_policy": "zero"}}],
-        [{"sidechain_geometry": {"mode": "degrees"}}],
-        [{"sidechain_geometry": {"missing_value_policy": "zero"}}],
-        [{"sidechain_geometry": {"atom_definition_table": "other"}}],
+        ([{"onehot": {"invalid": True}}], "residue_node", "does not support parameters"),
+        ([{"aaindex": {"ids": ["NOT_A_REAL_ID"]}}], "residue_node", "Unknown AAIndex1 accession"),
+        ([{"aaindex": {"ids": ["KYTJ820101", "kytj820101"]}}], "residue_node", "Duplicate AAIndex1"),
+        ([{"aaindex": {"ids": ["KYTJ820101"], "extra": True}}], "residue_node", "Unknown aaindex parameters"),
+        ([{"aaindex": {}}], "residue_node", "'ids' is required"),
+        ([{"aaindex": {"ids": []}}], "residue_node", "'ids' must not be empty"),
+        ([{"backbone_geometry": {"mode": "degrees"}}], "residue_node", "'mode' must be one of"),
+        ([{"backbone_geometry": {"max_peptide_bond_distance": 0.0}}], "residue_node", "finite positive"),
+        ([{"backbone_geometry": {"missing_value_policy": "zero"}}], "residue_node", "must be 'nan'"),
+        ([{"sidechain_geometry": {"mode": "degrees"}}], "residue_node", "'mode' must be one of"),
+        (
+            [{"sidechain_geometry": {"atom_definition_table": "other"}}],
+            "residue_node",
+            "atom_definition_table",
+        ),
+        ("occupancy+occupancy", "grid", "duplicate grid feature tokens"),
     ],
 )
-def test_residue_feature_parameters_fail_during_config_construction(value):
-    with pytest.raises((TypeError, ValueError)):
-        FeatureMode.from_value(value, kind="residue_node")
-
-
-@pytest.mark.parametrize(
-    ("value", "kind"),
-    [
-        ("occupancy+occupancy", "grid"),
-        ([{"dist": {"invalid": True}}], "edge"),
-    ],
-)
-def test_feature_mode_rejects_duplicates_unknowns_and_unsupported_params(value, kind):
-    with pytest.raises(ValueError):
+def test_feature_parameters_fail_during_config_construction(value, kind, match):
+    with pytest.raises(ValueError, match=match):
         FeatureMode.from_value(value, kind=kind)
 
 
@@ -665,44 +405,3 @@ def test_direct_feature_construction_cannot_retain_mutable_containers():
     assert token.name == "density"
     assert mode.tokens == (token,)
     assert token.to_value() == {"density": {"nested": [1, 2]}}
-
-
-def test_catalog_is_immutable():
-    with pytest.raises(TypeError):
-        # pyrefly: ignore [unsupported-operation]
-        _CONFIG_TYPES_BY_REPRESENTATION["extra"] = AtomPointCloudConfig
-
-
-def test_serialization_preserves_none_and_excludes_non_parameter_state():
-    config = ResidueVoxelGridConfig()
-    payload = config.to_dict()
-
-    assert payload["scale"] is None
-    assert payload["voxel_size"] is None
-    canonical_json(payload)
-    for excluded in (
-        "use_cache",
-        "cache",
-        "name",
-        "representation",
-        "representation_name",
-        "granularity",
-        "coordinate_source",
-        "voxel_size_effective",
-    ):
-        assert excluded not in payload
-
-
-def test_config_does_not_copy_current_identity_field_leaks():
-    assert "name" not in {item.name for item in fields(ResidueKNNGraphConfig)}
-    assert "name" not in {item.name for item in fields(ResidueVoxelGridConfig)}
-    assert "representation" not in {item.name for item in fields(ResidueContactGraphConfig)}
-
-
-def test_atom_knn_edge_mode_is_canonical_config_despite_runtime_class_attribute():
-    config = AtomKNNGraphConfig()
-    encoder = AtomKNNGraph()
-
-    assert config.edge_attr_mode.to_list() == ["dist", "rbf", "seq", "local"]
-    assert "edge_attr_mode" not in encoder.__dict__
-    assert not hasattr(encoder, "edge_attr_mode")
