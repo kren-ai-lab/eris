@@ -50,10 +50,10 @@ artifact.meta["parameters"]         # canonical parameters, including defaults
 ```
 
 Representation parameters are passed as keyword arguments and validated against the
-representation's config. `eris.list_representations()` and
-`eris.get_representation_info(name)` list every representation with its parameters and defaults.
-`output=` writes the artifact as a directory (`meta.json` plus `data.npz`) that
-`StructureArtifact.load(...)` reads back and validates.
+representation's config. `eris.list_representations()` lists the representations and
+`eris.get_representation_info(name)` shows one with its parameters and defaults. `output=` writes
+the artifact as a directory (`meta.json` plus `data.npz`) that
+`eris.core.artifacts.StructureArtifact.load(path)` reads back and validates.
 
 | Name | Type | Granularity | Primary output |
 | --- | --- | --- | --- |
@@ -99,8 +99,8 @@ dataset = ErisFolderDataset("artifacts/index.csv")   # loads each artifact on ac
 graph = eris.to_pyg(eris.encode("p1.pdb", representation="residue_knn_graph"))
 ```
 
-A manifest is a CSV or JSONL file or a Polars DataFrame with `id`, `path`, `chain` and `model`
-columns. `batch_encode` and `batch_embed` return one result row per input, record failures without
+A manifest is a CSV or JSONL file or a Polars DataFrame with `id` and `path` columns, and optional
+`chain` and `model` (default: all chains of the first model). `batch_encode` and `batch_embed` return one result row per input, record failures without
 stopping (unless `fail_fast=True`) and can resume an interrupted run. `pack` writes a CSV index
 over the artifact directories. `to_torch` converts any artifact to tensors; `to_pyg` only accepts
 graphs with an explicit `edge_index`.
@@ -120,15 +120,16 @@ Each command calls the matching Python function. Exit codes:
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Success |
-| `2` | Invalid usage or configuration (unknown representation, invalid parameters) |
-| `3` | The operation failed (unreadable input, invalid artifact, backend or cache error) |
+| `0` | Success (batch commands also exit `0` when some rows fail; see the results file) |
+| `2` | Invalid usage or configuration (missing argument or file, unknown representation, invalid parameters) |
+| `3` | The operation failed (unreadable structure, invalid artifact, backend or cache error) |
 | `4` | Unexpected internal error |
 
 ## Design principles
 
-- Eris never silently pads, truncates, resizes, normalizes or clips values, and never infers
-  topology, invents identifiers or drops failed samples.
+- Eris never silently pads, truncates, resizes, normalizes or clips values, and never invents
+  identifiers or drops failed samples. Graph edges come only from the documented neighbor or
+  cutoff rule, and exports never add topology that the artifact doesn't already contain.
 - Inputs that don't make scientific sense fail with a clear error instead of being coerced.
 - Sample identity, array order, feature order and keys are deterministic.
 - An artifact records the structure selection, canonical parameters and provenance, and is validated

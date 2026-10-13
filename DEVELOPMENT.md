@@ -8,8 +8,8 @@
 ## Dependencies
 
 Core dependencies are managed via `uv`:
-- **NumPy** holds every artifact array; **gemmi** and **Biotite** read structures and compute
-  structural annotations.
+- **NumPy** holds every artifact array; **gemmi** reads structures, **Biotite** computes
+  structural annotations and **aaindex** provides the AAIndex1 residue descriptors.
 - **Polars** (`polars>=1.44,<2`) reads manifests and writes batch results and packed indexes.
 - **Typer** and **Rich** power the CLI; **platformdirs** locates the per-user cache.
 - Optional extras: `gearnet` (PyTorch, for GearNet-Edge embeddings and `to_torch`) and `pyg`

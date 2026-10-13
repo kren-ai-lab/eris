@@ -159,8 +159,9 @@ class StructureArtifact:
         )
 
     @staticmethod
-    def load(indir: Path) -> StructureArtifact:
+    def load(indir: str | Path) -> StructureArtifact:
         """Read and strictly validate an artifact directory."""
+        indir = Path(indir)
         if not indir.exists():
             raise ArtifactValidationError(f"Artifact directory does not exist: {indir}")
         if not indir.is_dir():
