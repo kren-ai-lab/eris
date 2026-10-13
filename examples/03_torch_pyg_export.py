@@ -18,7 +18,7 @@ def _(mo):
 
     `eris.to_torch` converts any artifact to tensors. `eris.to_pyg` only
     accepts explicit graph artifacts, because it uses only the topology that
-    is already public in the artifact. Both need the `torch` / `pyg` extras.
+    is already public in the artifact. Both need the `pyg` extra (`erislib[pyg]`).
     """)
     return
 
