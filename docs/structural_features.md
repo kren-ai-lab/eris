@@ -420,7 +420,8 @@ The pooled artifact uses:
 
 The coordinate source is copied from the source artifact. Canonical pooling
 parameters include the mode, NaN policy, source array name, source feature keys
-and their order, and a source-artifact fingerprint. That fingerprint covers
+and their order, the source representation (name, encoder and canonical
+parameters), and a source-artifact fingerprint. That fingerprint covers
 the source schema version, representation identity, encoder identity, input
 source hash/model/chain selection, source configuration fingerprint, selected
 array name, ordered source keys, and selected array dtype, shape, and canonical

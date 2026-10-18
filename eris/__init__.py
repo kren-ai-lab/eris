@@ -12,6 +12,7 @@ from eris.discovery import (
 )
 from eris.exceptions import RepresentationNotFoundError
 from eris.export.pyg import to_pyg
+from eris.export.table import feature_table
 from eris.export.torch import to_torch
 from eris.pipelines.batch_encode import batch_embed, batch_encode
 from eris.pipelines.pack import pack_artifacts as pack
@@ -23,6 +24,7 @@ __all__ = [
     "batch_encode",
     "embed",
     "encode",
+    "feature_table",
     "get_embedder_info",
     "get_representation_info",
     "list_embedders",

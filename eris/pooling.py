@@ -196,6 +196,11 @@ def pool(
         "source": source,
         "source_artifact_fingerprint": source_fingerprint,
         "source_feature_keys": source_keys,
+        "source_representation": {
+            "name": source_artifact.meta["representation_name"],
+            "encoder": source_artifact.meta["encoder"],
+            "parameters": source_artifact.meta["parameters"],
+        },
     }
     if mode == "mean_std":
         parameters["std_ddof"] = 0
