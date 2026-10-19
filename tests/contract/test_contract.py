@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
+import polars as pl
 import pytest
 from jsonschema import Draft202012Validator
 from typer.testing import CliRunner
 
-from eris.cli.main import app
+import eris
+from eris.cli.main import EXIT_CONFIG, EXIT_INTERNAL, EXIT_WORKFLOW, app, main
 from tests.helpers import PDB
+from tests.test_batch_pack import _learned_artifact
 
 SCHEMAS = Path(__file__).parent
 runner = CliRunner()
@@ -90,3 +94,104 @@ def test_batch_from_folder_provenance_and_record_id(tmp_path: Path) -> None:
     metas = [_meta(p.parent) for p in out.rglob("meta.json")]
     assert [m["input"]["structure_id"] for m in metas] == ["good"]
     assert metas[0]["provenance"]["created_at"].endswith("Z")
+
+
+def _doc(path: Path) -> dict:
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    _schema("provenance.schema.json").validate(doc)
+    return doc
+
+
+def _packed(tmp_path: Path) -> tuple[Path, Path]:
+    arts, index = tmp_path / "arts", tmp_path / "index.csv"
+    manifest = pl.DataFrame({"id": ["p1"], "path": [str(PDB)]})
+    eris.batch_encode(manifest, representation="residue_knn_graph", artifact_root=arts, use_cache=False)
+    return arts, index
+
+
+def test_embed_provenance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_embed(*_args: object, **kwargs: Path) -> SimpleNamespace:
+        kwargs["output"].mkdir()
+        return SimpleNamespace(meta={"representation_name": "gearnet_edge"})
+
+    monkeypatch.setattr(eris, "embed", fake_embed)
+    out = tmp_path / "a"
+    args = ["embed", str(PDB), "-r", "gearnet_edge", "--out", str(out)]
+    assert runner.invoke(app, args).exit_code == 0
+    assert _doc(tmp_path / "a.provenance.json")["command"] == "embed"
+
+
+def test_batch_encode_and_embed_provenance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest = tmp_path / "m.csv"
+    pl.DataFrame({"id": ["p1"], "path": [str(PDB)]}).write_csv(manifest)
+    out = tmp_path / "enc"
+    args = ["batch", "encode", str(manifest), "-r", "residue_knn_graph", "--out", str(out)]
+    assert runner.invoke(app, args).exit_code == 0
+    assert _doc(tmp_path / "enc.provenance.json")["command"] == "batch encode"
+
+    monkeypatch.setattr(eris, "embed", lambda *_a, **_k: _learned_artifact(output_mode="node"))
+    out = tmp_path / "emb"
+    args = ["batch", "embed", str(manifest), "-r", "gearnet_edge", "--out", str(out)]
+    assert runner.invoke(app, args).exit_code == 0
+    assert _doc(tmp_path / "emb.provenance.json")["command"] == "batch embed"
+
+
+def test_pack_features_export_provenance(tmp_path: Path) -> None:
+    arts, index = _packed(tmp_path)
+    assert runner.invoke(app, ["pack", str(arts), "--out", str(index)]).exit_code == 0
+    assert _doc(tmp_path / "index.csv.provenance.json")["command"] == "pack"
+
+    table = tmp_path / "f.csv"
+    assert (
+        runner.invoke(app, ["features", str(index), "--source", "graph_attr", "--out", str(table)]).exit_code
+        == 0
+    )
+    assert _doc(tmp_path / "f.csv.provenance.json")["command"] == "features"
+
+    pytest.importorskip("torch")
+    art = next(p.parent for p in arts.rglob("meta.json"))
+    out = tmp_path / "x.pt"
+    assert (
+        runner.invoke(app, ["export", "to-torch", "--artifact-dir", str(art), "--out", str(out)]).exit_code
+        == 0
+    )
+    assert _doc(tmp_path / "x.pt.provenance.json")["command"] == "export to-torch"
+
+
+def test_missing_inputs_exit_3(tmp_path: Path) -> None:
+    missing = str(tmp_path / "nope")
+    assert main(["features", missing, "--out", str(tmp_path / "f.csv")]) == EXIT_WORKFLOW
+    assert main(["export", "to-torch", "--artifact-dir", missing]) == EXIT_WORKFLOW
+    assert main(["export", "to-pyg", "--artifact-dir", missing]) == EXIT_WORKFLOW
+
+
+def test_existing_output_without_overwrite_exits_2(tmp_path: Path) -> None:
+    out = tmp_path / "x.pt"
+    out.write_bytes(b"")
+    assert main(["export", "to-torch", "--artifact-dir", str(tmp_path), "--out", str(out)]) == EXIT_CONFIG
+
+
+def test_type_error_exits_4(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*_a: object, **_k: object) -> None:
+        raise TypeError("bug")
+
+    monkeypatch.setattr(eris, "feature_table", boom)
+    assert main(["features", str(tmp_path), "--out", str(tmp_path / "f.csv")]) == EXIT_INTERNAL
+
+
+def test_features_and_export_config(tmp_path: Path) -> None:
+    cfg = _config(tmp_path, "source: graph_attr\n")
+    assert runner.invoke(app, ["validate-config", "features", str(cfg)]).exit_code == 0
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("overwrite: maybe\nnope: 1\n", encoding="utf-8")
+    for target in ("export-to-torch", "export-to-pyg"):
+        assert runner.invoke(app, ["validate-config", target, str(bad)]).exit_code == 2
+    assert eris.validate_config({"matrix_as_channel": False}, "export-to-torch") == []
+    assert eris.validate_config({"matrix_as_channel": False}, "export-to-pyg") != []
+    arts, index = _packed(tmp_path)
+    eris.pack(arts, index)
+    out = tmp_path / "f.csv"
+    assert (
+        runner.invoke(app, ["features", str(index), "--config", str(cfg), "--out", str(out)]).exit_code == 0
+    )
+    assert _doc(tmp_path / "f.csv.provenance.json")["parameters"] == {"source": "graph_attr"}

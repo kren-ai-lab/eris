@@ -22,24 +22,32 @@ class Target(StrEnum):
     batch_encode = "batch-encode"
     batch_embed = "batch-embed"
     batch_from_folder = "batch-from-folder"
+    features = "features"
+    export_to_torch = "export-to-torch"
+    export_to_pyg = "export-to-pyg"
 
 
 def _command(target: Target) -> Any:
     from eris.cli.batch import app as batch_app  # noqa: PLC0415
     from eris.cli.embed import embed  # noqa: PLC0415
     from eris.cli.encode import encode  # noqa: PLC0415
+    from eris.cli.export import app as export_app  # noqa: PLC0415
+    from eris.cli.features import features  # noqa: PLC0415
 
     if target.value.startswith("batch-"):
         return typer.main.get_command(batch_app).commands[target.value.removeprefix("batch-")]  # type: ignore[attr-defined]
+    if target.value.startswith("export-"):
+        return typer.main.get_command(export_app).commands[target.value.removeprefix("export-")]  # type: ignore[attr-defined]
     single = typer.Typer()
-    single.command()(embed if target is Target.embed_cmd else encode)
+    single.command()({Target.embed_cmd: embed, Target.features: features}.get(target, encode))
     return typer.main.get_command(single)
 
 
 def validate_config(config: Mapping[str, Any] | str | PathLike[str], target: str) -> list[ConfigIssue]:
     """Check ``config`` (a mapping, or the path of a YAML/JSON file) as accepted by ``eris TARGET --config``.
 
-    ``target`` is ``encode``, ``embed``, ``batch-encode``, ``batch-embed`` or ``batch-from-folder``.
+    ``target`` is ``encode``, ``embed``, ``batch-encode``, ``batch-embed``, ``batch-from-folder``,
+    ``features``, ``export-to-torch`` or ``export-to-pyg``.
     Returns the problems found (empty when valid); an unknown target or a missing or unparsable
     file is one issue at ``""``.
     """

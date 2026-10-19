@@ -83,7 +83,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ErisError as exc:
         error_console.print(f"[bold red]eris workflow failed[/bold red]\n{escape(str(exc))}")
         return EXIT_WORKFLOW
-    except (OSError, ValueError, TypeError) as exc:
+    except (OSError, ValueError) as exc:
         error_console.print(f"[bold red]Error[/bold red]\n{escape(str(exc))}")
         return EXIT_WORKFLOW
     except Exception as exc:  # noqa: BLE001 - last-resort CLI boundary

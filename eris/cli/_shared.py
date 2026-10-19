@@ -16,7 +16,7 @@ from eris.cli._config_file import ConfigIssue, check_config, read_config
 from eris.core.registry import get_encoder_info
 
 # Options that stay on the command line and are not provenance parameters.
-CONFIG_EXCLUDE = frozenset({"out", "results", "checkpoint", "config"})
+CONFIG_EXCLUDE = frozenset({"out", "out_path", "artifact_dir", "results", "checkpoint", "config"})
 
 
 def check_params(representation: str, params: Any) -> list[ConfigIssue]:
@@ -98,11 +98,11 @@ def write_run_provenance(
     command: str,
     created_at: str,
     inputs: list[Path],
-    extensions: dict[str, Any],
+    extensions: dict[str, Any] | None = None,
 ) -> None:
     """Write the provenance sidecar for a finished run."""
     parameters = {k: v for k, v in ctx.params.items() if k not in CONFIG_EXCLUDE}
-    for path_option in ("input", "manifest", "folder"):
+    for path_option in ("input", "manifest", "folder", "index", "artifact_root"):
         parameters.pop(path_option, None)
     if parameters.get("params") is not None:  # record the parsed mapping, not the JSON string
         parameters["params"] = json.loads(parameters["params"])

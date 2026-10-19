@@ -11,6 +11,8 @@ All notable changes to Eris are recorded here. Versions follow
 - A text or path option given a non-string in a config (`chain: 5`) is reported instead of being coerced. The config key for `--model` is `model`.
 - A missing manifest (`batch encode`, `batch embed`) or folder (`batch from-folder`) exits `3`, as a missing structure does; a missing config file stays `2`.
 - Successful `encode`, `embed` and `batch` runs write `<output>.provenance.json` next to the output, following the shared ecosystem CLI contract.
+- `pack`, `features` and `export to-torch`/`to-pyg` also write `<output>.provenance.json`. `features` and `export` accept `--config` and are valid `validate-config` targets (`features`, `export-to-torch`, `export-to-pyg`).
+- A missing `features` index or `export --artifact-dir` exits `3` instead of `2`; an existing export output without `--overwrite` exits `2`; an uncaught `TypeError` is an internal error and exits `4`.
 - Batch artifacts record the manifest `id` as `input.structure_id` and the run time as `provenance.created_at` in `meta.json`; the artifact schema version is unchanged.
 
 ## 0.1.0
