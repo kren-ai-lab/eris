@@ -1,4 +1,4 @@
-"""Shared ecosystem CLI contract: ``--config``, ``validate`` and the provenance sidecar."""
+"""Shared ecosystem CLI contract: ``--config``, ``validate-config`` and the provenance sidecar."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ def test_bad_config_exits_2(tmp_path: Path) -> None:
     ],
 )
 def test_validate_json_conforms(tmp_path: Path, body: str, valid: bool) -> None:  # noqa: FBT001
-    result = runner.invoke(app, ["validate", "encode", str(_config(tmp_path, body)), "--json"])
+    result = runner.invoke(app, ["validate-config", "encode", str(_config(tmp_path, body)), "--json"])
     assert result.exit_code == (0 if valid else 2)
     issues = json.loads(result.stdout)
     _schema("validate-errors.schema.json").validate(issues)

@@ -147,7 +147,7 @@ params:
   k: 8
 ```
 
-`eris validate COMMAND CONFIG [--json]` checks such a file without reading structures (`COMMAND` is `encode`, `embed`, `batch-encode`, `batch-embed` or `batch-from-folder`). It prints one `path: message` line per problem to stderr, or with `--json` a JSON array of `{path, message}` on stdout, and exits `0` if valid or `2` if not.
+`eris validate-config COMMAND CONFIG [--json]` checks such a file without reading structures (`COMMAND` is `encode`, `embed`, `batch-encode`, `batch-embed` or `batch-from-folder`). It prints one `path: message` line per problem to stderr, or with `--json` a JSON array of `{path, message}` on stdout, and exits `0` if valid or `2` if not.
 
 Every successful run also writes `<out>.provenance.json` next to the output (shared ecosystem CLI contract): tool version, effective parameters and their fingerprint, input and output hashes, and the environment. The artifact's own `meta.json` is unchanged in format.
 
