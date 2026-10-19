@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import polars as pl
 
 import eris
+from eris._provenance import utc_now
 from eris.core.artifact_schema import compute_config_fingerprint
 from eris.core.artifacts import ArtifactValidationError, StructureArtifact
 from eris.core.cache import parser_hint_from_source, parser_hint_matches_format
@@ -416,6 +417,7 @@ def _run_batch(
             artifact = execute(row)
             if not isinstance(artifact, StructureArtifact):
                 raise ExecutionError("public execution did not return StructureArtifact")  # noqa: TRY301
+            artifact.stamp(utc_now(), row.id)
             artifact.validate()
             _save_artifact_safely(artifact, target)
             results.append(

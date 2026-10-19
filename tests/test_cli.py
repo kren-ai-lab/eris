@@ -81,10 +81,13 @@ def _require_gearnet_stack() -> None:
 
 
 def test_direct_embed_command_delegates_to_public_api(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    Path("input.pdb").write_text("", encoding="ascii")
     calls = []
 
     def fake_embed(*args, **kwargs):
         calls.append((args, kwargs))
+        kwargs["output"].mkdir()
         return SimpleNamespace(
             meta={
                 "representation_name": kwargs["representation"],
@@ -141,6 +144,8 @@ def test_direct_embed_command_delegates_to_public_api(monkeypatch, tmp_path):
 
 
 def test_absent_chain_model_and_checkpoint_are_not_forwarded(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    Path("input.pdb").write_text("", encoding="ascii")
     captured = {}
 
     def fake_embed(*args, **kwargs):
@@ -210,6 +215,7 @@ def test_batch_from_folder_delegates_sorted_rows(monkeypatch, tmp_path):
 
     def fake_batch_encode(manifest, **kwargs):
         captured.update(kwargs, manifest=manifest)
+        kwargs["artifact_root"].mkdir()
         return pl.DataFrame(schema={"status": pl.String})
 
     monkeypatch.setattr(batch_cli.eris, "batch_encode", fake_batch_encode)

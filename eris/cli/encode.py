@@ -8,10 +8,13 @@ from typing import Annotated, Any
 import typer
 
 import eris
+from eris._provenance import utc_now
+from eris.cli._shared import CONFIG_OPTION, write_run_provenance
 from eris.cli._utils import parse_json_object
 
 
 def encode(
+    ctx: typer.Context,
     input: Annotated[  # noqa: A002
         str,
         typer.Argument(..., metavar="INPUT", help="Structure file to encode."),
@@ -31,8 +34,11 @@ def encode(
         str | None,
         typer.Option("--params", help="JSON object with representation parameters."),
     ] = None,
+    config: Annotated[Path | None, CONFIG_OPTION] = None,
 ) -> None:
     """Encode one structure file into an Eris artifact."""
+    del config
+    created_at = utc_now()
     encode_kwargs: dict[str, Any] = {
         "input": input,
         "representation": representation,
@@ -46,6 +52,14 @@ def encode(
         encode_kwargs["model_index"] = model_index
 
     artifact = eris.encode(**encode_kwargs)
+    write_run_provenance(
+        ctx,
+        out,
+        command="encode",
+        created_at=created_at,
+        inputs=[Path(input)],
+        extensions={"representation": representation},
+    )
 
     typer.echo(f"Encoded {artifact.meta['representation_name']} -> {out}")
 
