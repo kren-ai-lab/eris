@@ -47,6 +47,11 @@ def config_issues(command: Any, path: Path) -> tuple[dict[str, Any], list[Config
     raw, issues = read_config(path)
     if issues:
         return raw, issues
+    return raw, mapping_issues(command, raw)
+
+
+def mapping_issues(command: Any, raw: dict[str, Any]) -> list[ConfigIssue]:
+    """Collect every problem of a parsed config with ``command``'s options and nested ``params``."""
     rest = {key: value for key, value in raw.items() if key != "params"}
     issues = check_config(command, rest, exclude=CONFIG_EXCLUDE)
     if "params" in raw:
@@ -59,7 +64,7 @@ def config_issues(command: Any, path: Path) -> tuple[dict[str, Any], list[Config
                 )
         else:
             issues.append(ConfigIssue("params", "unknown key"))
-    return raw, issues
+    return issues
 
 
 def config_callback(ctx: typer.Context, value: Path | None) -> Path | None:

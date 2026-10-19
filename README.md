@@ -149,6 +149,16 @@ params:
 
 `eris validate-config COMMAND CONFIG [--json]` checks such a file without reading structures (`COMMAND` is `encode`, `embed`, `batch-encode`, `batch-embed` or `batch-from-folder`). It prints one `path: message` line per problem to stderr, or with `--json` a JSON array of `{path, message}` on stdout, and exits `0` if valid or `2` if not.
 
+Validate a config from Python (no structures read, no model code imported):
+
+```python
+from eris import validate_config
+
+issues = validate_config("config.yaml", "encode")  # or a mapping; target as on the CLI
+for issue in issues:  # ConfigIssue(path, message); empty when valid
+    print(issue.path or "<root>", issue.message)
+```
+
 Every successful run also writes `<out>.provenance.json` next to the output (shared ecosystem CLI contract): tool version, effective parameters and their fingerprint, input and output hashes, and the environment. The artifact's own `meta.json` is unchanged in format.
 
 Exit codes:
@@ -156,8 +166,8 @@ Exit codes:
 | Code | Meaning |
 | --- | --- |
 | `0` | Success (batch commands also exit `0` when some rows fail; see the results file) |
-| `2` | Invalid usage or configuration (missing argument or file, unknown representation, invalid parameters) |
-| `3` | The operation failed (unreadable structure, invalid artifact, backend or cache error) |
+| `2` | Invalid usage or configuration (missing argument or config file, unknown representation, invalid parameters) |
+| `3` | The operation failed (missing or unreadable structure, manifest or folder, invalid artifact, backend or cache error) |
 | `4` | Unexpected internal error |
 
 ## Design principles

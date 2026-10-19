@@ -24,7 +24,7 @@ def embed(
     ],
     out: Annotated[Path, typer.Option("--out", help="Artifact output directory.")],
     chain: Annotated[str | None, typer.Option("--chain", help="Chain identifier.")] = None,
-    model_index: Annotated[int | None, typer.Option("--model", help="Model index.")] = None,
+    model: Annotated[int | None, typer.Option("--model", help="Model index.")] = None,
     output_mode: Annotated[
         str,
         typer.Option("--output-mode", help="Learned output mode: node, global, or both."),
@@ -61,8 +61,8 @@ def embed(
     }
     if chain is not None:
         embed_kwargs["chain_id"] = chain
-    if model_index is not None:
-        embed_kwargs["model_index"] = model_index
+    if model is not None:
+        embed_kwargs["model_index"] = model
     if checkpoint is not None:
         embed_kwargs["checkpoint_path"] = checkpoint
 

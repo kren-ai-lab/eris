@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
+from os import PathLike
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 
-from eris.cli._config_file import report_issues
-from eris.cli._shared import config_issues
+from eris.cli._config_file import ConfigIssue, read_config, report_issues
+from eris.cli._shared import mapping_issues
 
 
 class Target(StrEnum):
@@ -34,6 +36,23 @@ def _command(target: Target) -> Any:
     return typer.main.get_command(single)
 
 
+def validate_config(config: Mapping[str, Any] | str | PathLike[str], target: str) -> list[ConfigIssue]:
+    """Check ``config`` (a mapping, or the path of a YAML/JSON file) as accepted by ``eris TARGET --config``.
+
+    ``target`` is ``encode``, ``embed``, ``batch-encode``, ``batch-embed`` or ``batch-from-folder``.
+    Returns the problems found (empty when valid); an unknown target or a missing or unparsable
+    file is one issue at ``""``.
+    """
+    try:
+        command = _command(Target(target))
+    except ValueError:
+        return [ConfigIssue("", f"unknown target {target!r}; expected one of: {', '.join(Target)}")]
+    if isinstance(config, Mapping):
+        return mapping_issues(command, dict(config))
+    raw, issues = read_config(Path(config))
+    return issues or mapping_issues(command, raw)
+
+
 def validate(
     target: Annotated[Target, typer.Argument(help="Command the config is for.")],
     config: Annotated[Path, typer.Argument(help="YAML/JSON config file.")],
@@ -42,8 +61,8 @@ def validate(
     ] = False,
 ) -> None:
     """Validate CONFIG as accepted by `eris TARGET --config CONFIG`."""
-    _, issues = config_issues(_command(target), config)
+    issues = validate_config(config, target)
     raise typer.Exit(report_issues(issues, as_json=as_json))
 
 
-__all__ = ["validate"]
+__all__ = ["validate", "validate_config"]
