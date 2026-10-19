@@ -158,6 +158,12 @@ class StructureArtifact:
             serialized_meta=serialized_meta,
         )
 
+    def stamp(self, created_at: str, record_id: str | None = None) -> None:
+        """Record the run time (and the caller's record id) in optional metadata fields."""
+        self.meta["provenance"]["created_at"] = created_at
+        if record_id is not None:
+            self.meta["input"]["structure_id"] = record_id
+
     @staticmethod
     def load(indir: str | Path) -> StructureArtifact:
         """Read and strictly validate an artifact directory."""

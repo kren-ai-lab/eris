@@ -8,9 +8,12 @@ from typing import Annotated, Any
 import typer
 
 import eris
+from eris._provenance import utc_now
+from eris.cli._shared import CONFIG_OPTION, write_run_provenance
 
 
 def embed(
+    ctx: typer.Context,
     input: Annotated[  # noqa: A002
         str,
         typer.Argument(..., metavar="INPUT", help="Structure file to embed."),
@@ -42,8 +45,11 @@ def embed(
         bool,
         typer.Option("--no-cache", help="Disable artifact cache for this run."),
     ] = False,
+    config: Annotated[Path | None, CONFIG_OPTION] = None,
 ) -> None:
     """Embed one structure file into a learned Eris artifact."""
+    del config
+    created_at = utc_now()
     embed_kwargs: dict[str, Any] = {
         "input": input,
         "representation": representation,
@@ -61,6 +67,14 @@ def embed(
         embed_kwargs["checkpoint_path"] = checkpoint
 
     artifact = eris.embed(**embed_kwargs)
+    write_run_provenance(
+        ctx,
+        out,
+        command="embed",
+        created_at=created_at,
+        inputs=[Path(input)],
+        extensions={"representation": representation},
+    )
 
     mode = artifact.meta.get("parameters", {}).get("output_mode", output_mode)
     typer.echo(f"Embedded {artifact.meta['representation_name']} ({mode}) -> {out}")

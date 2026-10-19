@@ -19,6 +19,7 @@ from eris.cli.features import features as features_command
 from eris.cli.info_cmd import app as info_app
 from eris.cli.models import app as models_app
 from eris.cli.pack import pack as pack_command
+from eris.cli.validate import validate as validate_command
 from eris.exceptions import ConfigError, ErisError, RepresentationNotFoundError
 
 if TYPE_CHECKING:
@@ -58,6 +59,7 @@ app.add_typer(batch_app, name="batch")
 app.command("encode")(encode_command)
 app.command("embed")(embed_command)
 app.command("pack")(pack_command)
+app.command("validate")(validate_command)
 app.command("features")(features_command)
 app.add_typer(info_app, name="info")
 app.add_typer(models_app, name="models")

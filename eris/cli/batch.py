@@ -9,6 +9,8 @@ import polars as pl
 import typer
 
 import eris
+from eris._provenance import utc_now
+from eris.cli._shared import CONFIG_OPTION, write_run_provenance
 from eris.cli._utils import parse_json_object
 from eris.pipelines.manifest import ManifestValidationError
 
@@ -19,10 +21,28 @@ def _result_path(artifact_root: Path, results: Path | None) -> Path:
     return results if results is not None else artifact_root / "batch_results.csv"
 
 
-def _summary(results: pl.DataFrame, verb: str) -> None:
+def _summary(
+    results: pl.DataFrame,
+    verb: str,
+    ctx: typer.Context,
+    *,
+    command: str,
+    created_at: str,
+    out: Path,
+    source: Path,
+    representation: str,
+) -> None:
     successes = results.filter(pl.col("status") == "success").height
     failures = results.height - successes
     typer.echo(f"Batch {verb}: {successes} succeeded, {failures} failed")
+    write_run_provenance(
+        ctx,
+        out,
+        command=command,
+        created_at=created_at,
+        inputs=[source],
+        extensions={"representation": representation, "records_ok": successes, "records_failed": failures},
+    )
 
 
 def _folder_manifest(folder: Path, pattern: str, recursive: bool) -> pl.DataFrame:
@@ -40,6 +60,7 @@ def _folder_manifest(folder: Path, pattern: str, recursive: bool) -> pl.DataFram
 
 @app.command("encode")
 def encode(
+    ctx: typer.Context,
     manifest: Annotated[Path, typer.Argument(metavar="MANIFEST", exists=True, readable=True)],
     representation: Annotated[
         str,
@@ -55,8 +76,11 @@ def encode(
     fail_fast: Annotated[bool, typer.Option("--fail-fast", help="Stop on the first failed row.")] = False,
     no_cache: Annotated[bool, typer.Option("--no-cache", help="Disable representation cache.")] = False,
     params: Annotated[str | None, typer.Option("--params", help="JSON representation parameters.")] = None,
+    config: Annotated[Path | None, CONFIG_OPTION] = None,
 ) -> None:
     """Encode one canonical explicit representation for every manifest row."""
+    del config
+    created_at = utc_now()
     outcome = eris.batch_encode(
         manifest,
         representation=representation,
@@ -68,11 +92,21 @@ def encode(
         use_cache=not no_cache,
         params=parse_json_object(params),
     )
-    _summary(outcome, "encode")
+    _summary(
+        outcome,
+        "encode",
+        ctx,
+        command="batch encode",
+        created_at=created_at,
+        out=out,
+        source=manifest,
+        representation=representation,
+    )
 
 
 @app.command("embed")
 def embed(
+    ctx: typer.Context,
     manifest: Annotated[Path, typer.Argument(metavar="MANIFEST", exists=True, readable=True)],
     representation: Annotated[
         str,
@@ -88,8 +122,11 @@ def embed(
     overwrite: Annotated[bool, typer.Option("--overwrite")] = False,
     fail_fast: Annotated[bool, typer.Option("--fail-fast")] = False,
     no_cache: Annotated[bool, typer.Option("--no-cache")] = False,
+    config: Annotated[Path | None, CONFIG_OPTION] = None,
 ) -> None:
     """Embed one canonical learned representation for every manifest row."""
+    del config
+    created_at = utc_now()
     outcome = eris.batch_embed(
         manifest,
         representation=representation,
@@ -104,11 +141,21 @@ def embed(
         fail_fast=fail_fast,
         use_cache=not no_cache,
     )
-    _summary(outcome, "embed")
+    _summary(
+        outcome,
+        "embed",
+        ctx,
+        command="batch embed",
+        created_at=created_at,
+        out=out,
+        source=manifest,
+        representation=representation,
+    )
 
 
 @app.command("from-folder")
 def from_folder(
+    ctx: typer.Context,
     folder: Annotated[Path, typer.Argument(metavar="FOLDER", exists=True, file_okay=False)],
     representation: Annotated[
         str,
@@ -126,8 +173,11 @@ def from_folder(
     fail_fast: Annotated[bool, typer.Option("--fail-fast", help="Stop on the first failed row.")] = False,
     no_cache: Annotated[bool, typer.Option("--no-cache", help="Disable representation cache.")] = False,
     params: Annotated[str | None, typer.Option("--params", help="JSON representation parameters.")] = None,
+    config: Annotated[Path | None, CONFIG_OPTION] = None,
 ) -> None:
     """Encode one explicit representation for every matching structure file."""
+    del config
+    created_at = utc_now()
     outcome = eris.batch_encode(
         _folder_manifest(folder, pattern, recursive),
         representation=representation,
@@ -139,7 +189,16 @@ def from_folder(
         use_cache=not no_cache,
         params=parse_json_object(params),
     )
-    _summary(outcome, "encode")
+    _summary(
+        outcome,
+        "encode",
+        ctx,
+        command="batch from-folder",
+        created_at=created_at,
+        out=out,
+        source=folder,
+        representation=representation,
+    )
 
 
 __all__ = ["app"]

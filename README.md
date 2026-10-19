@@ -137,7 +137,21 @@ eris features emb/index.csv --out features.csv
 eris info validate artifact_knn
 ```
 
-Each command calls the matching Python function. Exit codes:
+Each command calls the matching Python function.
+
+`encode`, `embed` and the `batch` commands accept `--config PATH`, a YAML or JSON file whose keys are the option names (`representation`, `device`, ...). Representation parameters go under `params:`. Precedence is defaults < file < flags, and a `--params` flag replaces the file's `params` as a whole. Paths (input, `out`, `results`, `checkpoint`) stay on the command line.
+
+```yaml
+representation: residue_knn_graph
+params:
+  k: 8
+```
+
+`eris validate COMMAND CONFIG [--json]` checks such a file without reading structures (`COMMAND` is `encode`, `embed`, `batch-encode`, `batch-embed` or `batch-from-folder`). It prints one `path: message` line per problem to stderr, or with `--json` a JSON array of `{path, message}` on stdout, and exits `0` if valid or `2` if not.
+
+Every successful run also writes `<out>.provenance.json` next to the output (shared ecosystem CLI contract): tool version, effective parameters and their fingerprint, input and output hashes, and the environment. The artifact's own `meta.json` is unchanged in format.
+
+Exit codes:
 
 | Code | Meaning |
 | --- | --- |
