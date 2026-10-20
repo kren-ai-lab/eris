@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 import eris
 from eris.cli.main import EXIT_CONFIG, EXIT_INTERNAL, EXIT_WORKFLOW, app, main
 from tests.helpers import PDB
-from tests.test_batch_pack import _learned_artifact
+from tests.pipelines.test_batch_pack import _learned_artifact
 
 SCHEMAS = Path(__file__).parent
 runner = CliRunner()

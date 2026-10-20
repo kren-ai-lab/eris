@@ -22,7 +22,7 @@ This project uses `uv` and `taskipy` — see `DEVELOPMENT.md` for setup and task
 
 ## Package Layout
 
-The package is a **flat layout** at `eris/`. `tests/` is flat (`tests/test_*.py`), with structure
+The package is a **flat layout** at `eris/`. `tests/` mirrors the package (`tests/<subpackage>/test_*.py`, cross-cutting tests at the top level), with structure
 fixtures and GearNet reference data under `tests/data/`. Permanent contracts live in `docs/`:
 `architecture.md`, `structural_features.md`, `artifact_schema.md`, `representation_defaults.md`,
 `external_residue_features.md` and `gearnet_edge_backend.md`. Read the relevant one before

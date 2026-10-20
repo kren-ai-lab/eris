@@ -62,7 +62,7 @@ The package uses a flat layout:
 
 ```text
 eris/        # Flat package layout
-tests/       # Flat test suite; structure fixtures and GearNet references in tests/data/
+tests/       # Mirrors eris/ subpackages; structure fixtures and GearNet references in tests/data/
 examples/    # marimo examples (plain .py)
 docs/        # Technical documentation and permanent contracts
 ```
@@ -80,9 +80,10 @@ changes. Use the test file nearest the affected behavior while iterating:
 
 | Location | What it checks |
 | --- | --- |
-| `tests/test_<area>.py` | Public behavior of the corresponding area |
+| `tests/<subpackage>/test_<area>.py` | Behavior of the corresponding `eris/<subpackage>/` area |
+| `tests/test_public_api.py`, `tests/test_end_to_end.py` | Cross-cutting public API and CLI round trips |
 | `tests/test_packaging_boundaries.py` | Dependencies and the lazy-import boundary of `import eris` |
-| `tests/test_gearnet_native.py` | GearNet-Edge numerical parity; the parity test runs only when `ERIS_GEARNET_CHECKPOINT` points at the official checkpoint |
+| `tests/core/learned/test_gearnet_native.py` | GearNet-Edge numerical parity; the parity test runs only when `ERIS_GEARNET_CHECKPOINT` points at the official checkpoint |
 
 Tests that need an optional dependency or the checkpoint skip when it is unavailable; a skip does
 not certify that integration.

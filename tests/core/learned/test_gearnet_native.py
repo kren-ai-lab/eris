@@ -21,7 +21,7 @@ from eris.core.learned.backends.gearnet.preprocessing import (
 from eris.core.types import StructureInput
 from tests.helpers import TWO_CHAIN_PDB, atom_line, write_pdb
 
-DATA_DIR = Path(__file__).with_name("data")
+DATA_DIR = Path(__file__).parents[2] / "data"
 CHECKPOINT_ENV = "ERIS_GEARNET_CHECKPOINT"
 TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 requires_torch = pytest.mark.skipif(

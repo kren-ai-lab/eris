@@ -178,7 +178,7 @@ The supported contract is:
 | device/precision | CPU/fp32 |
 
 Numerical parity with the frozen reference embeddings is verified by
-`tests/test_gearnet_native.py` when `ERIS_GEARNET_CHECKPOINT` points at the official checkpoint.
+`tests/core/learned/test_gearnet_native.py` when `ERIS_GEARNET_CHECKPOINT` points at the official checkpoint.
 
 For a CPU-only environment, install PyTorch from its CPU index, then Eris:
 
