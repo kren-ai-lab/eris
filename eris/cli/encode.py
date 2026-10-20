@@ -25,7 +25,7 @@ def encode(
     ],
     out: Annotated[Path, typer.Option("--out", help="Artifact output directory.")],
     chain: Annotated[str | None, typer.Option("--chain", help="Chain identifier.")] = None,
-    model_index: Annotated[int | None, typer.Option("--model", help="Model index.")] = None,
+    model: Annotated[int | None, typer.Option("--model", help="Model index.")] = None,
     no_cache: Annotated[
         bool,
         typer.Option("--no-cache", help="Disable cache for this run."),
@@ -48,8 +48,8 @@ def encode(
     }
     if chain is not None:
         encode_kwargs["chain_id"] = chain
-    if model_index is not None:
-        encode_kwargs["model_index"] = model_index
+    if model is not None:
+        encode_kwargs["model_index"] = model
 
     artifact = eris.encode(**encode_kwargs)
     write_run_provenance(

@@ -48,6 +48,7 @@ def _fake_probe(monkeypatch, availability_probe) -> None:
 
 def test_root_exports_documented_public_surface_without_learned_execution():
     assert eris.__all__ == [
+        "ConfigIssue",
         "RepresentationNotFoundError",
         "__version__",
         "batch_embed",
@@ -63,6 +64,7 @@ def test_root_exports_documented_public_surface_without_learned_execution():
         "pool",
         "to_pyg",
         "to_torch",
+        "validate_config",
     ]
 
 

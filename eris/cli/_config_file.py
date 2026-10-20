@@ -58,6 +58,9 @@ def check_config(command: Any, raw: dict[str, Any], *, exclude: frozenset[str]) 
             issues.append(ConfigIssue(key, f"pass {param.opts[0]} on the command line, not in the config"))
         elif param.multiple and not isinstance(value, list):
             issues.append(ConfigIssue(key, f"expected a list, got {type(value).__name__}"))
+        # Click would coerce a number into a text or path option
+        elif param.type.name in ("str", "path") and not param.multiple and not isinstance(value, str):
+            issues.append(ConfigIssue(key, f"expected a string, got {type(value).__name__}"))
         else:
             try:
                 param.type_cast_value(ctx, value)

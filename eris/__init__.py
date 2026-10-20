@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from eris._version import __version__
 from eris.api import embed, encode, pool
+from eris.cli._config_file import ConfigIssue
+from eris.cli.validate import validate_config
 from eris.discovery import (
     get_embedder_info,
     get_representation_info,
@@ -18,6 +20,7 @@ from eris.pipelines.batch_encode import batch_embed, batch_encode
 from eris.pipelines.pack import pack_artifacts as pack
 
 __all__ = [
+    "ConfigIssue",
     "RepresentationNotFoundError",
     "__version__",
     "batch_embed",
@@ -33,6 +36,7 @@ __all__ = [
     "pool",
     "to_pyg",
     "to_torch",
+    "validate_config",
 ]
 
 # register built-in encoders

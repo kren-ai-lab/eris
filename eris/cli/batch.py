@@ -61,7 +61,7 @@ def _folder_manifest(folder: Path, pattern: str, recursive: bool) -> pl.DataFram
 @app.command("encode")
 def encode(
     ctx: typer.Context,
-    manifest: Annotated[Path, typer.Argument(metavar="MANIFEST", exists=True, readable=True)],
+    manifest: Annotated[Path, typer.Argument(metavar="MANIFEST")],
     representation: Annotated[
         str,
         typer.Option("--representation", "-r", help="Canonical explicit representation name."),
@@ -107,7 +107,7 @@ def encode(
 @app.command("embed")
 def embed(
     ctx: typer.Context,
-    manifest: Annotated[Path, typer.Argument(metavar="MANIFEST", exists=True, readable=True)],
+    manifest: Annotated[Path, typer.Argument(metavar="MANIFEST")],
     representation: Annotated[
         str,
         typer.Option("--representation", "-r", help="Canonical learned representation name."),
@@ -156,7 +156,7 @@ def embed(
 @app.command("from-folder")
 def from_folder(
     ctx: typer.Context,
-    folder: Annotated[Path, typer.Argument(metavar="FOLDER", exists=True, file_okay=False)],
+    folder: Annotated[Path, typer.Argument(metavar="FOLDER")],
     representation: Annotated[
         str,
         typer.Option("--representation", "-r", help="Canonical explicit representation name."),
