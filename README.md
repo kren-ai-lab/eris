@@ -4,6 +4,7 @@
 [![PyVersions](https://img.shields.io/pypi/pyversions/erislib?style=flat-square)](https://github.com/kren-ai-lab/eris)
 [![Tests](https://img.shields.io/github/actions/workflow/status/kren-ai-lab/eris/tests.yml?style=flat-square)](https://github.com/kren-ai-lab/eris/actions/workflows/tests.yml)
 ![License](https://img.shields.io/github/license/kren-ai-lab/eris?style=flat-square)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.23512938-blue?style=flat-square)](https://doi.org/10.5281/zenodo.23512938)
 
 Eris is a Python library that turns protein structures (PDB and mmCIF) into numerical
 representations for machine learning. It builds point clouds, graphs, contact maps, distograms and
@@ -55,18 +56,18 @@ representation's config. `eris.list_representations()` lists the representations
 the artifact as a directory (`meta.json` plus `data.npz`) that
 `eris.core.artifacts.StructureArtifact.load(path)` reads back and validates.
 
-| Name | Type | Granularity | Primary output |
-| --- | --- | --- | --- |
-| `atom_point_cloud` | cloud | atom | atom coordinates and features |
-| `residue_point_cloud` | cloud | residue | residue coordinates and features |
-| `atom_knn_graph` | graph | atom | atom k-nearest-neighbor graph |
-| `residue_knn_graph` | graph | residue | residue k-nearest-neighbor graph |
-| `residue_contact_graph` | graph | residue | distance-cutoff residue graph |
-| `residue_distogram` | matrix | residue | pairwise distances |
-| `residue_distogram_bins` | matrix | residue | distance-bin classes |
-| `residue_contact_map` | matrix | residue | binary contacts |
-| `residue_contact_map_bins` | matrix | residue | distance-bin contact classes |
-| `residue_voxel_grid` | grid | residue | multi-channel 3D grid |
+| Name                       | Type   | Granularity | Primary output                   |
+| -------------------------- | ------ | ----------- | -------------------------------- |
+| `atom_point_cloud`         | cloud  | atom        | atom coordinates and features    |
+| `residue_point_cloud`      | cloud  | residue     | residue coordinates and features |
+| `atom_knn_graph`           | graph  | atom        | atom k-nearest-neighbor graph    |
+| `residue_knn_graph`        | graph  | residue     | residue k-nearest-neighbor graph |
+| `residue_contact_graph`    | graph  | residue     | distance-cutoff residue graph    |
+| `residue_distogram`        | matrix | residue     | pairwise distances               |
+| `residue_distogram_bins`   | matrix | residue     | distance-bin classes             |
+| `residue_contact_map`      | matrix | residue     | binary contacts                  |
+| `residue_contact_map_bins` | matrix | residue     | distance-bin contact classes     |
+| `residue_voxel_grid`       | grid   | residue     | multi-channel 3D grid            |
 
 Residue coordinates can use the alpha carbon, the residue-atom mean or the center of mass. Residue
 features can combine amino-acid identity, physicochemical descriptors, AAIndex1 records, raw
@@ -163,12 +164,12 @@ Every successful run also writes `<out>.provenance.json` next to the output (sha
 
 Exit codes:
 
-| Code | Meaning |
-| --- | --- |
-| `0` | Success (batch commands also exit `0` when some rows fail; see the results file) |
-| `2` | Invalid usage or configuration (missing argument or config file, unknown representation, invalid parameters) |
-| `3` | The operation failed (missing or unreadable structure, manifest or folder, invalid artifact, backend or cache error) |
-| `4` | Unexpected internal error |
+| Code | Meaning                                                                                                              |
+| ---- | -------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success (batch commands also exit `0` when some rows fail; see the results file)                                     |
+| `2`  | Invalid usage or configuration (missing argument or config file, unknown representation, invalid parameters)         |
+| `3`  | The operation failed (missing or unreadable structure, manifest or folder, invalid artifact, backend or cache error) |
+| `4`  | Unexpected internal error                                                                                            |
 
 ## Design principles
 
