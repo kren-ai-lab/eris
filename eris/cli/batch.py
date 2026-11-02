@@ -16,6 +16,14 @@ from eris.pipelines.manifest import ManifestValidationError
 
 app = typer.Typer(add_completion=False, help="Run canonical batch encode/embed workflows.")
 
+# Same value as ``eris.cli.main.EXIT_WORKFLOW`` (not imported: main imports this module).
+_EXIT_WORKFLOW = 3
+
+ALLOW_FAILURES_OPTION = typer.Option(
+    "--allow-failures",
+    help="Exit 0 when some rows fail, as long as at least one succeeds (failures stay in the results file).",
+)
+
 
 def _result_path(artifact_root: Path, results: Path | None) -> Path:
     return results if results is not None else artifact_root / "batch_results.csv"
@@ -31,6 +39,8 @@ def _summary(
     out: Path,
     source: Path,
     representation: str,
+    results_path: Path,
+    allow_failures: bool,
 ) -> None:
     successes = results.filter(pl.col("status") == "success").height
     failures = results.height - successes
@@ -43,6 +53,10 @@ def _summary(
         inputs=[source],
         extensions={"representation": representation, "records_ok": successes, "records_failed": failures},
     )
+    if failures and (not allow_failures or successes == 0):
+        hint = "" if allow_failures else " (pass --allow-failures to accept partial results)"
+        typer.echo(f"{failures} of {results.height} rows failed; see {results_path}{hint}", err=True)
+        raise typer.Exit(code=_EXIT_WORKFLOW)
 
 
 def _folder_manifest(folder: Path, pattern: str, recursive: bool) -> pl.DataFrame:
@@ -76,16 +90,18 @@ def encode(
     fail_fast: Annotated[bool, typer.Option("--fail-fast", help="Stop on the first failed row.")] = False,
     no_cache: Annotated[bool, typer.Option("--no-cache", help="Disable representation cache.")] = False,
     params: Annotated[str | None, typer.Option("--params", help="JSON representation parameters.")] = None,
+    allow_failures: Annotated[bool, ALLOW_FAILURES_OPTION] = False,
     config: Annotated[Path | None, CONFIG_OPTION] = None,
 ) -> None:
     """Encode one canonical explicit representation for every manifest row."""
     del config
     created_at = utc_now()
+    results_path = _result_path(out, results)
     outcome = eris.batch_encode(
         manifest,
         representation=representation,
         artifact_root=out,
-        results_path=_result_path(out, results),
+        results_path=results_path,
         resume=resume,
         overwrite=overwrite,
         fail_fast=fail_fast,
@@ -101,6 +117,8 @@ def encode(
         out=out,
         source=manifest,
         representation=representation,
+        results_path=results_path,
+        allow_failures=allow_failures,
     )
 
 
@@ -122,11 +140,13 @@ def embed(
     overwrite: Annotated[bool, typer.Option("--overwrite")] = False,
     fail_fast: Annotated[bool, typer.Option("--fail-fast")] = False,
     no_cache: Annotated[bool, typer.Option("--no-cache")] = False,
+    allow_failures: Annotated[bool, ALLOW_FAILURES_OPTION] = False,
     config: Annotated[Path | None, CONFIG_OPTION] = None,
 ) -> None:
     """Embed one canonical learned representation for every manifest row."""
     del config
     created_at = utc_now()
+    results_path = _result_path(out, results)
     outcome = eris.batch_embed(
         manifest,
         representation=representation,
@@ -135,7 +155,7 @@ def embed(
         checkpoint_path=checkpoint,
         device=device,
         precision=precision,
-        results_path=_result_path(out, results),
+        results_path=results_path,
         resume=resume,
         overwrite=overwrite,
         fail_fast=fail_fast,
@@ -150,6 +170,8 @@ def embed(
         out=out,
         source=manifest,
         representation=representation,
+        results_path=results_path,
+        allow_failures=allow_failures,
     )
 
 
@@ -173,16 +195,18 @@ def from_folder(
     fail_fast: Annotated[bool, typer.Option("--fail-fast", help="Stop on the first failed row.")] = False,
     no_cache: Annotated[bool, typer.Option("--no-cache", help="Disable representation cache.")] = False,
     params: Annotated[str | None, typer.Option("--params", help="JSON representation parameters.")] = None,
+    allow_failures: Annotated[bool, ALLOW_FAILURES_OPTION] = False,
     config: Annotated[Path | None, CONFIG_OPTION] = None,
 ) -> None:
     """Encode one explicit representation for every matching structure file."""
     del config
     created_at = utc_now()
+    results_path = _result_path(out, results)
     outcome = eris.batch_encode(
         _folder_manifest(folder, pattern, recursive),
         representation=representation,
         artifact_root=out,
-        results_path=_result_path(out, results),
+        results_path=results_path,
         resume=resume,
         overwrite=overwrite,
         fail_fast=fail_fast,
@@ -198,6 +222,8 @@ def from_folder(
         out=out,
         source=folder,
         representation=representation,
+        results_path=results_path,
+        allow_failures=allow_failures,
     )
 
 

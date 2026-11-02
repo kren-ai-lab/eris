@@ -87,7 +87,7 @@ def test_batch_from_folder_provenance_and_record_id(tmp_path: Path) -> None:
     (folder / "bad.pdb").write_text("not a structure\n", encoding="utf-8")
     out = tmp_path / "arts"
     args = ["batch", "from-folder", str(folder), "-r", "residue_knn_graph", "--out", str(out)]
-    assert runner.invoke(app, args).exit_code == 0
+    assert runner.invoke(app, args).exit_code == EXIT_WORKFLOW
     doc = json.loads((tmp_path / "arts.provenance.json").read_text(encoding="utf-8"))
     _schema("provenance.schema.json").validate(doc)
     assert (doc["extensions"]["records_ok"], doc["extensions"]["records_failed"]) == (1, 1)
@@ -163,6 +163,66 @@ def test_missing_inputs_exit_3(tmp_path: Path) -> None:
     assert main(["features", missing, "--out", str(tmp_path / "f.csv")]) == EXIT_WORKFLOW
     assert main(["export", "to-torch", "--artifact-dir", missing]) == EXIT_WORKFLOW
     assert main(["export", "to-pyg", "--artifact-dir", missing]) == EXIT_WORKFLOW
+
+
+def _mixed_manifest(tmp_path: Path, *, ok: int, missing: int) -> Path:
+    ids = [f"ok{i}" for i in range(ok)] + [f"missing{i}" for i in range(missing)]
+    paths = [str(PDB)] * ok + [str(tmp_path / f"missing{i}.pdb") for i in range(missing)]
+    manifest = tmp_path / "m.csv"
+    pl.DataFrame({"id": ids, "path": paths}).write_csv(manifest)
+    return manifest
+
+
+@pytest.mark.parametrize(
+    ("ok", "missing", "extra", "expected"),
+    [
+        (1, 0, [], 0),
+        (1, 1, [], EXIT_WORKFLOW),
+        (0, 2, [], EXIT_WORKFLOW),
+        (1, 1, ["--allow-failures"], 0),
+        (0, 2, ["--allow-failures"], EXIT_WORKFLOW),
+    ],
+)
+def test_batch_failed_rows_exit_code(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    ok: int,
+    missing: int,
+    extra: list[str],
+    expected: int,
+) -> None:
+    manifest = _mixed_manifest(tmp_path, ok=ok, missing=missing)
+    out = tmp_path / "arts"
+    args = ["batch", "encode", str(manifest), "-r", "residue_knn_graph", "--out", str(out), "--no-cache"]
+    assert main([*args, *extra]) == expected
+    # The results file and the sidecar are written whatever the exit code, so failures stay diagnosable.
+    results = pl.read_csv(out / "batch_results.csv")
+    assert results.filter(pl.col("status") == "failed").height == missing
+    doc = _doc(tmp_path / "arts.provenance.json")
+    assert doc["extensions"]["records_ok"] == ok
+    assert doc["extensions"]["records_failed"] == missing
+    err = capsys.readouterr().err
+    if expected:
+        assert f"{missing} of {ok + missing} rows failed" in err
+        assert ("--allow-failures" in err) is (not extra)
+
+
+def test_batch_allow_failures_from_config(tmp_path: Path) -> None:
+    manifest = _mixed_manifest(tmp_path, ok=1, missing=1)
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text("representation: residue_knn_graph\nallow_failures: true\n", encoding="utf-8")
+    assert runner.invoke(app, ["validate-config", "batch-encode", str(cfg)]).exit_code == 0
+    args = [
+        "batch",
+        "encode",
+        str(manifest),
+        "--config",
+        str(cfg),
+        "--out",
+        str(tmp_path / "arts"),
+        "--no-cache",
+    ]
+    assert main(args) == 0
 
 
 def test_existing_output_without_overwrite_exits_2(tmp_path: Path) -> None:
