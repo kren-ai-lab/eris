@@ -3,6 +3,13 @@
 All notable changes to Eris are recorded here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Breaking changes
+
+- `eris batch encode`, `batch embed` and `batch from-folder` exit `3` when any row fails (they exited `0`, so an orchestrator saw a run with no artifacts as a success). The results file and the provenance sidecar are still written first, and the message on stderr names the results file.
+- New `--allow-failures` (also accepted in `--config`) restores exit `0` for partial results, but a run where every row fails still exits `3`.
+
 ## 0.1.0
 
 First public release, published on PyPI as `erislib`.

@@ -166,10 +166,12 @@ Exit codes:
 
 | Code | Meaning                                                                                                              |
 | ---- | -------------------------------------------------------------------------------------------------------------------- |
-| `0`  | Success (batch commands also exit `0` when some rows fail; see the results file)                                     |
+| `0`  | Success (batch commands with failed rows exit `0` only with `--allow-failures`)                                      |
 | `2`  | Invalid usage or configuration (missing argument or config file, unknown representation, invalid parameters)         |
 | `3`  | The operation failed (missing or unreadable structure, manifest or folder, invalid artifact, backend or cache error) |
 | `4`  | Unexpected internal error                                                                                            |
+
+A batch run with failed rows exits `3`, after writing the results file and the provenance sidecar (`records_ok`, `records_failed`). With `--allow-failures` it exits `0` as long as at least one row succeeds; the failures stay in the results file.
 
 ## Design principles
 
