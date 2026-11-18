@@ -5,6 +5,7 @@ abstract: "Encodes protein structures into validated explicit representations (p
 type: software
 version: 0.1.0
 license: MIT
+doi: 10.5281/zenodo.23512937
 authors:
   - family-names: Fernández Villegas
     given-names: Diego
@@ -28,3 +29,7 @@ keywords:
   - machine-learning
   - representation-learning
   - scientific-software
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23512937
+    description: "Concept DOI (all versions)"

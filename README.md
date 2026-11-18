@@ -4,7 +4,7 @@
 [![PyVersions](https://img.shields.io/pypi/pyversions/erislib?style=flat-square)](https://github.com/kren-ai-lab/eris)
 [![Tests](https://img.shields.io/github/actions/workflow/status/kren-ai-lab/eris/tests.yml?style=flat-square)](https://github.com/kren-ai-lab/eris/actions/workflows/tests.yml)
 ![License](https://img.shields.io/github/license/kren-ai-lab/eris?style=flat-square)
-[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.23512938-blue?style=flat-square)](https://doi.org/10.5281/zenodo.23512938)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.23512937-blue?style=flat-square)](https://doi.org/10.5281/zenodo.23512937)
 
 Eris is a Python library that turns protein structures (PDB and mmCIF) into numerical
 representations for machine learning. It builds point clouds, graphs, contact maps, distograms and
@@ -166,10 +166,12 @@ Exit codes:
 
 | Code | Meaning                                                                                                              |
 | ---- | -------------------------------------------------------------------------------------------------------------------- |
-| `0`  | Success (batch commands also exit `0` when some rows fail; see the results file)                                     |
+| `0`  | Success (batch commands with failed rows exit `0` only with `--allow-failures`)                                      |
 | `2`  | Invalid usage or configuration (missing argument or config file, unknown representation, invalid parameters)         |
 | `3`  | The operation failed (missing or unreadable structure, manifest or folder, invalid artifact, backend or cache error) |
 | `4`  | Unexpected internal error                                                                                            |
+
+A batch run with failed rows exits `3`, after writing the results file and the provenance sidecar (`records_ok`, `records_failed`). With `--allow-failures` it exits `0` as long as at least one row succeeds; the failures stay in the results file.
 
 ## Design principles
 
