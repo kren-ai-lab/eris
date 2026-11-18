@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
+from pathlib import PurePath
 from typing import TYPE_CHECKING, Any
 
 import typer
@@ -58,16 +59,19 @@ def check_config(command: Any, raw: dict[str, Any], *, exclude: frozenset[str]) 
             issues.append(ConfigIssue(key, f"pass {param.opts[0]} on the command line, not in the config"))
         elif param.multiple and not isinstance(value, list):
             issues.append(ConfigIssue(key, f"expected a list, got {type(value).__name__}"))
-        # Click would coerce a number into a text or path option
-        elif param.type.name in ("str", "path") and not param.multiple and not isinstance(value, str):
-            issues.append(ConfigIssue(key, f"expected a string, got {type(value).__name__}"))
         else:
+            # process_value is the coercion entry point in both Typer's vendored Click (<0.28) and its
+            # own parameter types (>=0.28), which dropped param.type and type_cast_value.
             try:
-                param.type_cast_value(ctx, value)
+                result = param.process_value(ctx, value)
             except typer.BadParameter as exc:
                 issues.append(ConfigIssue(key, exc.format_message()))
             except AttributeError:  # Click's bool type calls .strip() on non-strings such as 3
                 issues.append(ConfigIssue(key, f"invalid value {value!r}"))
+            else:
+                # a number must not be coerced silently into a text or path option
+                if not param.multiple and not isinstance(value, str) and isinstance(result, (str, PurePath)):
+                    issues.append(ConfigIssue(key, f"expected a string, got {type(value).__name__}"))
     return issues
 
 

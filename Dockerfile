@@ -17,6 +17,5 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends procps \
     && rm -rf /var/lib/apt/lists/*
 
-# typer<0.28: erislib 0.1.0 allows typer 0.28+, which breaks `eris validate-config`; drop once a release carries the bound.
 RUN test -n "${ERIS_VERSION}" \
-    && pip install --no-cache-dir "erislib${EXTRAS}==${ERIS_VERSION}" "typer>=0.27,<0.28"
+    && pip install --no-cache-dir "erislib${EXTRAS}==${ERIS_VERSION}"
