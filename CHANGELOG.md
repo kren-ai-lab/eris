@@ -12,7 +12,7 @@ All notable changes to Eris are recorded here. Versions follow
 
 ### Fixes
 
-- Bound `typer` to `>=0.27,<0.28`: with typer 0.28 and later `eris validate-config` fails with `'TyperOption' object has no attribute 'type'`. Supporting newer typer is a follow-up.
+- Supports typer 0.28 and later (`--config` and `validate-config` used option internals that typer 0.28 removed, failing with `'TyperOption' object has no attribute 'type'`). typer 0.27 still works.
 
 ## 0.1.0
 
