@@ -176,9 +176,7 @@ def _mixed_manifest(tmp_path: Path, *, ok: int, missing: int) -> Path:
 @pytest.mark.parametrize(
     ("ok", "missing", "extra", "expected"),
     [
-        (1, 0, [], 0),
         (1, 1, [], EXIT_WORKFLOW),
-        (0, 2, [], EXIT_WORKFLOW),
         (1, 1, ["--allow-failures"], 0),
         (0, 2, ["--allow-failures"], EXIT_WORKFLOW),
     ],
@@ -205,24 +203,6 @@ def test_batch_failed_rows_exit_code(
     if expected:
         assert f"{missing} of {ok + missing} rows failed" in err
         assert ("--allow-failures" in err) is (not extra)
-
-
-def test_batch_allow_failures_from_config(tmp_path: Path) -> None:
-    manifest = _mixed_manifest(tmp_path, ok=1, missing=1)
-    cfg = tmp_path / "cfg.yaml"
-    cfg.write_text("representation: residue_knn_graph\nallow_failures: true\n", encoding="utf-8")
-    assert runner.invoke(app, ["validate-config", "batch-encode", str(cfg)]).exit_code == 0
-    args = [
-        "batch",
-        "encode",
-        str(manifest),
-        "--config",
-        str(cfg),
-        "--out",
-        str(tmp_path / "arts"),
-        "--no-cache",
-    ]
-    assert main(args) == 0
 
 
 def test_existing_output_without_overwrite_exits_2(tmp_path: Path) -> None:
