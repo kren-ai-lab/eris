@@ -3,6 +3,17 @@
 All notable changes to Eris are recorded here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 0.2.0
+
+### Breaking changes
+
+- `eris batch encode`, `batch embed` and `batch from-folder` exit `3` when any row fails (they exited `0`, so an orchestrator saw a run with no artifacts as a success). The results file and the provenance sidecar are still written first, and the message on stderr names the results file.
+- New `--allow-failures` (also accepted in `--config`) restores exit `0` for partial results, but a run where every row fails still exits `3`.
+
+### Fixes
+
+- Supports typer 0.28 and later (`--config` and `validate-config` used option internals that typer 0.28 removed, failing with `'TyperOption' object has no attribute 'type'`). typer 0.27 still works.
+
 ## 0.1.0
 
 First public release, published on PyPI as `erislib`.
