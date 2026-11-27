@@ -21,7 +21,7 @@ def build_node_attr(
     """Build atom node attributes, by default ``[onehot(elem,17), onehot(role,6), bfactor(1), occ(1)]``."""
     elem_index = np.asarray(elem_index, dtype=np.int64).reshape(-1)
     atom_role = np.asarray(atom_role, dtype=np.int64).reshape(-1)
-    n = int(elem_index.shape[0])
+    n = elem_index.shape[0]
     if n == 0:
         validate_feature_mode(mode, ATOM_NODE_REGISTRY)
         x = np.zeros((0, 0), dtype=np.float32)

@@ -23,7 +23,7 @@ DOWNLOAD_URL = "https://models.example.test/checkpoints/model.pth"
 class _StreamingResponse:
     def __init__(self, data: bytes, *, final_url: str = DOWNLOAD_URL) -> None:
         self._stream = io.BytesIO(data)
-        self._final_url = final_url
+        self.url = final_url
         self.read_sizes: list[int] = []
 
     def __enter__(self):
@@ -31,9 +31,6 @@ class _StreamingResponse:
 
     def __exit__(self, exc_type, exc_value, traceback):
         del exc_type, exc_value, traceback
-
-    def geturl(self) -> str:
-        return self._final_url
 
     def read(self, size: int = -1) -> bytes:
         self.read_sizes.append(size)

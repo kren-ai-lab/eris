@@ -162,9 +162,9 @@ def _validate_same_shape(tensors: Sequence[torch.Tensor], key: str) -> None:
 
 
 def _validate_width(tensors: Sequence[torch.Tensor], key: str) -> int:
-    width = int(tensors[0].shape[1])
+    width = tensors[0].shape[1]
     for index, tensor in enumerate(tensors[1:], start=1):
-        actual = int(tensor.shape[1])
+        actual = tensor.shape[1]
         if actual != width:
             raise ValueError(f"feature width mismatch for {key!r}: batch[0]={width}, batch[{index}]={actual}")
     return width
@@ -178,10 +178,9 @@ def _validate_optional_rows(
     if tensors is None:
         return
     for index, (tensor, expected) in enumerate(zip(tensors, reference_lengths, strict=True)):
-        if int(tensor.shape[0]) != expected:
+        if tensor.shape[0] != expected:
             raise ValueError(
-                f"batch[{index}] key {key!r} row count {int(tensor.shape[0])} "
-                f"does not match expected {expected}"
+                f"batch[{index}] key {key!r} row count {tensor.shape[0]} does not match expected {expected}"
             )
 
 
@@ -204,7 +203,7 @@ def _ptr(lengths: Iterable[int], *, device: torch.device | None = None) -> torch
     values = [0]
     total = 0
     for length in lengths:
-        total += int(length)
+        total += length
         values.append(total)
     return torch.tensor(values, dtype=torch.long, device=device)
 
@@ -243,8 +242,8 @@ def collate_graph(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
     xs = [_require_tensor(sample, index, "x", ndim=2) for index, sample in enumerate(samples)]
     edge_indices = [_require_tensor(sample, index, "edge_index") for index, sample in enumerate(samples)]
-    node_counts = [int(x.shape[0]) for x in xs]
-    edge_counts = [int(edge_index.shape[1]) for edge_index in edge_indices]
+    node_counts = [x.shape[0] for x in xs]
+    edge_counts = [edge_index.shape[1] for edge_index in edge_indices]
 
     _validate_same_dtype_device(xs, "x")
     _validate_width(xs, "x")
@@ -266,9 +265,9 @@ def collate_graph(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
                 raise ValueError(
                     f"batch[{index}] key 'edge_dist' must be 1D or 2D, got shape {tuple(edge_dist.shape)}"
                 )
-            if int(edge_dist.shape[0]) != expected:
+            if edge_dist.shape[0] != expected:
                 raise ValueError(
-                    f"batch[{index}] key 'edge_dist' length {int(edge_dist.shape[0])} "
+                    f"batch[{index}] key 'edge_dist' length {edge_dist.shape[0]} "
                     f"does not match edge count {expected}"
                 )
 
@@ -322,10 +321,10 @@ def collate_cloud(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     metadata = _validate_metadata(samples, family="explicit", representation_type="cloud")
 
     positions = [_require_tensor(sample, index, "pos", ndim=2) for index, sample in enumerate(samples)]
-    node_counts = [int(pos.shape[0]) for pos in positions]
+    node_counts = [pos.shape[0] for pos in positions]
     _validate_same_dtype_device(positions, "pos")
     for index, pos in enumerate(positions):
-        if int(pos.shape[1]) != 3:
+        if pos.shape[1] != 3:
             raise ValueError(f"batch[{index}] key 'pos' must have shape (N, 3), got {tuple(pos.shape)}")
 
     xs = _optional_tensors(samples, "x", ndim=2)
@@ -420,7 +419,7 @@ def collate_grid(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     if grid_sizes is not None:
         _validate_same_dtype_device(grid_sizes, "grid_size")
         _validate_same_shape(grid_sizes, "grid_size")
-        expected_size = int(grids[0].shape[-1])
+        expected_size = grids[0].shape[-1]
         for index, grid_size in enumerate(grid_sizes):
             values = grid_size.reshape(-1)
             if values.numel() != 1 or int(values[0].item()) != expected_size:
@@ -513,7 +512,7 @@ def collate_learned(batch: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         embeddings = [
             _require_tensor(sample, index, "node_embedding", ndim=2) for index, sample in enumerate(samples)
         ]
-        node_counts = [int(embedding.shape[0]) for embedding in embeddings]
+        node_counts = [embedding.shape[0] for embedding in embeddings]
         _validate_same_dtype_device(embeddings, "node_embedding")
         _validate_width(embeddings, "node_embedding")
         node_ids = [

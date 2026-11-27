@@ -82,7 +82,7 @@ def acquire_registered_checkpoint(
                 headers={"User-Agent": _USER_AGENT},
             )
             with _open_registered_url(download_request) as response:
-                _require_safe_final_url(response.geturl(), identifier=descriptor.identifier)
+                _require_safe_final_url(response.url, identifier=descriptor.identifier)
                 with tempfile.NamedTemporaryFile(
                     mode="wb",
                     delete=False,

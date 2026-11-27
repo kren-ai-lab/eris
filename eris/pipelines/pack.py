@@ -192,7 +192,7 @@ def _required_shape_summary(value: Any, field: str, *, row_index: int | None) ->
     text = _required_index_string(value, field, row_index=row_index)
     try:
         parse_shape_summary(text)
-    except (TypeError, ValueError, json.JSONDecodeError) as error:
+    except (TypeError, ValueError) as error:
         raise PackIndexError(
             f"{_row_location(row_index)}: field {field!r} must be valid JSON object text"
         ) from error

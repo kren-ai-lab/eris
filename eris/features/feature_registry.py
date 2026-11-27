@@ -35,9 +35,7 @@ def _normalize_feature_params(
 ) -> dict[str, Any]:
     if params_fn is None:
         if params and not allow_unvalidated:
-            raise ValueError(
-                f"Feature '{token}' does not support parameters: {sorted(str(param) for param in params)}"
-            )
+            raise ValueError(f"Feature '{token}' does not support parameters: {sorted(params)}")
         return dict(params)
 
     normalized = params_fn(dict(params))

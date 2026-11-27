@@ -53,7 +53,7 @@ def binned_distance_data(
             dtype=np.float32,
         )
 
-    num_bins = int(edges.size - 1)
+    num_bins = edges.size - 1
     raw_bins = np.digitize(dist, edges, right=False) - 1
     raw_bins = np.clip(raw_bins, 0, num_bins - 1)
 

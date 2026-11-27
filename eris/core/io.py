@@ -235,7 +235,7 @@ def _atomic_mass(atom: gemmi.Atom) -> float:
     if sym in _ATOMIC_MASS:
         return float(_ATOMIC_MASS[sym])
     mass = float(atom.element.weight) if atom.element is not None else float("nan")
-    atomic_number = int(atom.element.atomic_number) if atom.element is not None else 0
+    atomic_number = atom.element.atomic_number if atom.element is not None else 0
     if atomic_number <= 0 or not np.isfinite(mass) or mass <= 0.0:
         raise StructureLoadError(
             f"Atomic mass is unavailable for residue-center element {sym or '<missing>'!r}."
@@ -457,9 +457,9 @@ def extract_residue_bundle(
         sequence_position = _next_biological_sequence_position(
             previous_residue_number,
             previous_sequence_position,
-            int(cast("int", res.seqid.num)),
+            cast("int", res.seqid.num),
         )
-        previous_residue_number = int(cast("int", res.seqid.num))
+        previous_residue_number = cast("int", res.seqid.num)
         previous_sequence_position = sequence_position
 
         center, bfactor_ca = _compute_residue_center(res, mode=mode, altloc=altloc)
@@ -603,7 +603,7 @@ def load_select_and_extract(
         logger.exception(
             "Failed to load structure",
             extra={
-                "source": str(inp.source),
+                "source": inp.source,
                 "chain_ids": inp.chain_id,
                 "model_index": inp.model_index,
             },

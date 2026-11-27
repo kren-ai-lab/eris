@@ -32,7 +32,7 @@ def build_grid_attr(
     return_keys: bool = False,
 ) -> tuple[np.ndarray, list[str], dict[str, float | np.ndarray]]:
     """Voxelize atom positions and return the grid, channel keys and grid geometry."""
-    G = int(grid_size)
+    G = grid_size
 
     pos_in = pos.copy()
 

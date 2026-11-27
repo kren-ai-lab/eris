@@ -177,7 +177,7 @@ def build_from_registry_voxel(
         allow_unvalidated_params=True,
     )
 
-    G = int(grid_size)
+    G = grid_size
 
     # -------- validate requirements and channel declarations --------
     channel_specs = []

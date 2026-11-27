@@ -536,7 +536,7 @@ def test_multichain_edge_feature_composition_is_deterministic_and_round_trips(
                 "dist",
             ],
             use_cache=False,
-        ).encode(StructureInput(source=str(path)))
+        ).encode(StructureInput(source=path))
 
     original = encode(_write_backbone_graph_structure(tmp_path / "edge-original.pdb", residues).source)
     transformed = encode(

@@ -9,7 +9,7 @@ import numpy as np
 
 FRAME_EPSILON = 1e-6
 SIDECHAIN_CHI_DEFINITION_TABLE = "eris.frozen_sidechain_chi_atoms.v1"
-SIDECHAIN_CHI_DEFINITIONS = {
+SIDECHAIN_CHI_DEFINITIONS: dict[str, tuple[tuple[str, str, str, str], ...]] = {
     "ARG": (
         ("N", "CA", "CB", "CG"),
         ("CA", "CB", "CG", "CD"),

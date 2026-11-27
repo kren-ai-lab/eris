@@ -42,7 +42,7 @@ def build_node_attr(
 ) -> np.ndarray | tuple[np.ndarray, list[str]]:
     """Build residue node attributes from the registered residue features in ``mode``."""
     aa_index = np.asarray(aa_index, dtype=np.int64).reshape(-1)
-    n = int(aa_index.shape[0])
+    n = aa_index.shape[0]
     if n == 0:
         validate_feature_mode(mode, RESIDUE_NODE_REGISTRY)
         x = np.zeros((0, 0), dtype=np.float32)

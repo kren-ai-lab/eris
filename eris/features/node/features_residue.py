@@ -596,8 +596,8 @@ def flags_fn(data: dict[str, Any], ctx: dict[str, Any], params: dict[str, Any]) 
     aa_index = np.asarray(data["aa_index"], dtype=np.int64).reshape(-1)
     has_ca = data["has_ca"]
 
-    is_gly = (aa_index == int(list(AA_VOCAB).index("G"))).astype(np.float32).reshape(-1, 1)
-    is_pro = (aa_index == int(list(AA_VOCAB).index("P"))).astype(np.float32).reshape(-1, 1)
+    is_gly = (aa_index == list(AA_VOCAB).index("G")).astype(np.float32).reshape(-1, 1)
+    is_pro = (aa_index == list(AA_VOCAB).index("P")).astype(np.float32).reshape(-1, 1)
     is_unk = (aa_index == UNKNOWN_INDEX).astype(np.float32).reshape(-1, 1)
     has_ca_f = has_ca.astype(np.float32).reshape(-1, 1)
 

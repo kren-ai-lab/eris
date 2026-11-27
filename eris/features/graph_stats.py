@@ -38,7 +38,7 @@ def compute_graph_stats(
         raise ValueError(f"edge_index must be (2,E), got {ei.shape}")
 
     E = int(ei.shape[1])
-    N = int(n_nodes)
+    N = n_nodes
 
     if N <= 0:
         raise ValueError(f"n_nodes must be > 0, got {N}")

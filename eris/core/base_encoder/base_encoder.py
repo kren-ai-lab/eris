@@ -344,7 +344,7 @@ class BaseEncoder(ABC):
         logger.info(
             "Loading structure",
             extra={
-                "source": str(ctx.inp.source),
+                "source": ctx.inp.source,
                 "granularity": self.granularity,
             },
         )

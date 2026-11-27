@@ -72,7 +72,6 @@ def _knn_edges_from_candidates(
 
     """
     n = len(candidates)
-    k = int(k)
 
     edges_i: list[int] = []
     edges_j: list[int] = []
@@ -88,7 +87,7 @@ def _knn_edges_from_candidates(
 
         for j, dist in neigh_sorted:
             edges_i.append(i)
-            edges_j.append(int(j))
+            edges_j.append(j)
             dists.append(float(dist))
 
     if not edges_i:

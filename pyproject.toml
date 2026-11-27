@@ -82,6 +82,8 @@ dev = [
     "taskipy>=1.14",
     "prek",
     "jsonschema>=4.26.0",
+    "types-pyyaml>=6.0.12.20261122",
+    "types-jsonschema>=4.26.0.20261006",
 ]
 examples = [
     "marimo>=0.25.1",

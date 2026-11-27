@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
@@ -12,8 +13,11 @@ from eris.exceptions import ConfigError
 from eris.export.table import FeatureTableError
 from tests.helpers import MULTIMER_PDB, PDB, learned_artifact
 
+if TYPE_CHECKING:
+    from eris.core.artifacts import StructureArtifact
 
-def _graph(path: Path) -> eris.core.artifacts.StructureArtifact:
+
+def _graph(path: Path) -> StructureArtifact:
     return eris.encode(path, representation="residue_knn_graph", chain_id="A", use_cache=False)
 
 
