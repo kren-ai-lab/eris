@@ -12,6 +12,7 @@ import polars as pl
 from eris.core.artifacts import StructureArtifact
 from eris.exceptions import ConfigError, ErisError
 from eris.pipelines.pack import read_packed_index, resolve_packed_locator
+from eris.pooling import pool as pool_artifact
 
 _DEFAULT_SOURCES = ("global_embedding", "pooled_attr")
 _SOURCES = (*_DEFAULT_SOURCES, "graph_attr")
@@ -41,9 +42,15 @@ def _source(meta: dict[str, Any], requested: str | None, sample_id: str) -> str:
         return requested
     found = [name for name in _DEFAULT_SOURCES if name in names]
     if not found:
+        name = meta["representation_name"]
+        if "node_attr" not in names:
+            raise FeatureTableError(
+                f"{sample_id}: {name!r} cannot be tabulated: it has no structure-level vector "
+                "and no per-node features to pool"
+            )
         raise FeatureTableError(
-            f"{sample_id}: {meta['representation_name']!r} has no structure-level vector; "
-            "pool residue features with eris.pool(...) or pass source='graph_attr' for graphs"
+            f"{sample_id}: {name!r} has no structure-level vector; pool its node_attr "
+            "(pool=MODE, CLI: --pool MODE) or, for graphs, use source='graph_attr' (CLI: --source graph_attr)"
         )
     return found[0]
 
@@ -70,17 +77,22 @@ def feature_table(
     artifacts: str | Path | Mapping[str, ArtifactSource],
     *,
     source: str | None = None,
+    pool: str | None = None,
 ) -> pl.DataFrame:
     """Collect one structure-level vector per artifact into an ``id`` + features DataFrame.
 
     ``artifacts`` is a packed index written by ``eris.pack`` or a mapping from sample id to an
     artifact or artifact directory. ``source`` defaults to ``global_embedding`` (learned) or
     ``pooled_attr`` (``eris.pool``); pass ``"graph_attr"`` for explicit graph statistics. Every
+    ``pool`` (a mode of ``eris.pool``) first pools each artifact's ``node_attr`` in memory and
+    tabulates the resulting ``pooled_attr``; it cannot be combined with ``source``. Every
     row must share the representation, encoder, canonical parameters, model and feature names.
     Values are copied as stored, including NaN.
     """
     if source is not None and source not in _SOURCES:
         raise ConfigError(f"source must be one of: {', '.join(_SOURCES)}")
+    if pool is not None and source is not None:
+        raise ConfigError("pool and source are mutually exclusive")
     entries = _artifacts(artifacts)
     if not entries:
         raise FeatureTableError("No artifacts to tabulate")
@@ -91,6 +103,8 @@ def feature_table(
     reference_id = ""
     for sample_id, item in entries:
         artifact = item if isinstance(item, StructureArtifact) else StructureArtifact.load(item)
+        if pool is not None:
+            artifact = pool_artifact(artifact, mode=pool)
         row_source = _source(artifact.meta, source, sample_id)
         values = artifact.data[row_source]
         if values.ndim != 1:
