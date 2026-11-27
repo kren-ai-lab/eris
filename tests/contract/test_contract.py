@@ -234,4 +234,4 @@ def test_features_and_export_config(tmp_path: Path) -> None:
     assert (
         runner.invoke(app, ["features", str(index), "--config", str(cfg), "--out", str(out)]).exit_code == 0
     )
-    assert _doc(tmp_path / "f.csv.provenance.json")["parameters"] == {"source": "graph_attr"}
+    assert _doc(tmp_path / "f.csv.provenance.json")["parameters"] == {"source": "graph_attr", "pool": None}

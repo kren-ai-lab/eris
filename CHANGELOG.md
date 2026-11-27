@@ -3,6 +3,13 @@
 All notable changes to Eris are recorded here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 0.3.0
+
+### Features
+
+- `eris features --pool MODE` (and `feature_table(pool=...)`) pools each artifact's `node_attr` before tabulating, so point clouds and graphs can be tabulated from the CLI. It excludes `--source`.
+- `feature_table` errors say when a representation (distogram, contact map, voxel grid) has no per-node features to pool, and point to `--pool` otherwise.
+
 ## 0.2.0
 
 ### Breaking changes

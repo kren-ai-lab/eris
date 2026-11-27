@@ -126,6 +126,10 @@ their features), or graph statistics with `source="graph_attr"`. It also accepts
 to artifact. Every row must come from the same representation, parameters and model; mixing them
 is an error.
 
+Point clouds and graphs hold per-node features, so `pool="mean"` (also `mean_std`, `sum`, `max`) pools each
+artifact's `node_attr` first; it cannot be combined with `source`. Distograms, contact maps and voxel
+grids have no per-node features and cannot be tabulated.
+
 ## Command line
 
 ```bash
@@ -135,6 +139,7 @@ eris embed protein.pdb --representation gearnet_edge --out embedding
 eris batch encode manifest.csv --representation residue_contact_map --out artifacts
 eris pack artifacts --out artifacts/index.csv
 eris features emb/index.csv --out features.csv
+eris features artifacts/index.csv --pool mean --out features.csv   # pool node_attr of clouds/graphs first
 eris info validate artifact_knn
 ```
 
