@@ -3,7 +3,7 @@
 All notable changes to Eris are recorded here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.3.0
 
 ### Features
 
