@@ -21,12 +21,16 @@ def features(
         str | None,
         typer.Option("--source", help="global_embedding, pooled_attr or graph_attr (default: auto)."),
     ] = None,
+    pool: Annotated[
+        str | None,
+        typer.Option("--pool", help="Pool node_attr first: mean, mean_std, sum or max (excludes --source)."),
+    ] = None,
     config: Annotated[Path | None, CONFIG_OPTION] = None,
 ) -> None:
     """Write one row of structure-level features per artifact in a packed index."""
     del config
     created_at = utc_now()
-    table = eris.feature_table(index, source=source)
+    table = eris.feature_table(index, source=source, pool=pool)
     write_atomically(out, table.write_csv)
     write_run_provenance(ctx, out, command="features", created_at=created_at, inputs=[index])
     typer.echo(f"Wrote {table.height} rows x {table.width - 1} features to {out}")

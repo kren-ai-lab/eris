@@ -8,6 +8,7 @@ import pytest
 
 import eris
 from eris.cli.main import EXIT_OK, main
+from eris.exceptions import ConfigError
 from eris.export.table import FeatureTableError
 from tests.helpers import MULTIMER_PDB, PDB, learned_artifact
 
@@ -64,8 +65,22 @@ def test_nan_values_are_copied_not_replaced() -> None:
 def test_artifacts_without_a_structure_vector_are_rejected() -> None:
     contact_map = eris.encode(PDB, representation="residue_contact_map", use_cache=False)
 
-    with pytest.raises(FeatureTableError, match=r"no structure-level vector.*eris\.pool"):
+    with pytest.raises(FeatureTableError, match=r"cannot be tabulated.*no per-node features"):
         eris.feature_table({"p1": contact_map})
+    with pytest.raises(FeatureTableError, match=r"--pool MODE.*--source graph_attr"):
+        eris.feature_table({"p1": eris.encode(PDB, representation="residue_point_cloud", use_cache=False)})
+
+
+def test_pool_tabulates_node_features_and_excludes_source() -> None:
+    cloud = eris.encode(PDB, representation="residue_point_cloud", use_cache=False)
+    pooled = eris.pool(cloud, mode="max")
+
+    table = eris.feature_table({"p1": cloud}, pool="max")
+
+    assert table.columns == ["id", *pooled.meta["feature_keys"]["pooled_attr_keys"]]
+    np.testing.assert_array_equal(table.drop("id").to_numpy()[0], pooled.data["pooled_attr"])
+    with pytest.raises(ConfigError, match="mutually exclusive"):
+        eris.feature_table({"p1": cloud}, pool="max", source="graph_attr")
 
 
 def test_rows_with_different_configurations_are_rejected() -> None:
